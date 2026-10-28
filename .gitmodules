@@ -1,6 +1,14 @@
+[submodule "heads-of-governments-jakarta-data"]
+	path = heads-of-governments-jakarta-data
+	url = https://github.com/jinahya/heads-of-governments-jakarta-data.git
+	branch = develop
 [submodule "heads-of-governments-persistence"]
 	path = heads-of-governments-persistence
 	url = https://github.com/jinahya/heads-of-governments-persistence.git
+	branch = develop
+[submodule "heads-of-governments-spring-data"]
+	path = heads-of-governments-spring-data
+	url = https://github.com/jinahya/heads-of-governments-spring-data.git
 	branch = develop
 [submodule "jinahya-persistence"]
 	path = jinahya-persistence

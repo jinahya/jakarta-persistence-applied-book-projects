@@ -4,7 +4,9 @@ The projects of *Jakarta Persistence Applied*, each a git submodule, at the comm
 
 | Project | What |
 |---|---|
+| [`heads-of-governments-jakarta-data`](https://github.com/jinahya/heads-of-governments-jakarta-data) | Jakarta Data, on the heads-of-governments database |
 | [`heads-of-governments-persistence`](https://github.com/jinahya/heads-of-governments-persistence) | Jakarta Persistence mappings of a small SQLite database of heads of government |
+| [`heads-of-governments-spring-data`](https://github.com/jinahya/heads-of-governments-spring-data) | Spring Data, on the heads-of-governments database |
 | [`jinahya-persistence`](https://github.com/jinahya/jinahya-persistence) | The library the other projects use |
 | [`mysql-sakila-persistence`](https://github.com/jinahya/mysql-sakila-persistence) | Jakarta Persistence mappings of the MySQL Sakila sample database |
 | [`postgresql-demodb-persistence`](https://github.com/jinahya/postgresql-demodb-persistence) | Jakarta Persistence mappings of the PostgreSQL demo database |
