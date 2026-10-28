@@ -1,0 +1,16 @@
+[submodule "heads-of-governments-persistence"]
+	path = heads-of-governments-persistence
+	url = https://github.com/jinahya/heads-of-governments-persistence.git
+	branch = develop
+[submodule "jinahya-persistence"]
+	path = jinahya-persistence
+	url = https://github.com/jinahya/jinahya-persistence.git
+	branch = develop
+[submodule "mysql-sakila-persistence"]
+	path = mysql-sakila-persistence
+	url = https://github.com/jinahya/mysql-sakila-persistence.git
+	branch = develop
+[submodule "postgresql-demodb-persistence"]
+	path = postgresql-demodb-persistence
+	url = https://github.com/jinahya/postgresql-demodb-persistence.git
+	branch = develop
