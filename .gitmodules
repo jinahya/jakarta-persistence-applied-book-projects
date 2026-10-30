@@ -22,3 +22,7 @@
 	path = postgresql-demodb-persistence
 	url = https://github.com/jinahya/postgresql-demodb-persistence.git
 	branch = develop
+[submodule "oracle-sample-schemas-persistence"]
+	path = oracle-sample-schemas-persistence
+	url = https://github.com/jinahya/oracle-sample-schemas-persistence.git
+	branch = develop

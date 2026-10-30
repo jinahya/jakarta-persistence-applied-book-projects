@@ -9,6 +9,7 @@ The projects of *Jakarta Persistence Applied*, each a git submodule, at the comm
 | [`heads-of-governments-spring-data`](https://github.com/jinahya/heads-of-governments-spring-data) | Spring Data, on the heads-of-governments database |
 | [`jinahya-persistence`](https://github.com/jinahya/jinahya-persistence) | The library the other projects use |
 | [`mysql-sakila-persistence`](https://github.com/jinahya/mysql-sakila-persistence) | Jakarta Persistence mappings of the MySQL Sakila sample database |
+| [`oracle-sample-schemas-persistence`](https://github.com/jinahya/oracle-sample-schemas-persistence) | Jakarta Persistence mappings of the Oracle Database sample schemas (CO, HR, SH) |
 | [`postgresql-demodb-persistence`](https://github.com/jinahya/postgresql-demodb-persistence) | Jakarta Persistence mappings of the PostgreSQL demo database |
 
 ## Cloning
@@ -55,6 +56,8 @@ versions only.
 | `heads-of-governments-jakarta-data` | `heads-of-governments-persistence` | `heads-of-governments-persistence` | `compile` |
 | `heads-of-governments-spring-data` | `heads-of-governments-persistence` | `heads-of-governments-persistence` | `compile` |
 | `mysql-sakila-persistence` | `jinahya-persistence` | `jinahya-persistence-test-utils` | `test` |
+| `oracle-sample-schemas-persistence` | `jinahya-persistence` | `jinahya-persistence-more` | `compile` |
+| | | `jinahya-persistence-test-utils` | `test` |
 | `postgresql-demodb-persistence` | `jinahya-persistence` | `jinahya-persistence-more` | `compile` |
 | | | `jinahya-persistence-utils` | `compile` |
 | | | `jinahya-persistence-test-utils` | `test` |
