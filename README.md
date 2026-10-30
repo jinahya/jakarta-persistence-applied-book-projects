@@ -36,10 +36,32 @@ The first keeps the projects as the book shows them; the second goes past it.
 
 Each project builds on its own, with its own wrapper, from its own directory; see its `README.md`. They need Java 25.
 
-A project may depend on a `-SNAPSHOT` of `jinahya-persistence`, which is not on Maven Central. Install it first:
+A project may depend on a `-SNAPSHOT` of another project here (see [Inter-dependencies](#inter-dependencies)), which
+is not on Maven Central. Install that project first, `jinahya-persistence` say:
 
 ```shell
 $ cd jinahya-persistence
 $ ./mvnw install -DskipTests
 ```
+
+## Inter-dependencies
+
+Some projects use another one here, as an `io.github.jinahya` artifact. Between releases, a project's `develop` may
+use the other's `-SNAPSHOT`, which has to be installed first (see [Building](#building)); a release uses released
+versions only.
+
+| Project | Depends on | Artifact | Scope |
+|---|---|---|---|
+| `heads-of-governments-jakarta-data` | `heads-of-governments-persistence` | `heads-of-governments-persistence` | `compile` |
+| `heads-of-governments-spring-data` | `heads-of-governments-persistence` | `heads-of-governments-persistence` | `compile` |
+| `mysql-sakila-persistence` | `jinahya-persistence` | `jinahya-persistence-test-utils` | `test` |
+| `postgresql-demodb-persistence` | `jinahya-persistence` | `jinahya-persistence-more` | `compile` |
+| | | `jinahya-persistence-utils` | `compile` |
+| | | `jinahya-persistence-test-utils` | `test` |
+
+`heads-of-governments-persistence` and `jinahya-persistence` depend on no other project here.
+
+`jinahya-persistence-test-utils` depends on `jinahya-persistence-utils` at `compile` scope, so a project that
+declares the former gets the latter too: `mysql-sakila-persistence`'s tests use both, and declare only
+`jinahya-persistence-test-utils`.
 
