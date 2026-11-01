@@ -53,7 +53,7 @@
 [submodule "oracle-sample-schemas-spring-data"]
 	path = oracle-sample-schemas-spring-data
 	url = https://github.com/jinahya/oracle-sample-schemas-spring-data.git
-	branch = main
+	branch = develop
 [submodule "postgresql-demodb-jakarta-data"]
 	path = postgresql-demodb-jakarta-data
 	url = https://github.com/jinahya/postgresql-demodb-jakarta-data.git
