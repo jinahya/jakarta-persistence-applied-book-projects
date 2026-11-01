@@ -1,6 +1,8 @@
 # jakarta-persistence-applied-book-projects
 
 The projects of *Jakarta Persistence Applied*, each a git submodule, at the commits the book is written against.
+The Jakarta Data and Spring Data projects, `*-jakarta-data` and `*-spring-data`, are under `data/`; the others are at
+the top.
 
 | Project | What |
 |---|---|
