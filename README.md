@@ -63,7 +63,8 @@ versions only.
 | | | `jinahya-persistence-utils` | `compile` |
 | | | `jinahya-persistence-test-utils` | `test` |
 
-`heads-of-governments-persistence` and `jinahya-persistence` depend on no other project here.
+`heads-of-governments-persistence`, `jinahya-persistence` and `mssql-sample-databases-persistence` depend on no other
+project here.
 
 `jinahya-persistence-test-utils` depends on `jinahya-persistence-utils` at `compile` scope, so a project that
 declares the former gets the latter too: `mysql-sakila-persistence`'s tests use both, and declare only
