@@ -30,3 +30,35 @@
 	path = mssql-sample-databases-persistence
 	url = https://github.com/jinahya/mssql-sample-databases-persistence.git
 	branch = develop
+[submodule "mysql-sakila-jakarta-data"]
+	path = mysql-sakila-jakarta-data
+	url = https://github.com/jinahya/mysql-sakila-jakarta-data.git
+	branch = develop
+[submodule "mysql-sakila-spring-data"]
+	path = mysql-sakila-spring-data
+	url = https://github.com/jinahya/mysql-sakila-spring-data.git
+	branch = develop
+[submodule "oracle-sample-schemas-jakarta-data"]
+	path = oracle-sample-schemas-jakarta-data
+	url = https://github.com/jinahya/oracle-sample-schemas-jakarta-data.git
+	branch = develop
+[submodule "mssql-sample-databases-jakarta-data"]
+	path = mssql-sample-databases-jakarta-data
+	url = https://github.com/jinahya/mssql-sample-databases-jakarta-data.git
+	branch = develop
+[submodule "mssql-sample-databases-spring-data"]
+	path = mssql-sample-databases-spring-data
+	url = https://github.com/jinahya/mssql-sample-databases-spring-data.git
+	branch = develop
+[submodule "oracle-sample-schemas-spring-data"]
+	path = oracle-sample-schemas-spring-data
+	url = https://github.com/jinahya/oracle-sample-schemas-spring-data.git
+	branch = main
+[submodule "postgresql-demodb-jakarta-data"]
+	path = postgresql-demodb-jakarta-data
+	url = https://github.com/jinahya/postgresql-demodb-jakarta-data.git
+	branch = develop
+[submodule "postgresql-demodb-spring-data"]
+	path = postgresql-demodb-spring-data
+	url = https://github.com/jinahya/postgresql-demodb-spring-data.git
+	branch = develop

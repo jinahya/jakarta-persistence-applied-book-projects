@@ -8,10 +8,18 @@ The projects of *Jakarta Persistence Applied*, each a git submodule, at the comm
 | [`heads-of-governments-persistence`](https://github.com/jinahya/heads-of-governments-persistence) | Jakarta Persistence mappings of a small SQLite database of heads of government |
 | [`heads-of-governments-spring-data`](https://github.com/jinahya/heads-of-governments-spring-data) | Spring Data, on the heads-of-governments database |
 | [`jinahya-persistence`](https://github.com/jinahya/jinahya-persistence) | The library the other projects use |
+| [`mysql-sakila-jakarta-data`](https://github.com/jinahya/mysql-sakila-jakarta-data) | Jakarta Data, on the Sakila sample database |
 | [`mysql-sakila-persistence`](https://github.com/jinahya/mysql-sakila-persistence) | Jakarta Persistence mappings of the MySQL Sakila sample database |
+| [`mysql-sakila-spring-data`](https://github.com/jinahya/mysql-sakila-spring-data) | Spring Data, on the Sakila sample database |
+| [`mssql-sample-databases-jakarta-data`](https://github.com/jinahya/mssql-sample-databases-jakarta-data) | Jakarta Data, on the SQL Server sample databases |
 | [`mssql-sample-databases-persistence`](https://github.com/jinahya/mssql-sample-databases-persistence) | Jakarta Persistence mappings of the Microsoft SQL Server sample databases |
+| [`mssql-sample-databases-spring-data`](https://github.com/jinahya/mssql-sample-databases-spring-data) | Spring Data, on the SQL Server sample databases |
+| [`oracle-sample-schemas-jakarta-data`](https://github.com/jinahya/oracle-sample-schemas-jakarta-data) | Jakarta Data, on the Oracle Database sample schemas |
 | [`oracle-sample-schemas-persistence`](https://github.com/jinahya/oracle-sample-schemas-persistence) | Jakarta Persistence mappings of the Oracle Database sample schemas (CO, HR, SH) |
+| [`oracle-sample-schemas-spring-data`](https://github.com/jinahya/oracle-sample-schemas-spring-data) | Spring Data, on the Oracle Database sample schemas |
+| [`postgresql-demodb-jakarta-data`](https://github.com/jinahya/postgresql-demodb-jakarta-data) | Jakarta Data, on the PostgreSQL demo database |
 | [`postgresql-demodb-persistence`](https://github.com/jinahya/postgresql-demodb-persistence) | Jakarta Persistence mappings of the PostgreSQL demo database |
+| [`postgresql-demodb-spring-data`](https://github.com/jinahya/postgresql-demodb-spring-data) | Spring Data, on the PostgreSQL demo database |
 
 ## Cloning
 
