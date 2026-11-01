@@ -9,6 +9,7 @@ The projects of *Jakarta Persistence Applied*, each a git submodule, at the comm
 | [`heads-of-governments-spring-data`](https://github.com/jinahya/heads-of-governments-spring-data) | Spring Data, on the heads-of-governments database |
 | [`jinahya-persistence`](https://github.com/jinahya/jinahya-persistence) | The library the other projects use |
 | [`mysql-sakila-persistence`](https://github.com/jinahya/mysql-sakila-persistence) | Jakarta Persistence mappings of the MySQL Sakila sample database |
+| [`mssql-sample-databases-persistence`](https://github.com/jinahya/mssql-sample-databases-persistence) | Jakarta Persistence mappings of the Microsoft SQL Server sample databases |
 | [`oracle-sample-schemas-persistence`](https://github.com/jinahya/oracle-sample-schemas-persistence) | Jakarta Persistence mappings of the Oracle Database sample schemas (CO, HR, SH) |
 | [`postgresql-demodb-persistence`](https://github.com/jinahya/postgresql-demodb-persistence) | Jakarta Persistence mappings of the PostgreSQL demo database |
 

@@ -26,3 +26,7 @@
 	path = oracle-sample-schemas-persistence
 	url = https://github.com/jinahya/oracle-sample-schemas-persistence.git
 	branch = develop
+[submodule "mssql-sample-databases-persistence"]
+	path = mssql-sample-databases-persistence
+	url = https://github.com/jinahya/mssql-sample-databases-persistence.git
+	branch = develop
