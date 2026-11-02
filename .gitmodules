@@ -26,9 +26,9 @@
 	path = oracle-sample-schemas-persistence
 	url = https://github.com/jinahya/oracle-sample-schemas-persistence.git
 	branch = develop
-[submodule "sql-server-samples-persistence"]
-	path = sql-server-samples-persistence
-	url = https://github.com/jinahya/sql-server-samples-persistence.git
+[submodule "sqlserver-samples-persistence"]
+	path = sqlserver-samples-persistence
+	url = https://github.com/jinahya/sqlserver-samples-persistence.git
 	branch = develop
 [submodule "mysql-sakila-jakarta-data"]
 	path = data/mysql-sakila-jakarta-data
@@ -42,13 +42,13 @@
 	path = data/oracle-sample-schemas-jakarta-data
 	url = https://github.com/jinahya/oracle-sample-schemas-jakarta-data.git
 	branch = develop
-[submodule "sql-server-samples-jakarta-data"]
-	path = data/sql-server-samples-jakarta-data
-	url = https://github.com/jinahya/sql-server-samples-jakarta-data.git
+[submodule "sqlserver-samples-jakarta-data"]
+	path = data/sqlserver-samples-jakarta-data
+	url = https://github.com/jinahya/sqlserver-samples-jakarta-data.git
 	branch = develop
-[submodule "sql-server-samples-spring-data"]
-	path = data/sql-server-samples-spring-data
-	url = https://github.com/jinahya/sql-server-samples-spring-data.git
+[submodule "sqlserver-samples-spring-data"]
+	path = data/sqlserver-samples-spring-data
+	url = https://github.com/jinahya/sqlserver-samples-spring-data.git
 	branch = develop
 [submodule "oracle-sample-schemas-spring-data"]
 	path = data/oracle-sample-schemas-spring-data

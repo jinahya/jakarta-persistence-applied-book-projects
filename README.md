@@ -19,9 +19,9 @@ the top.
 | [`postgresql-demodb-jakarta-data`](https://github.com/jinahya/postgresql-demodb-jakarta-data) | Jakarta Data, on the PostgreSQL demo database |
 | [`postgresql-demodb-persistence`](https://github.com/jinahya/postgresql-demodb-persistence) | Jakarta Persistence mappings of the PostgreSQL demo database |
 | [`postgresql-demodb-spring-data`](https://github.com/jinahya/postgresql-demodb-spring-data) | Spring Data, on the PostgreSQL demo database |
-| [`sql-server-samples-jakarta-data`](https://github.com/jinahya/sql-server-samples-jakarta-data) | Jakarta Data, on the SQL Server sample databases |
-| [`sql-server-samples-persistence`](https://github.com/jinahya/sql-server-samples-persistence) | Jakarta Persistence mappings of the Microsoft SQL Server sample databases |
-| [`sql-server-samples-spring-data`](https://github.com/jinahya/sql-server-samples-spring-data) | Spring Data, on the SQL Server sample databases |
+| [`sqlserver-samples-jakarta-data`](https://github.com/jinahya/sqlserver-samples-jakarta-data) | Jakarta Data, on the SQL Server sample databases |
+| [`sqlserver-samples-persistence`](https://github.com/jinahya/sqlserver-samples-persistence) | Jakarta Persistence mappings of the Microsoft SQL Server sample databases |
+| [`sqlserver-samples-spring-data`](https://github.com/jinahya/sqlserver-samples-spring-data) | Spring Data, on the SQL Server sample databases |
 
 ## Cloning
 
@@ -73,7 +73,7 @@ versions only.
 | | | `jinahya-persistence-utils` | `compile` |
 | | | `jinahya-persistence-test-utils` | `test` |
 
-`heads-of-governments-persistence`, `jinahya-persistence` and `sql-server-samples-persistence` depend on no other
+`heads-of-governments-persistence`, `jinahya-persistence` and `sqlserver-samples-persistence` depend on no other
 project here.
 
 `jinahya-persistence-test-utils` depends on `jinahya-persistence-utils` at `compile` scope, so a project that
