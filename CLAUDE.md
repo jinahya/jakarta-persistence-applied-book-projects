@@ -77,7 +77,7 @@ src/test/sql-exercises/
   `_HumanResources/`, `__/`).
 - A file holds its level's exercises in id order, each under a ruler that carries its id. A level with no exercise has
   no file.
-- Ids are permanent; see the header of each `EXERCISES.yaml`. `PROJECTS_EXERCISES.asciidoc`, here, picks the
+- Ids are permanent; see the header of each `EXERCISES.yaml`. `../PROJECTS_EXERCISES.asciidoc`, in the book, picks the
   exercises the book shows.
 - Exercise SQL pages in the optimal form the database permits (`LIMIT n`, `OFFSET m` only past the first page;
   `setMaxResults` / `setFirstResult` likewise), as the book's `../CLAUDE.md` states it.
@@ -109,14 +109,14 @@ which each project's root `pom.xml` adds as a test source with `build-helper-mav
 
 ## Documents
 
-The documents about the projects are here, beside this file. Those with agent instructions (`PROJECTS_*`,
-`SUBMODULE_RELEASE`) write their paths relative to the book's repository, where `_alignment.py` and the skills run.
+The documents about the projects are not here: this repository is what the book's readers clone. They live at the root
+of the book's repository (`../`), beside `_alignment.py`, where the skills run, and write their paths relative to it.
 
 | File | What |
 |---|---|
 | `PROJECTS_STRUCTURE.asciidoc` | the domains, their parts, and how the parts depend on one another |
 | `PROJECTS_BUILD.asciidoc` | the names and meanings of the profiles, scripts and Docker Compose files |
-| `PROJECTS_VERSIONS.asciidoc` | the version every submodule is to be on, per Jakarta EE generation (`../_alignment.py`) |
+| `PROJECTS_VERSIONS.asciidoc` | the version every submodule is to be on, per Jakarta EE generation (`_alignment.py`) |
 | `PROJECTS_EXERCISES.asciidoc` | which exercises the book shows, and the rules of the exercises |
 | `EXERCISES_PROGRESS.asciidoc` | the progress of the exercises (empty so far) |
 | `SUBMODULE_RELEASE.asciidoc` | releasing and deploying a submodule (`/release`, `/deploy-undeployed`) |
