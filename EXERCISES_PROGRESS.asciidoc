@@ -39,7 +39,7 @@ Steps of a unit (the status names the next step)
 2. `inputs` -> Codex, blind: run
      codex exec -s read-only --skip-git-repo-check -C exercises_progress/<UNIT> -o exercises_progress/<UNIT>/review-codex.md \
        "$(cat exercises_progress/CODEX_PROMPT.md)"
-   with only the inputs in that directory. Status `codex`.
+   with only the inputs in that directory (`exercises_progress/codex.sh <dir>` does it). Status `codex`.
 3. `codex` -> Claude reviews the same inputs before reading review-codex.md, into exercises_progress/<UNIT>/review-claude.md.
    Status `claude`.
 4. `claude` -> discuss: read review-codex.md against review-claude.md; for each item decide agreed / rejected / merged, with a
@@ -47,6 +47,13 @@ Steps of a unit (the status names the next step)
    in this file, under the unit. Status `decided`.
 5. `decided` -> apply the decisions to EXERCISES.asciidoc, EXERCISES.yaml and the .sql files, and the nested classes.
    test-compile, commit. Status `done`.
+
+A large unit (more than about 70 exercises) splits into batches of whole sections, about 60 exercises each, in
+exercises_progress/<UNIT>/<n>/; steps 1 to 4 run per batch (gather.py takes the batch's sections, as
+`python3 exercises_progress/gather.py . <UNIT>/<n> <module> <SECTION,...> <ddl>`), and step 5 applies them together.
+Claude's review of a batch may be done by a subagent given only that batch's directory and CODEX_PROMPT.md, writing
+review-claude.md, so that it stays independent of Codex's; the discussion and the decisions stay with the agent that
+runs the unit.
 
 Phase 2, after every unit is `done`: one database at a time, start its container (`docker compose up -d` in the
 project), run every statement whose output is `NOT YET RUN`, write the output in its place, fix a statement that fails,
@@ -60,8 +67,8 @@ then `docker compose down -v` and remove what it pulled if disk is short, before
 | # | Unit | Project | Sections | Source DDL | Status
 
 | 1 | HOG | heads-of-governments-persistence | HEAD, OFFICE, SCHEMA | `db/schema.sql` | done
-| 2 | SAKILA | mysql-sakila-persistence | every table and view, SCHEMA | `docker-entrypoint-initdb.d/01-sakila-schema.sql` | pending
-| 3 | DEMODB | postgresql-demodb-persistence | every table and view of `bookings`, SCHEMA | https://github.com/jinahya/postgresql-demodb-docker | pending
+| 2 | SAKILA | mysql-sakila-persistence | every table and view, SCHEMA | `docker-entrypoint-initdb.d/01-sakila-schema.sql` | done
+| 3 | DEMODB | postgresql-demodb-persistence | every table and view of `bookings`, SCHEMA | `exercises_progress/_ddl/demodb-20250901-3m-schema.sql`, the DDL of https://edu.postgrespro.ru/demo-20250901-3m.sql.gz (the edition compose.yaml runs), its data left out | pending
 | 4 | CO | oracle-sample-schemas-persistence-co | every table and view, SCHEMA | `db-sample-schemas/customer_orders/` | pending
 | 5 | HR | oracle-sample-schemas-persistence-hr | every table and view, SCHEMA | `db-sample-schemas/human_resources/` | pending
 | 6 | SH | oracle-sample-schemas-persistence-sh | every table and view, SCHEMA | `db-sample-schemas/sales_history/` | pending
@@ -89,7 +96,7 @@ A source DDL path is relative to the project. Where the project has none, take i
 | Database | Container | Statements `NOT YET RUN` | Status
 
 | heads-of-governments (SQLite, no container) | — | 7 (HOG) | pending
-| Sakila | `mysql-sakila-persistence/compose.yaml` | | pending
+| Sakila | `mysql-sakila-persistence/compose.yaml` | 63 (SAKILA) | pending
 | demodb | `postgresql-demodb-persistence/compose.yaml` | | pending
 | Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | | pending
 | SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | | pending
@@ -135,3 +142,100 @@ ones (HOG_HEAD_B_12, B_13, I_18, I_19) are empty.
 
 Process notes from this unit: CODEX_PROMPT.md no longer defines the levels (it had sent Codex moving exercises between
 tiers); review files are `review-*.md`, since a `claude.md` loads as CLAUDE.md on a case-insensitive disk.
+
+=== 2. SAKILA (2026-11-06)
+
+Four batches (`exercises_progress/SAKILA/1` .. `4`): ACTOR, ACTOR_INFO, FILM_ACTOR, FILM, FILM_TEXT, LANGUAGE; CATEGORY,
+FILM_CATEGORY, FILM_LIST, NICER_BUT_SLOWER_FILM_LIST, SALES_BY_FILM_CATEGORY, INVENTORY; ADDRESS, CITY, COUNTRY,
+CUSTOMER, CUSTOMER_LIST, STAFF, STAFF_LIST, STORE; PAYMENT, RENTAL, SALES_BY_STORE, SCHEMA. Codex reviewed each blind
+(57 items), Claude each by a subagent (48 items), and Codex answered the disagreements once
+(`exercises_progress/SAKILA/review-codex-reply.md`: 11 agree, 1 hold). Before: 222 live, 12 retired. After: 248 live,
+15 retired. The decisions are `exercises_progress/SAKILA/decisions1.py` .. `decisions4.py`.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| SAKILA_FILM_TEXT_B_02 | both | fixed, sql | LENGTH counts bytes; the request counts characters (CHAR_LENGTH); the columns the request names
+| SAKILA_ACTOR_I_06 | both | fixed, request and sql | sorted by the rounded average, so close averages tied and the wrong actor could rank higher
+| SAKILA_FILM_I_03 | both | fixed, title and request and sql | a NULL length fell into ELSE 'long'; Codex's own group for it, over Claude's leaving it out
+| SAKILA_FILM_TEXT_I_01 | Codex | fixed, request and sql | equal counts do not show the same films; film_text has no foreign key to film
+| SAKILA_ACTOR_INFO_I_03 | Codex | fixed, request and sql | an actor without a film has a NULL film_info, which fell into a NULL group instead of 0
+| SAKILA_ACTOR_INFO_A_01 | Codex | fixed, request and sql | a NULL film_info made the comparison UNKNOWN, so such an actor was never checked
+| SAKILA_ACTOR_INFO_B_01 | both | fixed, sql | SELECT *, LEFT(...) AS film_info gave two film_info columns, the first the whole string
+| SAKILA_FILM_B_06 | Claude | fixed, request and sql | the lowest and highest were hard-coded; title is not unique, so LIMIT 10 needs film_id
+| SAKILA_FILM_TEXT_I_03 | Claude | fixed, request and sql | the default collation ignores case, as does upd_film, so a case-only change was exactly what the check missed
+| SAKILA_FILM_B_07 | both | added, "how many films lack each optional value" | no Basic exercise shows that COUNT(column) skips NULLs; guards the populated columns other exercises assume
+| SAKILA_FILM_I_05 | Codex | added, "the copies of a film at each store, and how many are in" | no exercise tells the copies a store owns from the copies it has on the shelf now
+| SAKILA_FILM_A_02 | Claude | added, "how many films have each special feature" | FILM_B_04 tests one member of the SET column; counting every member means turning the set into rows
+| SAKILA_FILM_TEXT_I_06 | both | added, "the films whose film_text description differs from their description" | upd_film compares the description with !=, never true against a NULL, so a description set or cleared never reaches film_text
+| SAKILA_FILM_TEXT_I_07 | both | added, "the first words that start more than one title" | SAKILA_FILM_TEXT_A_02 relies on no two titles sharing a first word, which the DDL does not enforce; a check guards it
+| SAKILA_LANGUAGE_I_03 | Claude | added, "the first five films with the names of their language and original language" | no exercise joins one table twice under two aliases, as the two foreign keys from film to language ask
+| SAKILA_LANGUAGE_A_01 | both | added, "how many films use each language, as language and as original language" | LANGUAGE has no Advanced exercise; Claude's (both roles, every language) over Codex's, which ranked by original_language_id, NULL for every film in the data
+| SAKILA_ACTOR_INFO_I_04 | Claude | added, "the actors whose film_info may be cut by GROUP_CONCAT" | film_info is a GROUP_CONCAT, cut at group_concat_max_len; the exercises that count colons in it assume nothing was cut
+| SAKILA_SALES_BY_FILM_CATEGORY_B_01 | both | fixed, request and sql | the top three came only from the view's own ORDER BY, which a query of the view need not keep, with no tie-break
+| SAKILA_SALES_BY_FILM_CATEGORY_I_01 | Codex | fixed, request | equal totals do not show that each payment reaches one category; SAKILA_SALES_BY_FILM_CATEGORY_I_04 checks that
+| SAKILA_FILM_LIST_I_01 | both | fixed, request and sql | the request said inner joins, but the view joins film_category and category by outer joins, so a film without a category has a row too
+| SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_01 | both | fixed, request and sql | the join compared category with =, so the rows of the films without a category, NULL there, never joined
+| SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_02 | Claude | fixed, request and sql | m.category = n.category never matched the NULL category, which dropped out of the answer
+| SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_01 | Codex | fixed, request and sql | the request compares the two views' rows, but the SQL read one
+| SAKILA_CATEGORY_I_02 | both | fixed, request and sql | ordered by the rounded average with no tie-break, so LIMIT 1 could keep the wrong category
+| SAKILA_CATEGORY_I_01 | Codex | fixed, request and sql | the inner join left out a category with no film, though the request counts each category
+| SAKILA_FILM_CATEGORY_I_03 | Codex | fixed, request and sql | the query started from film_category, so a category with no film was left out
+| SAKILA_FILM_LIST_A_02 | both | added, "the films with the most actors in each category" | FILM_LIST has no live Advanced exercise; Claude's, which reads the view's own actors string, over Codex's three cheapest per category
+| SAKILA_INVENTORY_I_06 | both | added, "the copies which are out on more than one rental at once" | SAKILA_INVENTORY_I_03, I_05 and A_01 assume a copy is out on one rental at most, which the DDL does not enforce
+| SAKILA_INVENTORY_A_03 | Claude | added, "the ten copies most overdue, as of the last rental" | film.rental_duration is never used, and overdue copies are the first thing a store asks about; a fixed 'now' keeps the answer stable
+| SAKILA_FILM_CATEGORY_B_03 | Claude | added, "the films of the Comedy category" | listing a category's films by its name, across both foreign keys of the link table, has no Basic exercise
+| SAKILA_SALES_BY_FILM_CATEGORY_I_04 | Codex | added, "the payments which reach no category, or more than one" | payment.rental_id is nullable and a film may have several categories; this checks what SAKILA_SALES_BY_FILM_CATEGORY_I_01 assumes
+| SAKILA_SALES_BY_FILM_CATEGORY_A_04 | Claude | added, "each category's sales at each store, with the view's total beside them" | the view hides the store; subtotals with WITH ROLLUP and GROUPING() check its totals against the tables
+| SAKILA_CATEGORY_I_06 | Codex | added, "the category names which more than one category has" | the DDL does not make a category name unique, while the views group and join by it
+| SAKILA_STAFF_I_01 | both | fixed, request and sql | the inner join dropped a staff member who handled no rental, though the request counts each
+| SAKILA_STAFF_I_03 | both | fixed, request and sql | the inner joins dropped a staff member with no rental
+| SAKILA_STAFF_LIST_I_02 | Claude | fixed, request and sql | the title asks whether, but the SQL never compared the two cities, and city names repeat across countries
+| SAKILA_CUSTOMER_B_03 | Claude | fixed, request and sql | no ORDER BY, so the order of the groups was unspecified
+| SAKILA_STORE_A_01 | Codex | fixed, request and sql | the inner join dropped a store with no copy, though the request counts each store
+| SAKILA_CITY_B_01 | Codex | fixed, request and sql | city names repeat (across countries), so ordering by the name alone does not fix the order of the rows
+| SAKILA_CITY_I_04 | Codex | fixed, request and sql | two cities may share the name and the count; city_id breaks the tie
+| SAKILA_STAFF_LIST_A_01 | Codex | added, "the staff members who served a customer living outside their own country" | STAFF_LIST has no Advanced exercise; the view's home country against the rental-to-customer path
+| SAKILA_CUSTOMER_B_06 | Codex | added, "the customers whose email is missing or not one address" | email is nullable, and SAKILA_CUSTOMER_B_03 takes the domain after the @ of every one
+| SAKILA_CUSTOMER_I_06 | Codex | added, "the customers with no payment" | the spending exercises join payment with inner joins, assuming every customer has paid
+| SAKILA_CUSTOMER_I_07 | Claude | added, "the five customers who returned late most often" | film.rental_duration against the rental dates is the schema's own notion of lateness (get_customer_balance), and no exercise uses it per customer
+| SAKILA_CUSTOMER_A_04 | Claude | added, "the five customers with the longest gap between two rentals" | no exercise uses LAG over dates, which rental_date makes natural
+| SAKILA_COUNTRY_I_05 | both | added, "the country names found more than once" | SAKILA_COUNTRY_B_02 says the names are unique and the A tier orders by them, but country.country has no unique key
+| SAKILA_CITY_I_06 | Codex | added, "the city names found more than once in a country" | city names identify a city within its country in several exercises, which no key enforces
+| SAKILA_ADDRESS_B_05 | Claude | added, "how many addresses have no postal code, as NULL and as an empty string" | postal_code is nullable, and no exercise shows that a missing one takes two forms, nor that = '' is not true for NULL
+| SAKILA_CUSTOMER_LIST_B_05 | Claude | added, "the first ten customers in the United States by zip code" | the view's `zip code` column has a space in its name, which only backticks quote, and no exercise reads it
+| SAKILA_CUSTOMER_LIST_I_03 | both | retired | the view defines name as exactly that CONCAT, so the query can never return a row
+| SAKILA_ADDRESS_A_01 | Claude | retired | SAKILA_ADDRESS_I_03's 'none' class counts exactly these addresses; three NOT EXISTS is not Advanced either
+| SAKILA_SCHEMA_A_01 | both | fixed, request and sql | RANK() gave a country with a tie two rows, so LIMIT 5 cut rows, not countries; the country was grouped by its name, which is not unique; no tie-break on the country's total
+| SAKILA_SCHEMA_A_04 | Codex | fixed, request and sql | the payments skip months (2005-09 to 2006-01), so LAG compared February 2006 with August 2005; a calendar of months fills the gap with 0
+| SAKILA_SCHEMA_I_09 | Codex | fixed, request and sql | a NULL length fell into ELSE 'long', as in SAKILA_FILM_I_03; the same 'unknown' group
+| SAKILA_RENTAL_A_02 | both | fixed, request and sql | 'in 2005' had no lower bound; rental_id joins the final tie-break
+| SAKILA_RENTAL_B_04 | both | fixed, request and sql | LIMIT 1 with no tie-break
+| SAKILA_SCHEMA_I_03 | both | fixed, request and sql | a tie at the fifth place made LIMIT 5 unstable
+| SAKILA_RENTAL_A_01 | Claude | fixed, request and sql | late by the clock here, by calendar days in SAKILA_RENTAL_I_03 and in the schema's get_customer_balance; one rule, the schema's
+| SAKILA_PAYMENT_B_05 | Claude | fixed, request and sql | BETWEEN ... '23:59:59' holds only while payment_date has no fraction of a second; a half-open range holds for any
+| SAKILA_SCHEMA_B_02 | Claude | fixed, request and sql | the rows of a UNION ALL come in no stated order
+| SAKILA_SALES_BY_STORE_B_01 | Claude | fixed, request and sql | the rows came in the view's own order, which a query of the view need not keep
+| SAKILA_PAYMENT_B_06 | Claude | added, "the rentals paid more than once" | SAKILA_SCHEMA_I_07 and I_09 count rentals with COUNT(*) over rental LEFT JOIN payment, right only if a rental has one payment, which no key enforces
+| SAKILA_PAYMENT_I_04 | Claude | added, "the payments which do not agree with their rental" | payment and rental both name the customer, and nothing makes them agree, nor a payment no earlier than its rental
+| SAKILA_SALES_BY_STORE_A_01 | both | added, "each store's share of all sales" | SALES_BY_STORE has no Advanced exercise; a window over the whole result, SUM() OVER ()
+| SAKILA_SCHEMA_A_10 | Claude | added, "the five customers who owed the most at the end of the data" | SAKILA_SCHEMA_B_06 lists the stored functions, but no exercise calls one
+| SAKILA_SCHEMA_I_14 | Codex | added, "the manager names of sales_by_store which more than one staff member has" | SAKILA_SALES_BY_STORE_I_02 joins by the manager's name, which no key makes unique
+| SAKILA_SCHEMA_A_03 | Claude | retired | a running total over payment alone, which SAKILA_PAYMENT_A_01 teaches already
+|===
+
+Rejected: Codex's FILM_A_01 (no NULL rating; FILM_B_07 counts the NULLs), FILM_ACTOR_A_03 (empty casts; a million-pair
+query), LANGUAGE_A_01 (original_language_id is NULL for every film), FILM_I_06, SCHEMA_I_14, I_15, I_16 (duplicates of
+this round's adds), INVENTORY_I_03 and SCHEMA_I_07 (guarded by INVENTORY_I_06 and PAYMENT_B_06), CUSTOMER_B_02,
+CUSTOMER_LIST_B_02, PAYMENT_B_01 (the module returns whole entity rows), CUSTOMER_B_07 (every customer has one
+create_date), FILM_LIST_B_05; Claude's RENTAL_I_04 (STAFF_I_01 counts the same). Codex holds on CUSTOMER_A_02 (a store
+might have no customer above its average); kept as it is, since that needs every customer of a store to have paid the
+same.
+
+`NOT YET RUN`: SAKILA_FILM_TEXT_B_02, SAKILA_ACTOR_I_06, SAKILA_FILM_I_03, SAKILA_FILM_TEXT_I_01, SAKILA_ACTOR_INFO_I_03, SAKILA_ACTOR_INFO_A_01, SAKILA_ACTOR_INFO_B_01, SAKILA_FILM_B_06, SAKILA_FILM_TEXT_I_03, SAKILA_FILM_B_07, SAKILA_FILM_I_05, SAKILA_FILM_A_02, SAKILA_FILM_TEXT_I_06, SAKILA_FILM_TEXT_I_07, SAKILA_LANGUAGE_I_03, SAKILA_LANGUAGE_A_01, SAKILA_ACTOR_INFO_I_04, SAKILA_SALES_BY_FILM_CATEGORY_B_01, SAKILA_FILM_LIST_I_01, SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_01, SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_02, SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_01, SAKILA_CATEGORY_I_02, SAKILA_CATEGORY_I_01, SAKILA_FILM_CATEGORY_I_03, SAKILA_FILM_LIST_A_02, SAKILA_INVENTORY_I_06, SAKILA_INVENTORY_A_03, SAKILA_FILM_CATEGORY_B_03, SAKILA_SALES_BY_FILM_CATEGORY_I_04, SAKILA_SALES_BY_FILM_CATEGORY_A_04, SAKILA_CATEGORY_I_06, SAKILA_STAFF_I_01, SAKILA_STAFF_I_03, SAKILA_STAFF_LIST_I_02, SAKILA_CUSTOMER_B_03, SAKILA_STORE_A_01, SAKILA_CITY_B_01, SAKILA_CITY_I_04, SAKILA_STAFF_LIST_A_01, SAKILA_CUSTOMER_B_06, SAKILA_CUSTOMER_I_06, SAKILA_CUSTOMER_I_07, SAKILA_CUSTOMER_A_04, SAKILA_COUNTRY_I_05, SAKILA_CITY_I_06, SAKILA_ADDRESS_B_05, SAKILA_CUSTOMER_LIST_B_05, SAKILA_SCHEMA_A_01, SAKILA_SCHEMA_A_04, SAKILA_SCHEMA_I_09, SAKILA_RENTAL_A_02, SAKILA_RENTAL_B_04, SAKILA_SCHEMA_I_03, SAKILA_RENTAL_A_01, SAKILA_PAYMENT_B_05, SAKILA_SCHEMA_B_02, SAKILA_SALES_BY_STORE_B_01, SAKILA_PAYMENT_B_06, SAKILA_PAYMENT_I_04, SAKILA_SALES_BY_STORE_A_01, SAKILA_SCHEMA_A_10, SAKILA_SCHEMA_I_14.
+
+Process notes from this unit: apply.py now keeps each .sql file's own layout (ruler with or without title, output above
+or under, title or request as the comment, blank lines), a line such as "Answered by ..." after a block, a multi-line
+@DisplayName, and makes a new level's .sql file and test class; codex.sh closes stdin (`< /dev/null`), without which a
+background `codex exec` waits for input.

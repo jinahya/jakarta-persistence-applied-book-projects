@@ -1,0 +1,95 @@
+import json
+C = []
+def fix(i, src, why, **kw): C.append(dict(op='fix', id=i, _src=src, _why=why, rerun=kw.pop('rerun', 'sql' in kw), **kw))
+def add(i, src, why, **kw): C.append(dict(op='add', id=i, after=kw.pop('after', 'last'), _src=src, _why=why, rerun=True, **kw))
+
+fix('SAKILA_FILM_TEXT_B_02', 'both', 'LENGTH counts bytes; the request counts characters (CHAR_LENGTH); the columns the request names',
+    sql="SELECT film_id, title, CHAR_LENGTH(description) AS characters\nFROM film_text\nORDER BY characters DESC, film_id\nLIMIT 5")
+fix('SAKILA_ACTOR_I_06', 'both', 'sorted by the rounded average, so close averages tied and the wrong actor could rank higher',
+    request=["For each actor, take the average `length` of the films they appear in, through `film_actor`.",
+             "Show the five actors with the largest average: their `actor_id`, `first_name`, `last_name` and the average rounded to two decimal places, the largest first.",
+             "The order uses the average itself, not the rounded one; break ties by `actor_id`."],
+    sql="SELECT a.*, ROUND(AVG(f.length), 2) AS average_length\nFROM actor a\n         JOIN film_actor fa ON fa.actor_id = a.actor_id\n         JOIN film f ON f.film_id = fa.film_id\nGROUP BY a.actor_id\nORDER BY AVG(f.length) DESC, a.actor_id\nLIMIT 5")
+fix('SAKILA_FILM_I_03', 'both', "a NULL length fell into ELSE 'long'; Codex's own group for it, over Claude's leaving it out",
+    title='how many films are short, medium, long, or of unknown length',
+    request=["Put each film in one of four groups by its `length`: `short` under 60 minutes, `medium` from 60 to 120 minutes, `long` over 120 minutes, and `unknown` where `length` is NULL.",
+             "Show each group with its number of films, from the shortest group to the longest, `unknown` last.",
+             "A `CASE` expression makes the group, and the query groups by it; a NULL length passes no comparison, so it needs a test of its own."],
+    sql="SELECT CASE\n           WHEN length IS NULL THEN 'unknown'\n           WHEN length < 60 THEN 'short'\n           WHEN length <= 120 THEN 'medium'\n           ELSE 'long'\n           END  AS size,\n       COUNT(*) AS films\nFROM film\nGROUP BY size\nORDER BY CASE size WHEN 'short' THEN 1 WHEN 'medium' THEN 2 WHEN 'long' THEN 3 ELSE 4 END")
+fix('SAKILA_FILM_TEXT_I_01', 'Codex', 'equal counts do not show the same films; film_text has no foreign key to film',
+    request=["`film_text` keeps a copy of each film's title and description, for the full-text index; triggers on `film` keep it up to date.",
+             "Count the rows of `film_text` and of `film`, the films without a `film_text` row, and the `film_text` rows without a film, in one row.",
+             "Equal counts alone would not show that the two hold the same films; `film_text` has no foreign key to `film`."],
+    sql="SELECT (SELECT COUNT(*) FROM film_text) AS film_text,\n       (SELECT COUNT(*) FROM film)      AS film,\n       (SELECT COUNT(*)\n        FROM film f\n        WHERE NOT EXISTS (SELECT 1 FROM film_text ft WHERE ft.film_id = f.film_id)) AS without_text,\n       (SELECT COUNT(*)\n        FROM film_text ft\n        WHERE NOT EXISTS (SELECT 1 FROM film f WHERE f.film_id = ft.film_id)) AS without_film")
+fix('SAKILA_ACTOR_INFO_I_03', 'Codex', 'an actor without a film has a NULL film_info, which fell into a NULL group instead of 0',
+    request=["Count the categories of each actor's `film_info` as in SAKILA_ACTOR_INFO_I_02, then group the actors by that number.",
+             "Show each number of categories with the number of actors, the most categories first.",
+             "The groups are formed on a computed value, not on a column; an actor without a film has a NULL `film_info`, counted as 0 categories."],
+    sql="SELECT COALESCE(CHAR_LENGTH(film_info) - CHAR_LENGTH(REPLACE(film_info, ':', '')), 0) AS categories, COUNT(*) AS actors\nFROM actor_info\nGROUP BY categories\nORDER BY categories DESC")
+fix('SAKILA_ACTOR_INFO_A_01', 'Codex', 'a NULL film_info made the comparison UNKNOWN, so such an actor was never checked',
+    request=["Check the view against the tables it is built on.",
+             "For each actor, compare the number of categories in `film_info`, counted as in SAKILA_ACTOR_INFO_I_02, with the number of distinct categories of the actor's films, counted from `film_actor` and `film_category` by a correlated subquery; a NULL `film_info` counts as 0, so an actor without a film is checked too.",
+             "Show the `actor_id`, the `first_name` and the `last_name` of the actors where the two differ, ordered by `actor_id`.",
+             "The installed data has none."],
+    sql="SELECT ai.*\nFROM actor_info ai\nWHERE COALESCE(CHAR_LENGTH(ai.film_info) - CHAR_LENGTH(REPLACE(ai.film_info, ':', '')), 0)\n          <> (SELECT COUNT(DISTINCT fc.category_id)\n              FROM film_actor fa\n                       JOIN film_category fc ON fc.film_id = fa.film_id\n              WHERE fa.actor_id = ai.actor_id)\nORDER BY ai.actor_id")
+fix('SAKILA_ACTOR_INFO_B_01', 'both', 'SELECT *, LEFT(...) AS film_info gave two film_info columns, the first the whole string',
+    sql="SELECT actor_id, first_name, last_name, LEFT(film_info, 80) AS film_info\nFROM actor_info\nWHERE actor_id = 1")
+fix('SAKILA_FILM_B_06', 'Claude', 'the lowest and highest were hard-coded; title is not unique, so LIMIT 10 needs film_id',
+    request=["Find the films whose `rental_rate` is the lowest of all films and whose `replacement_cost` is the highest of all films; in the installed data those are `0.99` and `29.99`.",
+             "Show their `film_id`, `title`, `rental_rate` and `replacement_cost`, ordered by title, then by `film_id`, and keep the first ten."],
+    sql="SELECT *\nFROM film\nWHERE rental_rate = (SELECT MIN(rental_rate) FROM film)\n  AND replacement_cost = (SELECT MAX(replacement_cost) FROM film)\nORDER BY title, film_id\nLIMIT 10")
+fix('SAKILA_FILM_TEXT_I_03', 'Claude', 'the default collation ignores case, as does upd_film, so a case-only change was exactly what the check missed',
+    request=["Join `film_text` to `film` by the film id, and find the films whose two titles are not exactly the same, letter case included: the `film_id`, the film's `title` and the `film_text` title.",
+             "The default collation ignores case, and so does the `upd_film` trigger; `COLLATE utf8mb4_bin` compares the characters as they are.",
+             "The triggers keep the titles the same, so the installed data has none."],
+    sql="SELECT f.*, ft.*\nFROM film f\n         JOIN film_text ft ON ft.film_id = f.film_id\nWHERE ft.title COLLATE utf8mb4_bin <> f.title\nORDER BY f.film_id")
+
+add('SAKILA_FILM_B_07', 'both', 'no Basic exercise shows that COUNT(column) skips NULLs; guards the populated columns other exercises assume',
+    title='how many films lack each optional value',
+    request=["`film` has five columns that may be NULL: `description`, `release_year`, `length`, `rating` and `special_features`.",
+             "Count, in one row, all the films and, for each of the five, the films where it is NULL.",
+             "`COUNT(column)` skips NULLs, so `COUNT(*) - COUNT(column)` is the number of NULLs."],
+    sql="SELECT COUNT(*)                           AS films,\n       COUNT(*) - COUNT(description)      AS no_description,\n       COUNT(*) - COUNT(release_year)     AS no_release_year,\n       COUNT(*) - COUNT(length)           AS no_length,\n       COUNT(*) - COUNT(rating)           AS no_rating,\n       COUNT(*) - COUNT(special_features) AS no_special_features\nFROM film")
+add('SAKILA_FILM_I_05', 'Codex', "no exercise tells the copies a store owns from the copies it has on the shelf now",
+    title='the copies of a film at each store, and how many are in',
+    request=["For the film `1`, show every store with how many copies of the film it owns and how many are in now.",
+             "A copy is out while it has a rental whose `return_date` is NULL; a store with no copy shows zeros.",
+             "The film goes into the outer join, so every store stays; a `NOT EXISTS` tells a copy that is in."],
+    sql="SELECT s.store_id,\n       COUNT(i.inventory_id) AS copies,\n       COUNT(CASE\n                 WHEN i.inventory_id IS NOT NULL\n                     AND NOT EXISTS (SELECT 1\n                                     FROM rental r\n                                     WHERE r.inventory_id = i.inventory_id\n                                       AND r.return_date IS NULL) THEN 1\n           END)              AS copies_in\nFROM store s\n         LEFT JOIN inventory i ON i.store_id = s.store_id AND i.film_id = 1\nGROUP BY s.store_id\nORDER BY s.store_id")
+add('SAKILA_FILM_A_02', 'Claude', 'FILM_B_04 tests one member of the SET column; counting every member means turning the set into rows',
+    title='how many films have each special feature',
+    request=["`special_features` is a `SET` of `Trailers`, `Commentaries`, `Deleted Scenes` and `Behind the Scenes`.",
+             "For each of the four, count the films whose `special_features` hold it, and show each feature with its count, the most first; ties are ordered by the feature.",
+             "A derived table lists the members, and `FIND_IN_SET` joins each to the films that hold it."],
+    sql="SELECT sf.feature, COUNT(f.film_id) AS films\nFROM (SELECT 'Trailers' AS feature\n      UNION ALL\n      SELECT 'Commentaries'\n      UNION ALL\n      SELECT 'Deleted Scenes'\n      UNION ALL\n      SELECT 'Behind the Scenes') sf\n         LEFT JOIN film f ON FIND_IN_SET(sf.feature, f.special_features) > 0\nGROUP BY sf.feature\nORDER BY films DESC, sf.feature")
+add('SAKILA_FILM_TEXT_I_06', 'both', 'upd_film compares the description with !=, never true against a NULL, so a description set or cleared never reaches film_text',
+    title='the films whose film_text description differs from their description',
+    request=["Join `film_text` to `film` by the film id, and find the films whose two descriptions are not exactly the same, a NULL on one side and a value on the other counting as different.",
+             "The `upd_film` trigger compares them with `!=`, which is never true when one side is NULL; `<=>` is the comparison that is.",
+             "The installed data has none."],
+    sql="SELECT f.*, ft.*\nFROM film f\n         JOIN film_text ft ON ft.film_id = f.film_id\nWHERE NOT (ft.description COLLATE utf8mb4_bin <=> f.description)\nORDER BY f.film_id")
+add('SAKILA_FILM_TEXT_I_07', 'both', 'SAKILA_FILM_TEXT_A_02 relies on no two titles sharing a first word, which the DDL does not enforce; a check guards it',
+    title='the first words that start more than one title',
+    request=["SAKILA_FILM_TEXT_A_02 chains the titles by their words, which works only if no two titles share a first word; nothing in the schema says so.",
+             "Group the titles of `film_text` by their first word, and show each first word that starts more than one title, with its number of titles, ordered by the word; the check passes when nothing comes back."],
+    sql="SELECT SUBSTRING_INDEX(title, ' ', 1) AS first_word, COUNT(*) AS titles\nFROM film_text\nGROUP BY first_word\nHAVING COUNT(*) > 1\nORDER BY first_word")
+add('SAKILA_LANGUAGE_I_03', 'Claude', 'no exercise joins one table twice under two aliases, as the two foreign keys from film to language ask',
+    title='the first five films with the names of their language and original language',
+    request=["`film` refers to `language` twice: by `language_id`, and by `original_language_id`, which may be NULL.",
+             "Show the first five films by `film_id`, each with the name of its language and the name of its original language, NULL where it has none.",
+             "`language` joins twice, under two aliases, the second by an outer join so that no film drops out."],
+    sql="SELECT f.film_id, f.title, l.name AS language, ol.name AS original_language\nFROM film f\n         JOIN language l ON l.language_id = f.language_id\n         LEFT JOIN language ol ON ol.language_id = f.original_language_id\nORDER BY f.film_id\nLIMIT 5")
+add('SAKILA_LANGUAGE_A_01', 'both', "LANGUAGE has no Advanced exercise; Claude's (both roles, every language) over Codex's, which ranked by original_language_id, NULL for every film in the data",
+    title='how many films use each language, as language and as original language',
+    file_header="Exercises at the advanced level on language: references turned into rows with UNION ALL, and counted under conditions. Each poses a question, answers it, and shows what the installed data gives back.",
+    request=["For every language, even one no film uses, count the films that use it as their `language_id` and the films that use it as their `original_language_id`, both in one row, ordered by `language_id`.",
+             "A `UNION ALL` turns the two references into rows, each tagged with its role, and a `COUNT` of a `CASE` counts each role."],
+    sql="SELECT l.*,\n       COUNT(CASE WHEN u.role = 'language' THEN 1 END) AS as_language,\n       COUNT(CASE WHEN u.role = 'original' THEN 1 END) AS as_original_language\nFROM language l\n         LEFT JOIN (SELECT language_id, 'language' AS role\n                    FROM film\n                    UNION ALL\n                    SELECT original_language_id, 'original'\n                    FROM film\n                    WHERE original_language_id IS NOT NULL) u ON u.language_id = l.language_id\nGROUP BY l.language_id\nORDER BY l.language_id")
+add('SAKILA_ACTOR_INFO_I_04', 'Claude', 'film_info is a GROUP_CONCAT, cut at group_concat_max_len; the exercises that count colons in it assume nothing was cut',
+    title='the actors whose film_info may be cut by GROUP_CONCAT',
+    request=["`film_info` is built by `GROUP_CONCAT`, which cuts its result at `group_concat_max_len` bytes, 1024 by default, without an error.",
+             "Find the actors whose `film_info` is as long as that limit, so that it may have been cut: the `actor_id`, the `first_name`, the `last_name` and the length in bytes, ordered by `actor_id`.",
+             "SAKILA_ACTOR_INFO_I_02, I_03 and A_01 count the colons in `film_info`, which is right only if nothing was cut; the check passes when nothing comes back."],
+    sql="SELECT actor_id, first_name, last_name, LENGTH(film_info) AS film_info_bytes\nFROM actor_info\nWHERE LENGTH(film_info) >= @@group_concat_max_len\nORDER BY actor_id")
+json.dump({'module': 'mysql-sakila-persistence', 'changes': C}, open('decisions1.json', 'w'), indent=1, ensure_ascii=False)
+print(len(C), 'changes')

@@ -1,0 +1,1466 @@
+= Exercises
+:toc: left
+:toclevels: 3
+
+The exercises on the installed `sakila` database: a section for each table and view, with a section for each level, and, at the end, a section for the schema as a whole.
+Each exercise poses a problem; its answer, and what the installed data gives back, are in the `.sql` file, and are checked by an integration test.
+
+Run a file as a whole:
+
+[source,sh]
+----
+docker exec -i mysql-sakila mysql -uroot -p'Passw0rd!' -t sakila < src/test/sql-exercises/<section>/<NN>_<level>.sql
+----
+
+[[SAKILA_ADDRESS_B_01]]
+==== SAKILA_ADDRESS_B_01: how many addresses are in the district of California
+
+Count the addresses whose `district` is `California`.
+A single table, an equality filter and a `COUNT`.
+
+.`address/01_basic.sql`, SAKILA_ADDRESS_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS addresses
+FROM address
+WHERE district = 'California'
+----
+
+====
+
+
+[[SAKILA_ADDRESS_B_02]]
+==== SAKILA_ADDRESS_B_02: the five districts with the most addresses
+
+Group the addresses by `district` and count each group.
+Show the five districts with the most addresses, with their counts, the most first; districts with the same count are ordered by name.
+
+.`address/01_basic.sql`, SAKILA_ADDRESS_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT district, COUNT(*) AS addresses
+FROM address
+GROUP BY district
+ORDER BY addresses DESC, district
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_ADDRESS_B_03]]
+==== SAKILA_ADDRESS_B_03: the addresses whose address2 is NULL
+
+Most addresses have an empty `address2`, but a few have none at all.
+Find the addresses whose `address2` is `NULL`, and show the `address_id`, the `address` and the `district`, ordered by `address_id`.
+`= NULL` matches nothing; the test is `IS NULL`, and an empty string is not `NULL`.
+
+.`address/01_basic.sql`, SAKILA_ADDRESS_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT address_id, address, address2, district, city_id, postal_code, phone, last_update -- every column but location, a GEOMETRY which does not print
+FROM address
+WHERE address2 IS NULL
+ORDER BY address_id
+----
+
+====
+
+
+[[SAKILA_ADDRESS_B_04]]
+==== SAKILA_ADDRESS_B_04: the addresses with an empty district
+
+Find the addresses whose `district` is the empty string.
+Show the `address_id`, the `address`, the `postal_code` and the `phone`, ordered by `address_id`.
+The column is `NOT NULL`, so a missing district is stored as `''`, and the filter compares with it.
+
+.`address/01_basic.sql`, SAKILA_ADDRESS_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT address_id, address, address2, district, city_id, postal_code, phone, last_update -- every column but location, a GEOMETRY which does not print
+FROM address
+WHERE district = ''
+ORDER BY address_id
+----
+
+====
+
+Answered by `Address_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_ADDRESS_I_01]]
+==== SAKILA_ADDRESS_I_01: the first five addresses, with their city and country
+
+Show the first five addresses by `address_id`, each with the name of its city and the name of that city's country.
+An address refers to a city (`city_id`), and a city to a country (`country_id`), so the query joins three tables in a chain.
+
+.`address/02_intermediate.sql`, SAKILA_ADDRESS_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.address_id, a.address, a.address2, a.district, a.city_id, a.postal_code, a.phone, a.last_update, ci.*, co.* -- every column but location, a GEOMETRY which does not print
+FROM address a
+         JOIN city ci ON ci.city_id = a.city_id
+         JOIN country co ON co.country_id = ci.country_id
+ORDER BY a.address_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_ADDRESS_I_02]]
+==== SAKILA_ADDRESS_I_02: the district names found in more than one country
+
+The same district name may appear in different countries.
+Group the addresses by `district`, join `city` to reach the country, and keep the districts whose addresses lie in more than one country; leave out the empty district.
+Show each district with its number of countries, the most first; districts with the same number are ordered by name.
+
+.`address/02_intermediate.sql`, SAKILA_ADDRESS_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.district, COUNT(DISTINCT ci.country_id) AS countries
+FROM address a
+         JOIN city ci ON ci.city_id = a.city_id
+WHERE a.district <> ''
+GROUP BY a.district
+HAVING COUNT(DISTINCT ci.country_id) > 1
+ORDER BY countries DESC, a.district
+----
+
+====
+
+
+[[SAKILA_ADDRESS_I_03]]
+==== SAKILA_ADDRESS_I_03: how many addresses belong to a store, a staff member or a customer
+
+Classify each address by who refers to it: a store, else a staff member, else a customer, else nobody.
+Show each class with its number of addresses, the most first; classes with the same number are ordered by name.
+A `CASE` of `EXISTS` conditions gives the class, and the first condition that holds wins.
+
+.`address/02_intermediate.sql`, SAKILA_ADDRESS_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT CASE
+           WHEN EXISTS (SELECT 1 FROM store s WHERE s.address_id = a.address_id) THEN 'store'
+           WHEN EXISTS (SELECT 1 FROM staff s WHERE s.address_id = a.address_id) THEN 'staff'
+           WHEN EXISTS (SELECT 1 FROM customer c WHERE c.address_id = a.address_id) THEN 'customer'
+           ELSE 'none'
+           END  AS used_by,
+       COUNT(*) AS addresses
+FROM address a
+GROUP BY used_by
+ORDER BY addresses DESC, used_by
+----
+
+====
+
+Answered by `Address_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_ADDRESS_A_01]]
+==== SAKILA_ADDRESS_A_01: the addresses no customer, staff member or store has
+
+An address is referred to by a customer, a staff member or a store.
+Find the addresses which none of the three refers to, the whole rows, by `address_id`.
+Three `NOT EXISTS` conditions, each a correlated subquery on a different table.
+The installed data has none.
+
+.`address/03_advanced.sql`, SAKILA_ADDRESS_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*
+FROM address a
+WHERE NOT EXISTS (SELECT 1 FROM customer c WHERE c.address_id = a.address_id)
+  AND NOT EXISTS (SELECT 1 FROM staff s WHERE s.address_id = a.address_id)
+  AND NOT EXISTS (SELECT 1 FROM store s WHERE s.address_id = a.address_id)
+ORDER BY a.address_id
+----
+
+====
+
+
+[[SAKILA_ADDRESS_A_02]]
+==== SAKILA_ADDRESS_A_02: the pairs of addresses which share a postal code
+
+Find the pairs of different addresses with the same `postal_code`, leaving out the empty postal code.
+Show each pair once: the `address_id` and the `address` of both, and the postal code, ordered by the first `address_id` and then by the second.
+A self join of `address`; the condition that the second id is larger than the first keeps each pair once and drops an address paired with itself.
+
+.`address/03_advanced.sql`, SAKILA_ADDRESS_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a1.address_id, a1.address, a1.address2, a1.district, a1.city_id, a1.postal_code, a1.phone, a1.last_update, -- every column but location, a GEOMETRY which does not print
+       a2.address_id, a2.address, a2.address2, a2.district, a2.city_id, a2.postal_code, a2.phone, a2.last_update
+FROM address a1
+         JOIN address a2 ON a2.postal_code = a1.postal_code AND a2.address_id > a1.address_id
+WHERE a1.postal_code <> ''
+ORDER BY a1.address_id, a2.address_id
+----
+
+====
+
+
+[[SAKILA_ADDRESS_A_03]]
+==== SAKILA_ADDRESS_A_03: the three districts with the most addresses in each of India, China and the United States
+
+Count the addresses of each district in India, in China and in the United States, and keep the three districts with the most addresses in each country.
+Show the country, the district and the count, ordered by the country and then by the count, the most first; districts with the same count are ordered by name.
+A top-N per group: `ROW_NUMBER()` over a partition by country numbers the districts, and the outer query keeps the first three.
+
+.`address/03_advanced.sql`, SAKILA_ADDRESS_A_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, district, addresses
+FROM (SELECT co.country,
+             a.district,
+             COUNT(*)                                                                       AS addresses,
+             ROW_NUMBER() OVER (PARTITION BY co.country_id ORDER BY COUNT(*) DESC, a.district) AS district_rank
+      FROM address a
+               JOIN city ci ON ci.city_id = a.city_id
+               JOIN country co ON co.country_id = ci.country_id
+      WHERE co.country IN ('India', 'China', 'United States')
+      GROUP BY co.country_id, co.country, a.district) ranked
+WHERE district_rank <= 3
+ORDER BY country, district_rank
+----
+
+====
+
+Answered by `Address_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_CITY_B_01]]
+==== SAKILA_CITY_B_01: the cities whose name starts with Q
+
+Find the cities whose name starts with the letter `Q`.
+Show the whole rows, ordered by the name.
+A `LIKE` with a trailing wildcard.
+
+.`city/01_basic.sql`, SAKILA_CITY_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM city
+WHERE city LIKE 'Q%'
+ORDER BY city
+----
+
+====
+
+
+[[SAKILA_CITY_B_02]]
+==== SAKILA_CITY_B_02: how many city names have more than one word
+
+Count the cities whose name has a space in it, such as `Buenos Aires`.
+A `LIKE` with a wildcard on both sides of the space.
+
+.`city/01_basic.sql`, SAKILA_CITY_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS cities
+FROM city
+WHERE city LIKE '% %'
+----
+
+====
+
+Answered by `City_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_CITY_I_01]]
+==== SAKILA_CITY_I_01: the cities of Canada
+
+Show the cities of Canada, the whole rows, ordered by the name.
+The country is known only by its name, so join `country` and filter on `country.country`.
+
+.`city/02_intermediate.sql`, SAKILA_CITY_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT ci.*
+FROM city ci
+         JOIN country co ON co.country_id = ci.country_id
+WHERE co.country = 'Canada'
+ORDER BY ci.city
+----
+
+====
+
+
+[[SAKILA_CITY_I_02]]
+==== SAKILA_CITY_I_02: the five countries with the most cities
+
+Count the cities of each country.
+Show the five countries with the most cities, with their counts, the most first; countries with the same count are ordered by name.
+
+.`city/02_intermediate.sql`, SAKILA_CITY_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT co.*, COUNT(*) AS cities
+FROM country co
+         JOIN city ci ON ci.country_id = co.country_id
+GROUP BY co.country_id
+ORDER BY cities DESC, co.country
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_CITY_I_03]]
+==== SAKILA_CITY_I_03: how many cities have no address
+
+Count the cities to which no address refers.
+An anti-join on
+`address.city_id`, then a count.
+
+.`city/02_intermediate.sql`, SAKILA_CITY_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS cities
+FROM city ci
+WHERE NOT EXISTS (SELECT 1 FROM address a WHERE a.city_id = ci.city_id)
+----
+
+====
+
+
+[[SAKILA_CITY_I_04]]
+==== SAKILA_CITY_I_04: the cities with more than one address
+
+Count the addresses of each city, and keep the cities with more than one.
+Show the `city_id`, the `city` and the count, the most first; cities with the same count are ordered by the name.
+
+.`city/02_intermediate.sql`, SAKILA_CITY_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT ci.*, COUNT(*) AS addresses
+FROM city ci
+         JOIN address a ON a.city_id = ci.city_id
+GROUP BY ci.city_id
+HAVING COUNT(*) > 1
+ORDER BY addresses DESC, ci.city
+----
+
+====
+
+
+[[SAKILA_CITY_I_05]]
+==== SAKILA_CITY_I_05: the city names found in more than one country
+
+Group the cities by name and keep the names that belong to more than one country.
+Show each such name with its number of countries, the most first; names with the same number are ordered by the name.
+
+.`city/02_intermediate.sql`, SAKILA_CITY_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT city, COUNT(DISTINCT country_id) AS countries
+FROM city
+GROUP BY city
+HAVING COUNT(DISTINCT country_id) > 1
+ORDER BY countries DESC, city
+----
+
+====
+
+Answered by `City_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_CITY_A_01]]
+==== SAKILA_CITY_A_01: the first ten cities which are the only city of their country
+
+Find the cities for which no other city has the same `country_id`.
+Show the `city_id`, the `city` and the name of its country for the first ten such cities, ordered by the country's name and then by `city_id`.
+A correlated `NOT EXISTS` on `city` itself: the subquery looks for another city of the same country.
+
+.`city/03_advanced.sql`, SAKILA_CITY_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT ci.*, co.*
+FROM city ci
+         JOIN country co ON co.country_id = ci.country_id
+WHERE NOT EXISTS (SELECT 1 FROM city other WHERE other.country_id = ci.country_id AND other.city_id <> ci.city_id)
+ORDER BY co.country, ci.city_id
+LIMIT 10
+----
+
+====
+
+
+[[SAKILA_CITY_A_02]]
+==== SAKILA_CITY_A_02: the cities whose customers are all inactive
+
+Find the cities which have at least one customer, through `address`, and none of whose customers is active.
+Show the `city_id` and the `city`, ordered by the name and then by `city_id`.
+An `EXISTS` asks for a customer, and a `NOT EXISTS` asks that no customer of the city has `active = 1`.
+
+.`city/03_advanced.sql`, SAKILA_CITY_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT ci.*
+FROM city ci
+WHERE EXISTS (SELECT 1
+              FROM address a
+                       JOIN customer cu ON cu.address_id = a.address_id
+              WHERE a.city_id = ci.city_id)
+  AND NOT EXISTS (SELECT 1
+                  FROM address a
+                           JOIN customer cu ON cu.address_id = a.address_id
+                  WHERE a.city_id = ci.city_id
+                    AND cu.active = 1)
+ORDER BY ci.city, ci.city_id
+----
+
+====
+
+Answered by `City_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_COUNTRY_B_01]]
+==== SAKILA_COUNTRY_B_01: how many countries there are
+
+Count the rows of `country`.
+
+.`country/01_basic.sql`, SAKILA_COUNTRY_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS countries
+FROM country
+----
+
+====
+
+
+[[SAKILA_COUNTRY_B_02]]
+==== SAKILA_COUNTRY_B_02: the countries whose name starts with S, ordered by name
+
+Find the countries whose `country` starts with `S`.
+Show the whole rows, ordered by the name; the names are unique, so no tie-break is needed.
+
+.`country/01_basic.sql`, SAKILA_COUNTRY_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM country
+WHERE country LIKE 'S%'
+ORDER BY country
+----
+
+====
+
+
+[[SAKILA_COUNTRY_B_03]]
+==== SAKILA_COUNTRY_B_03: the five countries with the longest names
+
+Measure each country's name in characters, not in bytes, with `CHAR_LENGTH`.
+Show the five countries with the longest names, with their lengths, the longest first; ties are ordered by the name.
+
+.`country/01_basic.sql`, SAKILA_COUNTRY_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *, CHAR_LENGTH(country) AS length
+FROM country
+ORDER BY length DESC, country
+LIMIT 5
+----
+
+====
+
+Answered by `Country_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_COUNTRY_I_01]]
+==== SAKILA_COUNTRY_I_01: the countries with no city
+
+Find the countries which have no city: no row in `city` refers to them.
+Show the whole rows.
+The installed data has none.
+
+.`country/02_intermediate.sql`, SAKILA_COUNTRY_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT co.*
+FROM country co
+WHERE NOT EXISTS (SELECT 1 FROM city ci WHERE ci.country_id = co.country_id)
+----
+
+====
+
+
+[[SAKILA_COUNTRY_I_02]]
+==== SAKILA_COUNTRY_I_02: the five countries with the most customers
+
+Count the customers who live in each country.
+A customer has an address, an address a city, and a city a country, so the query walks four tables.
+Show the five countries with the most customers, with their counts, the most first; ties are ordered by the country's name.
+
+.`country/02_intermediate.sql`, SAKILA_COUNTRY_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT co.*, COUNT(*) AS customers
+FROM country co
+         JOIN city ci ON ci.country_id = co.country_id
+         JOIN address a ON a.city_id = ci.city_id
+         JOIN customer cu ON cu.address_id = a.address_id
+GROUP BY co.country_id
+ORDER BY customers DESC, co.country
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_COUNTRY_I_03]]
+==== SAKILA_COUNTRY_I_03: how many countries have exactly one city
+
+Count the countries which have exactly one row in `city`.
+A correlated subquery counts each country's cities, and the outer query keeps those whose count is one.
+
+.`country/02_intermediate.sql`, SAKILA_COUNTRY_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS countries
+FROM country co
+WHERE (SELECT COUNT(*) FROM city ci WHERE ci.country_id = co.country_id) = 1
+----
+
+====
+
+
+[[SAKILA_COUNTRY_I_04]]
+==== SAKILA_COUNTRY_I_04: the countries which have a city but no customer
+
+Find the countries which have at least one city, yet no customer lives in any of their cities.
+Show the whole rows, ordered by the name.
+One `EXISTS` and one `NOT EXISTS`, the second walking city, address and customer.
+
+.`country/02_intermediate.sql`, SAKILA_COUNTRY_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT co.*
+FROM country co
+WHERE EXISTS (SELECT 1 FROM city ci WHERE ci.country_id = co.country_id)
+  AND NOT EXISTS (SELECT 1
+                  FROM city ci
+                           JOIN address a ON a.city_id = ci.city_id
+                           JOIN customer cu ON cu.address_id = a.address_id
+                  WHERE ci.country_id = co.country_id)
+ORDER BY co.country
+----
+
+====
+
+Answered by `Country_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_COUNTRY_A_01]]
+==== SAKILA_COUNTRY_A_01: the fewest countries which hold half of the customers
+
+Count the customers of each country, and order the countries by the count, the most first, ties by the name.
+Keep a running total of the counts (`SUM() OVER (ORDER BY ...)`) and stop at the first country with which the total reaches half of all the customers.
+Show each country, its count, the running total and the running total as a percentage of all the customers, rounded to two decimal places.
+
+.`country/03_advanced.sql`, SAKILA_COUNTRY_A_01
+[%collapsible]
+====
+[source,sql]
+----
+WITH counted AS (SELECT co.country, COUNT(*) AS customers
+                 FROM country co
+                          JOIN city ci ON ci.country_id = co.country_id
+                          JOIN address a ON a.city_id = ci.city_id
+                          JOIN customer cu ON cu.address_id = a.address_id
+                 GROUP BY co.country_id, co.country),
+     running AS (SELECT counted.*,
+                        SUM(customers) OVER (ORDER BY customers DESC, country) AS running_total,
+                        SUM(customers) OVER () AS total
+                 FROM counted)
+SELECT country, customers, running_total, ROUND(100 * running_total / total, 2) AS running_percent
+FROM running
+WHERE running_total - customers < total / 2
+ORDER BY customers DESC, country
+----
+
+====
+
+
+[[SAKILA_COUNTRY_A_02]]
+==== SAKILA_COUNTRY_A_02: the countries ranked in the top ten by customers, ties sharing a rank
+
+Rank the countries by their number of customers with `RANK()`, so that countries with the same count share a rank and the next rank is skipped.
+Show the countries whose rank is ten or better, with their counts and ranks, ordered by the rank; ties are ordered by the name.
+Unlike `LIMIT 10`, the cut keeps every country tied at the edge.
+
+.`country/03_advanced.sql`, SAKILA_COUNTRY_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, customers, ranking
+FROM (SELECT co.country, COUNT(*) AS customers, RANK() OVER (ORDER BY COUNT(*) DESC) AS ranking
+      FROM country co
+               JOIN city ci ON ci.country_id = co.country_id
+               JOIN address a ON a.city_id = ci.city_id
+               JOIN customer cu ON cu.address_id = a.address_id
+      GROUP BY co.country_id, co.country) t
+WHERE ranking <= 10
+ORDER BY ranking, country
+----
+
+====
+
+Answered by `Country_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_CUSTOMER_B_01]]
+==== SAKILA_CUSTOMER_B_01: how many customers are active, and how many are not
+
+Split the customers by the `active` flag: show each value of `active` (`0`
+or `1`) with the number of customers who have it, ordered by the value.
+
+.`customer/01_basic.sql`, SAKILA_CUSTOMER_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT active, COUNT(*) AS customers
+FROM customer
+GROUP BY active
+ORDER BY active
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_B_02]]
+==== SAKILA_CUSTOMER_B_02: how many customers each store has
+
+Count the customers of each store, by the customer's own `store_id`.
+Show each `store_id` with its count, ordered by the store.
+
+.`customer/01_basic.sql`, SAKILA_CUSTOMER_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*, COUNT(*) AS customers
+FROM customer c
+         JOIN store st ON st.store_id = c.store_id
+GROUP BY st.store_id
+ORDER BY st.store_id
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_B_03]]
+==== SAKILA_CUSTOMER_B_03: the domains of the customers' emails
+
+Every customer has an `email`.
+Take the part after the `@` as the domain, group the customers by it, and show each domain with the number of its customers.
+The group is by an expression, not by a column.
+
+.`customer/01_basic.sql`, SAKILA_CUSTOMER_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT SUBSTRING_INDEX(email, '@', -1) AS domain, COUNT(*) AS customers
+FROM customer
+GROUP BY domain
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_B_04]]
+==== SAKILA_CUSTOMER_B_04: the customers who are not active
+
+Find the customers whose `active` is `0`.
+Show their `customer_id`, `first_name`, `last_name` and `store_id`, ordered by `customer_id`.
+
+.`customer/01_basic.sql`, SAKILA_CUSTOMER_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM customer
+WHERE active = 0
+ORDER BY customer_id
+----
+
+====
+
+Answered by `Customer_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_CUSTOMER_I_01]]
+==== SAKILA_CUSTOMER_I_01: the five customers who paid the most
+
+Sum the payments of each customer.
+Show the five customers who paid the most: their `customer_id`, `first_name`, `last_name` and total, the largest first; ties are ordered by
+`customer_id`.
+
+.`customer/02_intermediate.sql`, SAKILA_CUSTOMER_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, SUM(p.amount) AS paid
+FROM customer c
+         JOIN payment p ON p.customer_id = c.customer_id
+GROUP BY c.customer_id
+ORDER BY paid DESC, c.customer_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_I_02]]
+==== SAKILA_CUSTOMER_I_02: the customers who never rented
+
+Find the customers who have no rental at all.
+Show the whole rows.
+The installed data has none.
+
+.`customer/02_intermediate.sql`, SAKILA_CUSTOMER_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*
+FROM customer c
+WHERE NOT EXISTS (SELECT 1 FROM rental r WHERE r.customer_id = c.customer_id)
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_I_03]]
+==== SAKILA_CUSTOMER_I_03: the customers who rented forty times or more
+
+Count the rentals of each customer, and keep the customers with forty or more.
+Show their `customer_id`, `first_name`, `last_name` and number of rentals, the most first; ties are ordered by `customer_id`.
+The condition is on the count, so it goes in `HAVING`.
+
+.`customer/02_intermediate.sql`, SAKILA_CUSTOMER_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, COUNT(*) AS rentals
+FROM customer c
+         JOIN rental r ON r.customer_id = c.customer_id
+GROUP BY c.customer_id
+HAVING COUNT(*) >= 40
+ORDER BY rentals DESC, c.customer_id
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_I_04]]
+==== SAKILA_CUSTOMER_I_04: the five customers holding the most rentals not returned yet
+
+A rental whose `return_date` is `NULL` is not returned yet.
+Count those rentals of each customer, and show the five customers with the most: their `customer_id`, `first_name`, `last_name` and count, the most first; ties are ordered by `customer_id`.
+
+.`customer/02_intermediate.sql`, SAKILA_CUSTOMER_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, COUNT(*) AS unreturned
+FROM customer c
+         JOIN rental r ON r.customer_id = c.customer_id
+WHERE r.return_date IS NULL
+GROUP BY c.customer_id
+ORDER BY unreturned DESC, c.customer_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_I_05]]
+==== SAKILA_CUSTOMER_I_05: the first ten customers of the store 1, each with the rentals they have out, zero included
+
+For the first ten customers of the store `1` by `customer_id`, count the rentals they have not returned yet.
+Show the `customer_id`, the `first_name`, the `last_name` and the count; a customer with nothing out shows `0`.
+The join is an outer one, and the condition on `return_date` is in its `ON`; in `WHERE` it would drop the customers with nothing out.
+
+.`customer/02_intermediate.sql`, SAKILA_CUSTOMER_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.customer_id, c.first_name, c.last_name, COUNT(r.rental_id) AS rentals_out
+FROM customer c
+         LEFT JOIN rental r ON r.customer_id = c.customer_id AND r.return_date IS NULL
+WHERE c.store_id = 1
+GROUP BY c.customer_id
+ORDER BY c.customer_id
+LIMIT 10
+----
+
+====
+
+Answered by `Customer_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_CUSTOMER_A_01]]
+==== SAKILA_CUSTOMER_A_01: the three customers who paid the most at each store
+
+Sum the payments of each customer, the store being the customer's own `store_id`.
+Number the customers within each store, the largest total first and ties by `customer_id`, with `ROW_NUMBER() OVER (PARTITION BY ...)`, and keep the first three of each store.
+Show the `store_id`, the `customer_id`, the `first_name`, the `last_name` and the total, ordered by the store and the number.
+
+.`customer/03_advanced.sql`, SAKILA_CUSTOMER_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT store_id, customer_id, first_name, last_name, paid
+FROM (SELECT c.store_id, c.customer_id, c.first_name, c.last_name, SUM(p.amount) AS paid,
+             ROW_NUMBER() OVER (PARTITION BY c.store_id ORDER BY SUM(p.amount) DESC, c.customer_id) AS n
+      FROM customer c
+               JOIN payment p ON p.customer_id = c.customer_id
+      GROUP BY c.store_id, c.customer_id, c.first_name, c.last_name) t
+WHERE n <= 3
+ORDER BY store_id, n
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_A_02]]
+==== SAKILA_CUSTOMER_A_02: how many customers of each store paid more than that store's average customer
+
+Sum the payments of each customer, then compare each customer's total with the average total of the customers of the same store.
+Show, for each store, how many of its customers paid more than the average, and the average itself rounded to two decimal places, ordered by `store_id`.
+A common table expression holds the totals, and a correlated subquery takes the average of the customer's own store.
+
+.`customer/03_advanced.sql`, SAKILA_CUSTOMER_A_02
+[%collapsible]
+====
+[source,sql]
+----
+WITH paid AS (SELECT c.customer_id, c.store_id, SUM(p.amount) AS paid
+              FROM customer c
+                       JOIN payment p ON p.customer_id = c.customer_id
+              GROUP BY c.customer_id, c.store_id)
+SELECT p1.store_id, COUNT(*) AS customers,
+       (SELECT ROUND(AVG(p2.paid), 2) FROM paid p2 WHERE p2.store_id = p1.store_id) AS average_paid
+FROM paid p1
+WHERE p1.paid > (SELECT AVG(p2.paid) FROM paid p2 WHERE p2.store_id = p1.store_id)
+GROUP BY p1.store_id
+ORDER BY p1.store_id
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_A_03]]
+==== SAKILA_CUSTOMER_A_03: the customers in four bands by what they paid
+
+Sum the payments of each customer, and split the customers into four bands of nearly the same size, those who paid the most in the first, with `NTILE(4) OVER (ORDER BY ...)`; ties are ordered by `customer_id`.
+Show each band with its number of customers, the least and the most paid in it, and its total, ordered by the band.
+The 599 customers do not split evenly, so the last band has one fewer.
+
+.`customer/03_advanced.sql`, SAKILA_CUSTOMER_A_03
+[%collapsible]
+====
+[source,sql]
+----
+WITH paid AS (SELECT c.customer_id, SUM(p.amount) AS paid
+              FROM customer c
+                       JOIN payment p ON p.customer_id = c.customer_id
+              GROUP BY c.customer_id),
+     banded AS (SELECT paid.*, NTILE(4) OVER (ORDER BY paid DESC, customer_id) AS band
+                FROM paid)
+SELECT band, COUNT(*) AS customers, MIN(paid) AS least_paid, MAX(paid) AS most_paid, SUM(paid) AS total
+FROM banded
+GROUP BY band
+ORDER BY band
+----
+
+====
+
+Answered by `Customer_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_CUSTOMER_LIST_B_01]]
+==== SAKILA_CUSTOMER_LIST_B_01: the customers in Japan
+
+The `customer_list` view joins each customer with their address, city and country, and writes the name as one string.
+Show the customers who live in Japan, the whole rows of the view, ordered by `ID`.
+
+.`customer_list/01_basic.sql`, SAKILA_CUSTOMER_LIST_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM customer_list
+WHERE country = 'Japan'
+ORDER BY ID
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_LIST_B_02]]
+==== SAKILA_CUSTOMER_LIST_B_02: how many customers each store has, as the view's SID says
+
+Count the customers of each store, as the view's `SID` column, the store's id, says.
+Show each `SID` with its count, ordered by `SID`.
+The counts should match those taken from
+`customer` itself.
+
+.`customer_list/01_basic.sql`, SAKILA_CUSTOMER_LIST_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*, COUNT(*) AS customers
+FROM customer_list l
+         JOIN store st ON st.store_id = l.SID
+GROUP BY st.store_id
+ORDER BY st.store_id
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_LIST_B_03]]
+==== SAKILA_CUSTOMER_LIST_B_03: how many customers the view's notes call active
+
+The view does not show the `active` flag; its `notes` column holds `active` for an active customer and an empty string for the others.
+Show each value of `notes` with the number of its customers, ordered by `notes`.
+The counts should match those of `active` in `customer` itself.
+
+.`customer_list/01_basic.sql`, SAKILA_CUSTOMER_LIST_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT notes, COUNT(*) AS customers
+FROM customer_list
+GROUP BY notes
+ORDER BY notes
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_LIST_B_04]]
+==== SAKILA_CUSTOMER_LIST_B_04: how many customers live on an Avenue
+
+Count the rows of the view whose `address` ends with the word `Avenue`.
+
+.`customer_list/01_basic.sql`, SAKILA_CUSTOMER_LIST_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS customers
+FROM customer_list
+WHERE address LIKE '% Avenue'
+----
+
+====
+
+Answered by `CustomerList_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_CUSTOMER_LIST_I_01]]
+==== SAKILA_CUSTOMER_LIST_I_01: whether the view has a row for every customer
+
+Check that the view is complete: count the rows of
+`customer_list` and the rows of `customer`, and show both counts in one row.
+The view uses inner joins, so a customer whose address chain is broken would be missing.
+
+.`customer_list/02_intermediate.sql`, SAKILA_CUSTOMER_LIST_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT COUNT(*) FROM customer_list) AS customer_list, (SELECT COUNT(*) FROM customer) AS customer
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_LIST_I_02]]
+==== SAKILA_CUSTOMER_LIST_I_02: the cities with more than one customer
+
+Group the rows of the view by `city` and `country`, as two countries may have a city of the same name.
+Show the groups with more than one customer, with their counts, ordered by the city and then the country.
+
+.`customer_list/02_intermediate.sql`, SAKILA_CUSTOMER_LIST_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT city, country, COUNT(*) AS customers
+FROM customer_list
+GROUP BY city, country
+HAVING COUNT(*) > 1
+ORDER BY city, country
+----
+
+====
+
+
+[[SAKILA_CUSTOMER_LIST_I_03]]
+==== SAKILA_CUSTOMER_LIST_I_03: the rows whose name is not the customer's first and last name
+
+The view writes a customer's name as one string.
+Join each row of the view with its `customer` by `ID`, and find the rows whose `name` differs from `first_name`, a space, and `last_name`.
+Show the `ID`, the `name`, the `first_name` and the `last_name`.
+The installed data has none.
+
+.`customer_list/02_intermediate.sql`, SAKILA_CUSTOMER_LIST_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT cl.*, c.*
+FROM customer_list cl
+         JOIN customer c ON c.customer_id = cl.ID
+WHERE cl.name <> CONCAT(c.first_name, ' ', c.last_name)
+----
+
+====
+
+Answered by `CustomerList_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_CUSTOMER_LIST_A_01]]
+==== SAKILA_CUSTOMER_LIST_A_01: the three countries with the most customers of each store
+
+Count the rows of the view for each `SID` and `country`.
+Number the countries within each store, the most customers first and ties by the country's name, with `ROW_NUMBER() OVER (PARTITION BY ...)`, and keep the first three of each store.
+Show the `SID`, the country and the count, ordered by the store and the number.
+
+.`customer_list/03_advanced.sql`, SAKILA_CUSTOMER_LIST_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT SID, country, customers
+FROM (SELECT SID, country, COUNT(*) AS customers,
+             ROW_NUMBER() OVER (PARTITION BY SID ORDER BY COUNT(*) DESC, country) AS n
+      FROM customer_list
+      GROUP BY SID, country) t
+WHERE n <= 3
+ORDER BY SID, n
+----
+
+====
+
+Answered by `CustomerList_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_STAFF_B_01]]
+==== SAKILA_STAFF_B_01: every staff member, with their store
+
+Show every staff member: their `staff_id`, `first_name`, `last_name`, the
+`store_id` of the store they work at, and the `active` flag, ordered by `staff_id`.
+
+.`staff/01_basic.sql`, SAKILA_STAFF_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update -- every column but picture, a BLOB which does not print
+FROM staff s
+ORDER BY s.staff_id
+----
+
+====
+
+
+[[SAKILA_STAFF_B_02]]
+==== SAKILA_STAFF_B_02: the staff members who have no password
+
+`staff.password` may be `NULL`.
+Show the `staff_id`, `first_name`, `last_name` and `username` of the staff members who have no password, ordered by `staff_id`.
+
+.`staff/01_basic.sql`, SAKILA_STAFF_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update -- every column but picture, a BLOB which does not print
+FROM staff s
+WHERE s.password IS NULL
+ORDER BY s.staff_id
+----
+
+====
+
+Answered by `Staff_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_STAFF_I_01]]
+==== SAKILA_STAFF_I_01: how many rentals each staff member handled
+
+Count the rentals each staff member handled, by `rental.staff_id`.
+Show each staff member's `staff_id` and `first_name` with the count, ordered by `staff_id`.
+
+.`staff/02_intermediate.sql`, SAKILA_STAFF_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update, COUNT(*) AS rentals -- every column but picture, a BLOB which does not print
+FROM staff s
+         JOIN rental r ON r.staff_id = s.staff_id
+GROUP BY s.staff_id
+ORDER BY s.staff_id
+----
+
+====
+
+
+[[SAKILA_STAFF_I_02]]
+==== SAKILA_STAFF_I_02: the staff members who manage the store they work at
+
+A store names its manager (`manager_staff_id`), and a staff member names the store they work at (`store_id`).
+The two are not tied together by the schema.
+Find the staff members who manage the very store they work at: their `staff_id`, `first_name`, `last_name` and the `store_id`.
+
+.`staff/02_intermediate.sql`, SAKILA_STAFF_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update, st.* -- every column but picture, a BLOB which does not print
+FROM staff s
+         JOIN store st ON st.manager_staff_id = s.staff_id
+WHERE st.store_id = s.store_id
+ORDER BY s.staff_id
+----
+
+====
+
+
+[[SAKILA_STAFF_I_03]]
+==== SAKILA_STAFF_I_03: how many rentals each staff member handled for their own store's copies, and for the other's
+
+A staff member works at one store, but may rent out a copy of another store.
+For each staff member, count the rentals they handled whose copy is at their own store, and those whose copy is elsewhere, with `CASE` inside `SUM`.
+Show the `staff_id`, `first_name`, `store_id` and the two counts, ordered by `staff_id`.
+
+.`staff/02_intermediate.sql`, SAKILA_STAFF_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update, -- every column but picture, a BLOB which does not print
+       SUM(CASE WHEN i.store_id = s.store_id THEN 1 ELSE 0 END) AS own_store,
+       SUM(CASE WHEN i.store_id <> s.store_id THEN 1 ELSE 0 END) AS other_store
+FROM staff s
+         JOIN rental r ON r.staff_id = s.staff_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+GROUP BY s.staff_id
+ORDER BY s.staff_id
+----
+
+====
+
+Answered by `Staff_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_STAFF_A_01]]
+==== SAKILA_STAFF_A_01: the day on which each staff member took the most
+
+Sum the payments each staff member took on each day.
+For each staff member, show the day with the largest sum, with the number of payments and the sum; on a tie, the earlier day.
+Order by `staff_id`; the best day per staff member is a top-1-per-group, with `ROW_NUMBER() OVER (PARTITION BY staff_id ...)`.
+
+.`staff/03_advanced.sql`, SAKILA_STAFF_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT staff_id, day, payments, total
+FROM (SELECT staff_id, DATE(payment_date) AS day, COUNT(*) AS payments, SUM(amount) AS total,
+             ROW_NUMBER() OVER (PARTITION BY staff_id ORDER BY SUM(amount) DESC, DATE(payment_date)) AS rn
+      FROM payment
+      GROUP BY staff_id, DATE(payment_date)) d
+WHERE rn = 1
+ORDER BY staff_id
+----
+
+====
+
+Answered by `Staff_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_STAFF_LIST_B_01]]
+==== SAKILA_STAFF_LIST_B_01: every row of the view
+
+The `staff_list` view joins each staff member with their address, city and country.
+Show every row, ordered by `ID`.
+
+.`staff_list/01_basic.sql`, SAKILA_STAFF_LIST_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM staff_list
+ORDER BY ID
+----
+
+====
+
+Answered by `StaffList_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_STAFF_LIST_I_01]]
+==== SAKILA_STAFF_LIST_I_01: whether the view has a row for every staff member
+
+Check that the view is complete: count the rows of `staff_list`
+and of `staff`, and show both in one row.
+
+.`staff_list/02_intermediate.sql`, SAKILA_STAFF_LIST_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT COUNT(*) FROM staff_list) AS staff_list, (SELECT COUNT(*) FROM staff) AS staff
+----
+
+====
+
+
+[[SAKILA_STAFF_LIST_I_02]]
+==== SAKILA_STAFF_LIST_I_02: whether each staff member lives in the city of their store
+
+The view's `city` is where the staff member lives, and `SID` is the store they work at.
+Join each row to its store, the store's address and its city, and show the `ID`, `name`, the city they live in and the city they work in, ordered by `ID`.
+
+.`staff_list/02_intermediate.sql`, SAKILA_STAFF_LIST_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT l.*, ci.*
+FROM staff_list l
+         JOIN store st ON st.store_id = l.SID
+         JOIN address a ON a.address_id = st.address_id
+         JOIN city ci ON ci.city_id = a.city_id
+ORDER BY l.ID
+----
+
+====
+
+Answered by `StaffList_Exercises_02_Intermediate_PersistenceIT`.
+
+
+[[SAKILA_STORE_B_01]]
+==== SAKILA_STORE_B_01: every store, with its manager and address ids
+
+Show every store: its `store_id`, the `manager_staff_id` of its manager and its `address_id`, ordered by `store_id`.
+
+.`store/01_basic.sql`, SAKILA_STORE_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM store
+ORDER BY store_id
+----
+
+====
+
+Answered by `Store_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_STORE_I_01]]
+==== SAKILA_STORE_I_01: every store, with its manager and city
+
+Show every store with the name of its manager and the city of its address: the `store_id`, the manager's `first_name` and `last_name`, and the city, ordered by `store_id`.
+The manager is a staff member, and the city is two joins away, through the address.
+
+.`store/02_intermediate.sql`, SAKILA_STORE_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*, s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update, ci.* -- every column but picture, a BLOB which does not print
+FROM store st
+         JOIN staff s ON s.staff_id = st.manager_staff_id
+         JOIN address a ON a.address_id = st.address_id
+         JOIN city ci ON ci.city_id = a.city_id
+ORDER BY st.store_id
+----
+
+====
+
+
+[[SAKILA_STORE_I_02]]
+==== SAKILA_STORE_I_02: how many customers, copies and staff members each store has
+
+For each store, count its customers, its copies in the inventory and its staff members, and show the three counts in one row per store, ordered by `store_id`.
+The three counts come from three different tables; joining all three at once would multiply the rows, so each is counted on its own.
+
+.`store/02_intermediate.sql`, SAKILA_STORE_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*,
+       (SELECT COUNT(*) FROM customer c WHERE c.store_id = st.store_id)  AS customers,
+       (SELECT COUNT(*) FROM inventory i WHERE i.store_id = st.store_id) AS copies,
+       (SELECT COUNT(*) FROM staff s WHERE s.store_id = st.store_id)     AS staff
+FROM store st
+ORDER BY st.store_id
+----
+
+====
+
+Answered by `Store_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_STORE_A_01]]
+==== SAKILA_STORE_A_01: how many films each store has a copy of, and how many of them only that store has
+
+For each store, count the distinct films it has at least one copy of, and, of those, the films no other store has a copy of.
+Show the `store_id` and both counts, ordered by `store_id`.
+The second count needs a correlated condition on the inventory of the other stores.
+
+.`store/03_advanced.sql`, SAKILA_STORE_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*,
+       COUNT(DISTINCT i.film_id)                  AS films,
+       COUNT(DISTINCT CASE
+                          WHEN NOT EXISTS (SELECT 1
+                                           FROM inventory o
+                                           WHERE o.film_id = i.film_id
+                                             AND o.store_id <> st.store_id)
+                              THEN i.film_id END) AS films_only_here
+FROM store st
+         JOIN inventory i ON i.store_id = st.store_id
+GROUP BY st.store_id
+ORDER BY st.store_id
+----
+
+====
+
+
+[[SAKILA_STORE_A_02]]
+==== SAKILA_STORE_A_02: each store's rentals in each month, and its share of the month
+
+Count the rentals of each store in each month, written as `YYYY-MM`; a rental reaches a store through its copy.
+Show the month, the `store_id`, the count and the store's share of that month's rentals in percent, rounded to two decimal places.
+Order by the month, then by `store_id`; the month's rentals are `SUM(COUNT(*)) OVER (PARTITION BY ...)`.
+
+.`store/03_advanced.sql`, SAKILA_STORE_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DATE_FORMAT(r.rental_date, '%Y-%m') AS month, st.*, COUNT(*) AS rentals,
+       ROUND(100 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY DATE_FORMAT(r.rental_date, '%Y-%m')), 2) AS percent
+FROM rental r
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN store st ON st.store_id = i.store_id
+GROUP BY month, st.store_id
+ORDER BY month, st.store_id
+----
+
+====
+
+Answered by `Store_Exercises_03_Advanced_PersistenceIT`.
+

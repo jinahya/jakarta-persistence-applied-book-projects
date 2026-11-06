@@ -1,0 +1,1088 @@
+= Exercises
+:toc: left
+:toclevels: 3
+
+The exercises on the installed `sakila` database: a section for each table and view, with a section for each level, and, at the end, a section for the schema as a whole.
+Each exercise poses a problem; its answer, and what the installed data gives back, are in the `.sql` file, and are checked by an integration test.
+
+Run a file as a whole:
+
+[source,sh]
+----
+docker exec -i mysql-sakila mysql -uroot -p'Passw0rd!' -t sakila < src/test/sql-exercises/<section>/<NN>_<level>.sql
+----
+
+[[SAKILA_CATEGORY_B_01]]
+==== SAKILA_CATEGORY_B_01: every category, by name
+
+Show every category, the whole rows, ordered by the name.
+
+.`category/01_basic.sql`, SAKILA_CATEGORY_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM category
+ORDER BY name
+----
+
+====
+
+
+[[SAKILA_CATEGORY_B_02]]
+==== SAKILA_CATEGORY_B_02: the categories whose names fall between D and H
+
+Find the categories whose `name` is between `D` and `H`, with `BETWEEN`.
+Show the whole rows, ordered by the name.
+`Horror` is not in the answer: it sorts after `H`, which is the upper bound itself, not every name that starts with it.
+
+.`category/01_basic.sql`, SAKILA_CATEGORY_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM category
+WHERE name BETWEEN 'D' AND 'H'
+ORDER BY name
+----
+
+====
+
+Answered by `Category_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_CATEGORY_I_01]]
+==== SAKILA_CATEGORY_I_01: how many films each category has, the most first
+
+Count the films of each category through the `film_category` link table.
+Show each category's name and its number of films, the most first; categories with the same count are ordered by name.
+
+.`category/02_intermediate.sql`, SAKILA_CATEGORY_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, COUNT(*) AS films
+FROM category c
+         JOIN film_category fc ON fc.category_id = c.category_id
+GROUP BY c.category_id
+ORDER BY films DESC, c.name
+----
+
+====
+
+
+[[SAKILA_CATEGORY_I_02]]
+==== SAKILA_CATEGORY_I_02: the category whose films are, on average, the longest
+
+For each category, take the average `length` of its films, and find the category whose average is the largest.
+Show its name and the average, rounded to two decimal places.
+Order the groups by the average and keep only the first.
+
+.`category/02_intermediate.sql`, SAKILA_CATEGORY_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, ROUND(AVG(f.length), 2) AS average_length
+FROM category c
+         JOIN film_category fc ON fc.category_id = c.category_id
+         JOIN film f ON f.film_id = fc.film_id
+GROUP BY c.category_id
+ORDER BY average_length DESC
+LIMIT 1
+----
+
+====
+
+
+[[SAKILA_CATEGORY_I_03]]
+==== SAKILA_CATEGORY_I_03: the categories with no film
+
+Find the categories which have no film: no row in `film_category`
+refers to them.
+Show the whole rows.
+The installed data has none.
+
+.`category/02_intermediate.sql`, SAKILA_CATEGORY_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*
+FROM category c
+WHERE NOT EXISTS (SELECT 1 FROM film_category fc WHERE fc.category_id = c.category_id)
+----
+
+====
+
+
+[[SAKILA_CATEGORY_I_04]]
+==== SAKILA_CATEGORY_I_04: the categories whose films rent for more than the average
+
+For each category, take the average `rental_rate` of its films, and keep the categories whose average is higher than the average over all films.
+Show each such category's name and its average rounded to two decimal places, the highest first; categories with the same rounded average are ordered by name.
+The overall average comes from a subquery in `HAVING`.
+
+.`category/02_intermediate.sql`, SAKILA_CATEGORY_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, ROUND(AVG(f.rental_rate), 2) AS average_rental_rate
+FROM category c
+         JOIN film_category fc ON fc.category_id = c.category_id
+         JOIN film f ON f.film_id = fc.film_id
+GROUP BY c.category_id
+HAVING AVG(f.rental_rate) > (SELECT AVG(rental_rate) FROM film)
+ORDER BY average_rental_rate DESC, c.name
+----
+
+====
+
+
+[[SAKILA_CATEGORY_I_05]]
+==== SAKILA_CATEGORY_I_05: the five categories with the most different actors
+
+Count the different actors who appear in the films of each category, through `film_category` and `film_actor`.
+Show the five categories with the most actors, with their counts, the most first; categories with the same count are ordered by name.
+An actor in several films of one category is counted once, so the count is `COUNT(DISTINCT ...)`.
+
+.`category/02_intermediate.sql`, SAKILA_CATEGORY_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, COUNT(DISTINCT fa.actor_id) AS actors
+FROM category c
+         JOIN film_category fc ON fc.category_id = c.category_id
+         JOIN film_actor fa ON fa.film_id = fc.film_id
+GROUP BY c.category_id
+ORDER BY actors DESC, c.name
+LIMIT 5
+----
+
+====
+
+Answered by `Category_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_CATEGORY_A_01]]
+==== SAKILA_CATEGORY_A_01: the running total of the films, category by category
+
+Count the films of each category, and, going from the category with the most films down, add up the counts as a running total and as a running percentage of all films.
+Show each category's name, its number of films, the running total and the running percentage rounded to one decimal place; categories with the same count are ordered by name.
+Window functions over the grouped rows: `SUM(COUNT(*)) OVER (ORDER BY ...)` for the running total and `SUM(COUNT(*)) OVER ()` for the whole.
+
+.`category/03_advanced.sql`, SAKILA_CATEGORY_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*,
+       COUNT(*)                                                         AS films,
+       SUM(COUNT(*)) OVER (ORDER BY COUNT(*) DESC, c.name)              AS running_films,
+       ROUND(100 * SUM(COUNT(*)) OVER (ORDER BY COUNT(*) DESC, c.name)
+                 / SUM(COUNT(*)) OVER (), 1)                            AS running_percent
+FROM category c
+         JOIN film_category fc ON fc.category_id = c.category_id
+GROUP BY c.category_id
+ORDER BY films DESC, c.name
+----
+
+====
+
+
+[[SAKILA_CATEGORY_A_02]]
+==== SAKILA_CATEGORY_A_02: the film rented the most in each category
+
+Count the rentals of each film, through `inventory` and `rental`, and find, in each category, the film with the most rentals.
+Show the category's name, the film's `title` and its number of rentals, ordered by the category's name; when films of a category tie, the one whose title comes first is shown.
+A top-1 per group: `ROW_NUMBER()` over a partition by category.
+
+.`category/03_advanced.sql`, SAKILA_CATEGORY_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT name, title, rentals
+FROM (SELECT c.name,
+             f.title,
+             COUNT(*)                                                                    AS rentals,
+             ROW_NUMBER() OVER (PARTITION BY c.category_id ORDER BY COUNT(*) DESC, f.title) AS film_rank
+      FROM category c
+               JOIN film_category fc ON fc.category_id = c.category_id
+               JOIN film f ON f.film_id = fc.film_id
+               JOIN inventory i ON i.film_id = f.film_id
+               JOIN rental r ON r.inventory_id = i.inventory_id
+      GROUP BY c.category_id, c.name, f.film_id, f.title) ranked
+WHERE film_rank = 1
+ORDER BY name
+----
+
+====
+
+Answered by `Category_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_FILM_CATEGORY_B_01]]
+==== SAKILA_FILM_CATEGORY_B_01: how many categories the films are in
+
+Count the different categories that `film_category` refers to, that is, the categories which have at least one film.
+Count each `category_id` once, however many films it has.
+
+.`film_category/01_basic.sql`, SAKILA_FILM_CATEGORY_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(DISTINCT category_id) AS categories
+FROM film_category
+----
+
+====
+
+
+[[SAKILA_FILM_CATEGORY_B_02]]
+==== SAKILA_FILM_CATEGORY_B_02: the categories of the films 1 to 10
+
+Show the rows of `film_category` for the films whose id is between `1` and `10`: the `film_id` and its `category_id`, ordered by `film_id`.
+A film has one category in the installed data, so `film_id` alone gives the order.
+
+.`film_category/01_basic.sql`, SAKILA_FILM_CATEGORY_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM film_category
+WHERE film_id BETWEEN 1 AND 10
+ORDER BY film_id
+----
+
+====
+
+Answered by `FilmCategory_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_FILM_CATEGORY_I_01]]
+==== SAKILA_FILM_CATEGORY_I_01: the films with more than one category
+
+The table allows a film more than one category.
+Find the films which actually have more than one: group `film_category` by `film_id` and keep the groups with more than one row.
+Show each film's id with its count.
+The installed data has none; every film has exactly one category.
+
+.`film_category/02_intermediate.sql`, SAKILA_FILM_CATEGORY_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.*, COUNT(*) AS categories
+FROM film_category fc
+         JOIN film f ON f.film_id = fc.film_id
+GROUP BY f.film_id
+HAVING COUNT(*) > 1
+----
+
+====
+
+
+[[SAKILA_FILM_CATEGORY_I_02]]
+==== SAKILA_FILM_CATEGORY_I_02: how many films have no category
+
+Count the films which have no row in `film_category`.
+
+.`film_category/02_intermediate.sql`, SAKILA_FILM_CATEGORY_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film f
+WHERE NOT EXISTS (SELECT 1 FROM film_category fc WHERE fc.film_id = f.film_id)
+----
+
+====
+
+
+[[SAKILA_FILM_CATEGORY_I_03]]
+==== SAKILA_FILM_CATEGORY_I_03: how many films each category has, and how many of them are rated R
+
+For each category, count its films, and, in the same row, those of them whose `rating` is `R`.
+Show the category's name with both counts, ordered by the name.
+Count the R-rated films with a `CASE` inside a `SUM`, so that one pass over the rows gives both counts.
+
+.`film_category/02_intermediate.sql`, SAKILA_FILM_CATEGORY_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*,
+       COUNT(*) AS films,
+       SUM(CASE WHEN f.rating = 'R' THEN 1 ELSE 0 END) AS r_rated
+FROM film_category fc
+         JOIN category c ON c.category_id = fc.category_id
+         JOIN film f ON f.film_id = fc.film_id
+GROUP BY c.category_id
+ORDER BY c.name
+----
+
+====
+
+Answered by `FilmCategory_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_FILM_CATEGORY_A_01]]
+==== SAKILA_FILM_CATEGORY_A_01: the longest film of each category
+
+For each category, find its longest film.
+Show the category's name, the film's `film_id`, `title` and `length`, ordered by the category's name.
+Several films of a category may share the longest length; take the one with the smallest `film_id`.
+Number the films of each category with `ROW_NUMBER()`, partitioned by the category, and keep the first.
+
+.`film_category/03_advanced.sql`, SAKILA_FILM_CATEGORY_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT name, film_id, title, length
+FROM (SELECT c.name, f.film_id, f.title, f.length,
+             ROW_NUMBER() OVER (PARTITION BY c.category_id ORDER BY f.length DESC, f.film_id) AS rn
+      FROM film_category fc
+               JOIN category c ON c.category_id = fc.category_id
+               JOIN film f ON f.film_id = fc.film_id) t
+WHERE rn = 1
+ORDER BY name
+----
+
+====
+
+
+[[SAKILA_FILM_CATEGORY_A_02]]
+==== SAKILA_FILM_CATEGORY_A_02: the pairs of categories which have the same number of films
+
+Find the pairs of categories which have the same number of films.
+Join `category` with itself, keeping each pair once, the name which comes first on the left, and compare the two counts, each a correlated subquery on `film_category`.
+Show the two names and the number of films, the largest number first; ties are ordered by the two names.
+
+.`film_category/03_advanced.sql`, SAKILA_FILM_CATEGORY_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c1.*, c2.*,
+       (SELECT COUNT(*) FROM film_category fc WHERE fc.category_id = c1.category_id) AS films
+FROM category c1
+         JOIN category c2 ON c1.name < c2.name
+WHERE (SELECT COUNT(*) FROM film_category fc WHERE fc.category_id = c1.category_id)
+          = (SELECT COUNT(*) FROM film_category fc WHERE fc.category_id = c2.category_id)
+ORDER BY films DESC, c1.name, c2.name
+----
+
+====
+
+Answered by `FilmCategory_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_FILM_LIST_B_01]]
+==== SAKILA_FILM_LIST_B_01: how many Action films there are
+
+The `film_list` view shows each film with its category, its price and its actors.
+Count the films whose `category` is `Action`.
+
+.`film_list/01_basic.sql`, SAKILA_FILM_LIST_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film_list
+WHERE category = 'Action'
+----
+
+====
+
+
+[[SAKILA_FILM_LIST_B_02]]
+==== SAKILA_FILM_LIST_B_02: the actors of the film 1
+
+Show the view's row for the film `1`: its `FID`, `title` and `actors`, the names of all its actors in one comma-separated string.
+
+.`film_list/01_basic.sql`, SAKILA_FILM_LIST_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM film_list
+WHERE FID = 1
+----
+
+====
+
+
+[[SAKILA_FILM_LIST_B_03]]
+==== SAKILA_FILM_LIST_B_03: the Children films rated G
+
+Find the films whose `category` is `Children` and whose `rating` is `G`.
+Show their `FID`, `title` and `length`, ordered by the title; ties are ordered by `FID`.
+
+.`film_list/01_basic.sql`, SAKILA_FILM_LIST_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM film_list
+WHERE category = 'Children'
+  AND rating = 'G'
+ORDER BY title, FID
+----
+
+====
+
+
+[[SAKILA_FILM_LIST_B_04]]
+==== SAKILA_FILM_LIST_B_04: the films with no actor
+
+The view joins the actors with outer joins, so a film without an actor still has a row, and its `actors` is `NULL`.
+Find those films: their `FID`, `title` and `category`, ordered by `FID`.
+
+.`film_list/01_basic.sql`, SAKILA_FILM_LIST_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM film_list
+WHERE actors IS NULL
+ORDER BY FID
+----
+
+====
+
+Answered by `FilmList_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_FILM_LIST_I_01]]
+==== SAKILA_FILM_LIST_I_01: whether the view has a row for every film which has a category
+
+The view joins `film` with `film_category` and `category` by inner joins, so it has a row only for a film which has a category.
+Count the rows of the view, and the distinct films of
+`film_category`, and show both in one row.
+
+.`film_list/02_intermediate.sql`, SAKILA_FILM_LIST_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT COUNT(*) FROM film_list) AS film_list,
+       (SELECT COUNT(DISTINCT film_id) FROM film_category) AS films_with_a_category
+----
+
+====
+
+
+[[SAKILA_FILM_LIST_I_02]]
+==== SAKILA_FILM_LIST_I_02: how many films of each rating there are at each price
+
+The view's `price` takes only three values: `0.99`, `2.99` and `4.99`.
+For each rating, count its films at each price, one column per price, and order the rows by the rating, in the order the `rating` column declares its values.
+Count each price with a `CASE` inside a `SUM`.
+
+.`film_list/02_intermediate.sql`, SAKILA_FILM_LIST_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT rating,
+       SUM(CASE WHEN price = 0.99 THEN 1 ELSE 0 END) AS price_0_99,
+       SUM(CASE WHEN price = 2.99 THEN 1 ELSE 0 END) AS price_2_99,
+       SUM(CASE WHEN price = 4.99 THEN 1 ELSE 0 END) AS price_4_99
+FROM film_list
+GROUP BY rating
+ORDER BY rating
+----
+
+====
+
+
+[[SAKILA_FILM_LIST_I_03]]
+==== SAKILA_FILM_LIST_I_03: the films whose actors string lists a different number of actors than film_actor
+
+Count the actors in each film's `actors` string, one more than its commas, and compare the number with the film's rows in `film_actor`.
+Find the films, of those which have an actor, whose two numbers differ: their `FID` and `title`, ordered by `FID`.
+The commas are counted as the length of the string less the length of the string with its commas removed.
+The installed data has none.
+
+.`film_list/02_intermediate.sql`, SAKILA_FILM_LIST_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT l.*
+FROM film_list l
+WHERE l.actors IS NOT NULL
+  AND LENGTH(l.actors) - LENGTH(REPLACE(l.actors, ',', '')) + 1
+          <> (SELECT COUNT(*) FROM film_actor fa WHERE fa.film_id = l.FID)
+ORDER BY l.FID
+----
+
+====
+
+Answered by `FilmList_Exercises_02_Intermediate_PersistenceIT`.
+
+
+[[SAKILA_INVENTORY_B_01]]
+==== SAKILA_INVENTORY_B_01: how many copies each store has
+
+Count the copies, the rows of `inventory`, that each store has.
+Show each
+`store_id` with its count, ordered by the store.
+
+.`inventory/01_basic.sql`, SAKILA_INVENTORY_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*, COUNT(*) AS copies
+FROM inventory i
+         JOIN store st ON st.store_id = i.store_id
+GROUP BY st.store_id
+ORDER BY st.store_id
+----
+
+====
+
+
+[[SAKILA_INVENTORY_B_02]]
+==== SAKILA_INVENTORY_B_02: the copies of the film 1
+
+Find the copies of the film `1`.
+Show each copy's `inventory_id` and `store_id`, ordered by `inventory_id`.
+
+.`inventory/01_basic.sql`, SAKILA_INVENTORY_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM inventory
+WHERE film_id = 1
+ORDER BY inventory_id
+----
+
+====
+
+
+[[SAKILA_INVENTORY_B_03]]
+==== SAKILA_INVENTORY_B_03: how many copies of the films 1 to 5 each store has
+
+For the films whose id is between `1` and `5`, count the copies each store has of each film.
+Show the `film_id`, the `store_id` and the count, ordered by `film_id` and then by `store_id`.
+A store with no copy of a film has no row for it.
+
+.`inventory/01_basic.sql`, SAKILA_INVENTORY_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.*, st.*, COUNT(*) AS copies
+FROM inventory i
+         JOIN film f ON f.film_id = i.film_id
+         JOIN store st ON st.store_id = i.store_id
+WHERE f.film_id BETWEEN 1 AND 5
+GROUP BY f.film_id, st.store_id
+ORDER BY f.film_id, st.store_id
+----
+
+====
+
+Answered by `Inventory_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_INVENTORY_I_01]]
+==== SAKILA_INVENTORY_I_01: the five films with the most copies
+
+Count the copies of each film.
+Show the five films with the most copies: their `film_id`, `title` and number of copies, the most first; ties are ordered by `film_id`.
+
+.`inventory/02_intermediate.sql`, SAKILA_INVENTORY_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.*, COUNT(*) AS copies
+FROM film f
+         JOIN inventory i ON i.film_id = f.film_id
+GROUP BY f.film_id
+ORDER BY copies DESC, f.film_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_INVENTORY_I_02]]
+==== SAKILA_INVENTORY_I_02: how many copies were never rented
+
+Count the copies which no rental refers to, that is, the copies which were never rented.
+
+.`inventory/02_intermediate.sql`, SAKILA_INVENTORY_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS copies
+FROM inventory i
+WHERE NOT EXISTS (SELECT 1 FROM rental r WHERE r.inventory_id = i.inventory_id)
+----
+
+====
+
+
+[[SAKILA_INVENTORY_I_03]]
+==== SAKILA_INVENTORY_I_03: how many copies each store has out right now
+
+A copy is out while it has a rental whose `return_date` is `NULL`.
+Count, for each store, its copies which are out, and show each `store_id` with its count, ordered by the store.
+
+.`inventory/02_intermediate.sql`, SAKILA_INVENTORY_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*, COUNT(*) AS copies_out
+FROM inventory i
+         JOIN store st ON st.store_id = i.store_id
+         JOIN rental r ON r.inventory_id = i.inventory_id
+WHERE r.return_date IS NULL
+GROUP BY st.store_id
+ORDER BY st.store_id
+----
+
+====
+
+
+[[SAKILA_INVENTORY_I_04]]
+==== SAKILA_INVENTORY_I_04: how many copies of each rating each store has
+
+Count the copies of each store by the rating of their film.
+Show the `store_id`, the `rating` and the count, ordered by the store and then by the rating, in the order the `rating` column declares its values.
+
+.`inventory/02_intermediate.sql`, SAKILA_INVENTORY_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*, f.rating, COUNT(*) AS copies
+FROM inventory i
+         JOIN store st ON st.store_id = i.store_id
+         JOIN film f ON f.film_id = i.film_id
+GROUP BY st.store_id, f.rating
+ORDER BY st.store_id, f.rating
+----
+
+====
+
+
+[[SAKILA_INVENTORY_I_05]]
+==== SAKILA_INVENTORY_I_05: the copies of the film 1 on the shelf right now
+
+A customer asks for `ACADEMY DINOSAUR`, the film `1`.
+Find its copies which are in, that is, which have no rental without a `return_date`.
+Show the whole rows, ordered by `store_id` and then by `inventory_id`; the copy `6` is out, so it is missing.
+A `NOT EXISTS` on the copy's rentals.
+
+.`inventory/02_intermediate.sql`, SAKILA_INVENTORY_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT i.*
+FROM inventory i
+WHERE i.film_id = 1
+  AND NOT EXISTS (SELECT 1 FROM rental r WHERE r.inventory_id = i.inventory_id AND r.return_date IS NULL)
+ORDER BY i.store_id, i.inventory_id
+----
+
+====
+
+Answered by `Inventory_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_INVENTORY_A_01]]
+==== SAKILA_INVENTORY_A_01: the five longest times a copy sat on the shelf between two rentals
+
+For each rental of a copy, find the copy's next rental, and the days between the return and that next rental.
+Leave out the rentals of 2006, which all fall on one day, months after the others.
+Show the five longest: the `inventory_id`, the `return_date`, the next rental's date and the days, the most days first; ties are ordered by `inventory_id` and then by `return_date`.
+Find the next rental with `LEAD()`, partitioned by the copy and ordered by the rental date and the rental's id.
+
+.`inventory/03_advanced.sql`, SAKILA_INVENTORY_A_01
+[%collapsible]
+====
+[source,sql]
+----
+WITH rentals AS (SELECT r.inventory_id, r.rental_date, r.return_date,
+                        LEAD(r.rental_date) OVER (PARTITION BY r.inventory_id ORDER BY r.rental_date, r.rental_id) AS next_rental_date
+                 FROM rental r
+                 WHERE r.rental_date < '2006-01-01')
+SELECT inventory_id, return_date, next_rental_date,
+       DATEDIFF(next_rental_date, return_date) AS idle_days
+FROM rentals
+WHERE return_date IS NOT NULL
+  AND next_rental_date IS NOT NULL
+ORDER BY idle_days DESC, inventory_id, return_date
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_INVENTORY_A_02]]
+==== SAKILA_INVENTORY_A_02: how many films have had every one of their copies rented
+
+Count the films in the inventory, and, in the same row, the films every copy of which has been rented at least once.
+A film qualifies when none of its copies is without a rental: a `NOT EXISTS` inside a `NOT EXISTS`.
+
+.`inventory/03_advanced.sql`, SAKILA_INVENTORY_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT COUNT(DISTINCT film_id) FROM inventory) AS films_in_inventory,
+       (SELECT COUNT(DISTINCT i.film_id)
+        FROM inventory i
+        WHERE NOT EXISTS (SELECT 1
+                          FROM inventory o
+                          WHERE o.film_id = i.film_id
+                            AND NOT EXISTS (SELECT 1 FROM rental r WHERE r.inventory_id = o.inventory_id))) AS every_copy_rented
+----
+
+====
+
+Answered by `Inventory_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_01]]
+==== SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_01: the actors of the film 1, as this view writes them
+
+`nicer_but_slower_film_list` is `film_list` with the actors' names written with only the first letter of each name in upper case.
+Show the view's row for the film `1`:
+its `FID`, `title` and `actors`, and compare them with the same row of `film_list`.
+
+.`nicer_but_slower_film_list/01_basic.sql`, SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM nicer_but_slower_film_list
+WHERE FID = 1
+----
+
+====
+
+
+[[SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_02]]
+==== SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_02: how many films PENELOPE GUINESS plays in, by the view's actors
+
+The view writes the actors as one string, `Penelope Guiness, Christian Gable, ...`.
+Count the rows whose `actors` contain `Penelope Guiness`, with `LIKE`.
+The column's collation ignores case, so `PENELOPE GUINESS` would match as well.
+
+.`nicer_but_slower_film_list/01_basic.sql`, SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM nicer_but_slower_film_list
+WHERE actors LIKE '%Penelope Guiness%'
+----
+
+====
+
+Answered by `NicerButSlowerFilmList_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_NICER_BUT_SLOWER_FILM_LIST_I_01]]
+==== SAKILA_NICER_BUT_SLOWER_FILM_LIST_I_01: the five categories whose films are the longest, on average
+
+Group the view's rows by `category`.
+Show each category with the number of its films and their average `length`, rounded to two decimal places.
+Show the five longest on average, the longest first; on a tie, by `category`.
+
+.`nicer_but_slower_film_list/02_intermediate.sql`, SAKILA_NICER_BUT_SLOWER_FILM_LIST_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT category, COUNT(*) AS films, ROUND(AVG(length), 2) AS average_length
+FROM nicer_but_slower_film_list
+GROUP BY category
+ORDER BY average_length DESC, category
+LIMIT 5
+----
+
+====
+
+Answered by `NicerButSlowerFilmList_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_01]]
+==== SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_01: how many rows differ from film_list, column by column, but for the actors
+
+The two views should differ only in how the actors are written.
+Join them row by row, by `FID` and `category`, and count the rows where any other column (`title`,
+`description`, `price`, `length`, `rating`) differs.
+The columns may be `NULL`, so compare them with the null-safe `<=>`, not with `=`.
+The answer is `0`.
+
+.`nicer_but_slower_film_list/03_advanced.sql`, SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS differing
+FROM nicer_but_slower_film_list n
+         JOIN film_list l ON l.FID = n.FID AND l.category = n.category
+WHERE NOT (n.title <=> l.title AND n.description <=> l.description AND n.price <=> l.price
+           AND n.length <=> l.length AND n.rating <=> l.rating)
+----
+
+====
+
+
+[[SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_02]]
+==== SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_02: the longest length in each category, and how many films have it
+
+For each category, find the longest `length` of its films, and count the films which are exactly that long.
+Show the `category`, the longest length and the count, ordered by `category`.
+A row is kept when its length equals the maximum of its own category, which is a correlated subquery.
+
+.`nicer_but_slower_film_list/03_advanced.sql`, SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT n.category, n.length AS longest, COUNT(*) AS films
+FROM nicer_but_slower_film_list n
+WHERE n.length = (SELECT MAX(m.length) FROM nicer_but_slower_film_list m WHERE m.category = n.category)
+GROUP BY n.category, n.length
+ORDER BY n.category
+----
+
+====
+
+Answered by `NicerButSlowerFilmList_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_B_01]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_B_01: the three categories which sold the most
+
+The `sales_by_film_category` view sums the payments of each category.
+Show the three categories which sold the most, with their `total_sales`, the most first.
+
+.`sales_by_film_category/01_basic.sql`, SAKILA_SALES_BY_FILM_CATEGORY_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM sales_by_film_category
+LIMIT 3
+----
+
+====
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_B_02]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_B_02: the categories which sold between 4000 and 4500
+
+Show the categories whose `total_sales` is between `4000` and `4500`, with their `total_sales`, ordered by `category`.
+
+.`sales_by_film_category/01_basic.sql`, SAKILA_SALES_BY_FILM_CATEGORY_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM sales_by_film_category
+WHERE total_sales BETWEEN 4000 AND 4500
+ORDER BY category
+----
+
+====
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_B_03]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_B_03: how many categories sold less than 4000, and how much they sold together
+
+Keep the categories whose `total_sales` is under `4000`.
+Show how many they are and the sum of their `total_sales`, in one row.
+
+.`sales_by_film_category/01_basic.sql`, SAKILA_SALES_BY_FILM_CATEGORY_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS categories, SUM(total_sales) AS total
+FROM sales_by_film_category
+WHERE total_sales < 4000
+----
+
+====
+
+Answered by `SalesByFilmCategory_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_I_01]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_I_01: whether the view's sales add up to every payment
+
+Check the view: sum its `total_sales` over all categories, sum the `amount` of all payments, and show both in one row.
+They are equal only if every payment reaches exactly one category, through its rental, copy and film.
+
+.`sales_by_film_category/02_intermediate.sql`, SAKILA_SALES_BY_FILM_CATEGORY_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT SUM(total_sales) FROM sales_by_film_category) AS by_category,
+       (SELECT SUM(amount) FROM payment) AS all_payments
+----
+
+====
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_I_02]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_I_02: the five categories which sold the most, and their share of all sales
+
+Show the five categories which sold the most, with their `total_sales` and their share of the sales of all categories, in percent, rounded to two decimal places.
+Order them by `total_sales`, the most first; on a tie, by `category`.
+The sales of all categories come from a subquery.
+
+.`sales_by_film_category/02_intermediate.sql`, SAKILA_SALES_BY_FILM_CATEGORY_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *,
+       ROUND(100 * total_sales / (SELECT SUM(total_sales) FROM sales_by_film_category), 2) AS percent
+FROM sales_by_film_category
+ORDER BY total_sales DESC, category
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_I_03]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_I_03: the five categories which sold the most per film
+
+A category with more films may sell more only because it has more films.
+Join the view to `category` by name and to `film_category`, and count each category's films.
+Show the five categories with the largest sales per film: the `category`, `total_sales`, the number of films and the sales per film rounded to two decimal places, the largest first; on a tie, by `category`.
+
+.`sales_by_film_category/02_intermediate.sql`, SAKILA_SALES_BY_FILM_CATEGORY_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT s.*, COUNT(*) AS films, ROUND(s.total_sales / COUNT(*), 2) AS per_film
+FROM sales_by_film_category s
+         JOIN category c ON c.name = s.category
+         JOIN film_category fc ON fc.category_id = c.category_id
+GROUP BY s.category, s.total_sales
+ORDER BY per_film DESC, s.category
+LIMIT 5
+----
+
+====
+
+Answered by `SalesByFilmCategory_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_A_02]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_A_02: the three largest gaps between a category and the next one down
+
+Order the categories by `total_sales`, the most first; on a tie, by `category`.
+For each category, find the category just below it and the difference between their sales.
+Show the three largest gaps: the `category`, its `total_sales`, the next category and the gap, the largest first; on a tie, by `category`.
+The next category is `LEAD(...) OVER (ORDER BY ...)`.
+
+.`sales_by_film_category/03_advanced.sql`, SAKILA_SALES_BY_FILM_CATEGORY_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT category, total_sales, next_category, total_sales - next_sales AS gap
+FROM (SELECT category, total_sales,
+             LEAD(category) OVER (ORDER BY total_sales DESC, category) AS next_category,
+             LEAD(total_sales) OVER (ORDER BY total_sales DESC, category) AS next_sales
+      FROM sales_by_film_category) g
+WHERE next_category IS NOT NULL
+ORDER BY gap DESC, category
+LIMIT 3
+----
+
+====
+
+
+[[SAKILA_SALES_BY_FILM_CATEGORY_A_03]]
+==== SAKILA_SALES_BY_FILM_CATEGORY_A_03: each category's rank by sales, next to its rank by rentals
+
+A category may sell much because its films rent for more, not because they are rented more.
+Count the rentals of each category, through the copy and `film_category`, and join the counts to the view by the category's name.
+Rank the categories twice with `RANK()`, by `total_sales` and by the rentals, and show each category's `total_sales`, its rank, its rentals and that rank, ordered by the sales rank; on a tie, by `category`.
+
+.`sales_by_film_category/03_advanced.sql`, SAKILA_SALES_BY_FILM_CATEGORY_A_03
+[%collapsible]
+====
+[source,sql]
+----
+WITH rented AS (SELECT c.name AS category, COUNT(*) AS rentals
+                FROM rental r
+                         JOIN inventory i ON i.inventory_id = r.inventory_id
+                         JOIN film_category fc ON fc.film_id = i.film_id
+                         JOIN category c ON c.category_id = fc.category_id
+                GROUP BY c.name)
+SELECT s.*,
+       RANK() OVER (ORDER BY s.total_sales DESC) AS sales_rank,
+       rd.rentals,
+       RANK() OVER (ORDER BY rd.rentals DESC)    AS rentals_rank
+FROM sales_by_film_category s
+         JOIN rented rd ON rd.category = s.category
+ORDER BY sales_rank, s.category
+----
+
+====
+
+Answered by `SalesByFilmCategory_Exercises_03_Advanced_PersistenceIT`.
+

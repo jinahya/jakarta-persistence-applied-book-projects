@@ -1,0 +1,888 @@
+{
+ "module": "mysql-sakila-persistence",
+ "changes": [
+  {
+   "op": "fix",
+   "id": "SAKILA_FILM_TEXT_B_02",
+   "_src": "both",
+   "_why": "LENGTH counts bytes; the request counts characters (CHAR_LENGTH); the columns the request names",
+   "rerun": true,
+   "sql": "SELECT film_id, title, CHAR_LENGTH(description) AS characters\nFROM film_text\nORDER BY characters DESC, film_id\nLIMIT 5"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_ACTOR_I_06",
+   "_src": "both",
+   "_why": "sorted by the rounded average, so close averages tied and the wrong actor could rank higher",
+   "rerun": true,
+   "request": [
+    "For each actor, take the average `length` of the films they appear in, through `film_actor`.",
+    "Show the five actors with the largest average: their `actor_id`, `first_name`, `last_name` and the average rounded to two decimal places, the largest first.",
+    "The order uses the average itself, not the rounded one; break ties by `actor_id`."
+   ],
+   "sql": "SELECT a.*, ROUND(AVG(f.length), 2) AS average_length\nFROM actor a\n         JOIN film_actor fa ON fa.actor_id = a.actor_id\n         JOIN film f ON f.film_id = fa.film_id\nGROUP BY a.actor_id\nORDER BY AVG(f.length) DESC, a.actor_id\nLIMIT 5"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_FILM_I_03",
+   "_src": "both",
+   "_why": "a NULL length fell into ELSE 'long'; Codex's own group for it, over Claude's leaving it out",
+   "rerun": true,
+   "title": "how many films are short, medium, long, or of unknown length",
+   "request": [
+    "Put each film in one of four groups by its `length`: `short` under 60 minutes, `medium` from 60 to 120 minutes, `long` over 120 minutes, and `unknown` where `length` is NULL.",
+    "Show each group with its number of films, from the shortest group to the longest, `unknown` last.",
+    "A `CASE` expression makes the group, and the query groups by it; a NULL length passes no comparison, so it needs a test of its own."
+   ],
+   "sql": "SELECT CASE\n           WHEN length IS NULL THEN 'unknown'\n           WHEN length < 60 THEN 'short'\n           WHEN length <= 120 THEN 'medium'\n           ELSE 'long'\n           END  AS size,\n       COUNT(*) AS films\nFROM film\nGROUP BY size\nORDER BY CASE size WHEN 'short' THEN 1 WHEN 'medium' THEN 2 WHEN 'long' THEN 3 ELSE 4 END"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_FILM_TEXT_I_01",
+   "_src": "Codex",
+   "_why": "equal counts do not show the same films; film_text has no foreign key to film",
+   "rerun": true,
+   "request": [
+    "`film_text` keeps a copy of each film's title and description, for the full-text index; triggers on `film` keep it up to date.",
+    "Count the rows of `film_text` and of `film`, the films without a `film_text` row, and the `film_text` rows without a film, in one row.",
+    "Equal counts alone would not show that the two hold the same films; `film_text` has no foreign key to `film`."
+   ],
+   "sql": "SELECT (SELECT COUNT(*) FROM film_text) AS film_text,\n       (SELECT COUNT(*) FROM film)      AS film,\n       (SELECT COUNT(*)\n        FROM film f\n        WHERE NOT EXISTS (SELECT 1 FROM film_text ft WHERE ft.film_id = f.film_id)) AS without_text,\n       (SELECT COUNT(*)\n        FROM film_text ft\n        WHERE NOT EXISTS (SELECT 1 FROM film f WHERE f.film_id = ft.film_id)) AS without_film"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_ACTOR_INFO_I_03",
+   "_src": "Codex",
+   "_why": "an actor without a film has a NULL film_info, which fell into a NULL group instead of 0",
+   "rerun": true,
+   "request": [
+    "Count the categories of each actor's `film_info` as in SAKILA_ACTOR_INFO_I_02, then group the actors by that number.",
+    "Show each number of categories with the number of actors, the most categories first.",
+    "The groups are formed on a computed value, not on a column; an actor without a film has a NULL `film_info`, counted as 0 categories."
+   ],
+   "sql": "SELECT COALESCE(CHAR_LENGTH(film_info) - CHAR_LENGTH(REPLACE(film_info, ':', '')), 0) AS categories, COUNT(*) AS actors\nFROM actor_info\nGROUP BY categories\nORDER BY categories DESC"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_ACTOR_INFO_A_01",
+   "_src": "Codex",
+   "_why": "a NULL film_info made the comparison UNKNOWN, so such an actor was never checked",
+   "rerun": true,
+   "request": [
+    "Check the view against the tables it is built on.",
+    "For each actor, compare the number of categories in `film_info`, counted as in SAKILA_ACTOR_INFO_I_02, with the number of distinct categories of the actor's films, counted from `film_actor` and `film_category` by a correlated subquery; a NULL `film_info` counts as 0, so an actor without a film is checked too.",
+    "Show the `actor_id`, the `first_name` and the `last_name` of the actors where the two differ, ordered by `actor_id`.",
+    "The installed data has none."
+   ],
+   "sql": "SELECT ai.*\nFROM actor_info ai\nWHERE COALESCE(CHAR_LENGTH(ai.film_info) - CHAR_LENGTH(REPLACE(ai.film_info, ':', '')), 0)\n          <> (SELECT COUNT(DISTINCT fc.category_id)\n              FROM film_actor fa\n                       JOIN film_category fc ON fc.film_id = fa.film_id\n              WHERE fa.actor_id = ai.actor_id)\nORDER BY ai.actor_id"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_ACTOR_INFO_B_01",
+   "_src": "both",
+   "_why": "SELECT *, LEFT(...) AS film_info gave two film_info columns, the first the whole string",
+   "rerun": true,
+   "sql": "SELECT actor_id, first_name, last_name, LEFT(film_info, 80) AS film_info\nFROM actor_info\nWHERE actor_id = 1"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_FILM_B_06",
+   "_src": "Claude",
+   "_why": "the lowest and highest were hard-coded; title is not unique, so LIMIT 10 needs film_id",
+   "rerun": true,
+   "request": [
+    "Find the films whose `rental_rate` is the lowest of all films and whose `replacement_cost` is the highest of all films; in the installed data those are `0.99` and `29.99`.",
+    "Show their `film_id`, `title`, `rental_rate` and `replacement_cost`, ordered by title, then by `film_id`, and keep the first ten."
+   ],
+   "sql": "SELECT *\nFROM film\nWHERE rental_rate = (SELECT MIN(rental_rate) FROM film)\n  AND replacement_cost = (SELECT MAX(replacement_cost) FROM film)\nORDER BY title, film_id\nLIMIT 10"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_FILM_TEXT_I_03",
+   "_src": "Claude",
+   "_why": "the default collation ignores case, as does upd_film, so a case-only change was exactly what the check missed",
+   "rerun": true,
+   "request": [
+    "Join `film_text` to `film` by the film id, and find the films whose two titles are not exactly the same, letter case included: the `film_id`, the film's `title` and the `film_text` title.",
+    "The default collation ignores case, and so does the `upd_film` trigger; `COLLATE utf8mb4_bin` compares the characters as they are.",
+    "The triggers keep the titles the same, so the installed data has none."
+   ],
+   "sql": "SELECT f.*, ft.*\nFROM film f\n         JOIN film_text ft ON ft.film_id = f.film_id\nWHERE ft.title COLLATE utf8mb4_bin <> f.title\nORDER BY f.film_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_FILM_B_07",
+   "after": "last",
+   "_src": "both",
+   "_why": "no Basic exercise shows that COUNT(column) skips NULLs; guards the populated columns other exercises assume",
+   "rerun": true,
+   "title": "how many films lack each optional value",
+   "request": [
+    "`film` has five columns that may be NULL: `description`, `release_year`, `length`, `rating` and `special_features`.",
+    "Count, in one row, all the films and, for each of the five, the films where it is NULL.",
+    "`COUNT(column)` skips NULLs, so `COUNT(*) - COUNT(column)` is the number of NULLs."
+   ],
+   "sql": "SELECT COUNT(*)                           AS films,\n       COUNT(*) - COUNT(description)      AS no_description,\n       COUNT(*) - COUNT(release_year)     AS no_release_year,\n       COUNT(*) - COUNT(length)           AS no_length,\n       COUNT(*) - COUNT(rating)           AS no_rating,\n       COUNT(*) - COUNT(special_features) AS no_special_features\nFROM film"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_FILM_I_05",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "no exercise tells the copies a store owns from the copies it has on the shelf now",
+   "rerun": true,
+   "title": "the copies of a film at each store, and how many are in",
+   "request": [
+    "For the film `1`, show every store with how many copies of the film it owns and how many are in now.",
+    "A copy is out while it has a rental whose `return_date` is NULL; a store with no copy shows zeros.",
+    "The film goes into the outer join, so every store stays; a `NOT EXISTS` tells a copy that is in."
+   ],
+   "sql": "SELECT s.store_id,\n       COUNT(i.inventory_id) AS copies,\n       COUNT(CASE\n                 WHEN i.inventory_id IS NOT NULL\n                     AND NOT EXISTS (SELECT 1\n                                     FROM rental r\n                                     WHERE r.inventory_id = i.inventory_id\n                                       AND r.return_date IS NULL) THEN 1\n           END)              AS copies_in\nFROM store s\n         LEFT JOIN inventory i ON i.store_id = s.store_id AND i.film_id = 1\nGROUP BY s.store_id\nORDER BY s.store_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_FILM_A_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "FILM_B_04 tests one member of the SET column; counting every member means turning the set into rows",
+   "rerun": true,
+   "title": "how many films have each special feature",
+   "request": [
+    "`special_features` is a `SET` of `Trailers`, `Commentaries`, `Deleted Scenes` and `Behind the Scenes`.",
+    "For each of the four, count the films whose `special_features` hold it, and show each feature with its count, the most first; ties are ordered by the feature.",
+    "A derived table lists the members, and `FIND_IN_SET` joins each to the films that hold it."
+   ],
+   "sql": "SELECT sf.feature, COUNT(f.film_id) AS films\nFROM (SELECT 'Trailers' AS feature\n      UNION ALL\n      SELECT 'Commentaries'\n      UNION ALL\n      SELECT 'Deleted Scenes'\n      UNION ALL\n      SELECT 'Behind the Scenes') sf\n         LEFT JOIN film f ON FIND_IN_SET(sf.feature, f.special_features) > 0\nGROUP BY sf.feature\nORDER BY films DESC, sf.feature"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_FILM_TEXT_I_06",
+   "after": "last",
+   "_src": "both",
+   "_why": "upd_film compares the description with !=, never true against a NULL, so a description set or cleared never reaches film_text",
+   "rerun": true,
+   "title": "the films whose film_text description differs from their description",
+   "request": [
+    "Join `film_text` to `film` by the film id, and find the films whose two descriptions are not exactly the same, a NULL on one side and a value on the other counting as different.",
+    "The `upd_film` trigger compares them with `!=`, which is never true when one side is NULL; `<=>` is the comparison that is.",
+    "The installed data has none."
+   ],
+   "sql": "SELECT f.*, ft.*\nFROM film f\n         JOIN film_text ft ON ft.film_id = f.film_id\nWHERE NOT (ft.description COLLATE utf8mb4_bin <=> f.description)\nORDER BY f.film_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_FILM_TEXT_I_07",
+   "after": "last",
+   "_src": "both",
+   "_why": "SAKILA_FILM_TEXT_A_02 relies on no two titles sharing a first word, which the DDL does not enforce; a check guards it",
+   "rerun": true,
+   "title": "the first words that start more than one title",
+   "request": [
+    "SAKILA_FILM_TEXT_A_02 chains the titles by their words, which works only if no two titles share a first word; nothing in the schema says so.",
+    "Group the titles of `film_text` by their first word, and show each first word that starts more than one title, with its number of titles, ordered by the word; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT SUBSTRING_INDEX(title, ' ', 1) AS first_word, COUNT(*) AS titles\nFROM film_text\nGROUP BY first_word\nHAVING COUNT(*) > 1\nORDER BY first_word"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_LANGUAGE_I_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "no exercise joins one table twice under two aliases, as the two foreign keys from film to language ask",
+   "rerun": true,
+   "title": "the first five films with the names of their language and original language",
+   "request": [
+    "`film` refers to `language` twice: by `language_id`, and by `original_language_id`, which may be NULL.",
+    "Show the first five films by `film_id`, each with the name of its language and the name of its original language, NULL where it has none.",
+    "`language` joins twice, under two aliases, the second by an outer join so that no film drops out."
+   ],
+   "sql": "SELECT f.film_id, f.title, l.name AS language, ol.name AS original_language\nFROM film f\n         JOIN language l ON l.language_id = f.language_id\n         LEFT JOIN language ol ON ol.language_id = f.original_language_id\nORDER BY f.film_id\nLIMIT 5"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_LANGUAGE_A_01",
+   "after": "last",
+   "_src": "both",
+   "_why": "LANGUAGE has no Advanced exercise; Claude's (both roles, every language) over Codex's, which ranked by original_language_id, NULL for every film in the data",
+   "rerun": true,
+   "title": "how many films use each language, as language and as original language",
+   "file_header": "Exercises at the advanced level on language: references turned into rows with UNION ALL, and counted under conditions. Each poses a question, answers it, and shows what the installed data gives back.",
+   "request": [
+    "For every language, even one no film uses, count the films that use it as their `language_id` and the films that use it as their `original_language_id`, both in one row, ordered by `language_id`.",
+    "A `UNION ALL` turns the two references into rows, each tagged with its role, and a `COUNT` of a `CASE` counts each role."
+   ],
+   "sql": "SELECT l.*,\n       COUNT(CASE WHEN u.role = 'language' THEN 1 END) AS as_language,\n       COUNT(CASE WHEN u.role = 'original' THEN 1 END) AS as_original_language\nFROM language l\n         LEFT JOIN (SELECT language_id, 'language' AS role\n                    FROM film\n                    UNION ALL\n                    SELECT original_language_id, 'original'\n                    FROM film\n                    WHERE original_language_id IS NOT NULL) u ON u.language_id = l.language_id\nGROUP BY l.language_id\nORDER BY l.language_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_ACTOR_INFO_I_04",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "film_info is a GROUP_CONCAT, cut at group_concat_max_len; the exercises that count colons in it assume nothing was cut",
+   "rerun": true,
+   "title": "the actors whose film_info may be cut by GROUP_CONCAT",
+   "request": [
+    "`film_info` is built by `GROUP_CONCAT`, which cuts its result at `group_concat_max_len` bytes, 1024 by default, without an error.",
+    "Find the actors whose `film_info` is as long as that limit, so that it may have been cut: the `actor_id`, the `first_name`, the `last_name` and the length in bytes, ordered by `actor_id`.",
+    "SAKILA_ACTOR_INFO_I_02, I_03 and A_01 count the colons in `film_info`, which is right only if nothing was cut; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT actor_id, first_name, last_name, LENGTH(film_info) AS film_info_bytes\nFROM actor_info\nWHERE LENGTH(film_info) >= @@group_concat_max_len\nORDER BY actor_id"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SALES_BY_FILM_CATEGORY_B_01",
+   "_src": "both",
+   "_why": "the top three came only from the view's own ORDER BY, which a query of the view need not keep, with no tie-break",
+   "rerun": true,
+   "request": [
+    "The `sales_by_film_category` view sums the payments of each category.",
+    "Show the three categories which sold the most, with their `total_sales`, the most first; on a tie, by `category`.",
+    "The view's own `ORDER BY` does not carry over to a query of it, so the query orders the rows itself."
+   ],
+   "sql": "SELECT *\nFROM sales_by_film_category\nORDER BY total_sales DESC, category\nLIMIT 3"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SALES_BY_FILM_CATEGORY_I_01",
+   "_src": "Codex",
+   "_why": "equal totals do not show that each payment reaches one category; SAKILA_SALES_BY_FILM_CATEGORY_I_04 checks that",
+   "rerun": false,
+   "request": [
+    "Check the view: sum its `total_sales` over all categories, sum the `amount` of all payments, and show both in one row.",
+    "They are equal if every payment reaches exactly one category, through its rental, copy and film; equal totals alone do not prove it, and SAKILA_SALES_BY_FILM_CATEGORY_I_04 checks it payment by payment."
+   ]
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_FILM_LIST_I_01",
+   "_src": "both",
+   "_why": "the request said inner joins, but the view joins film_category and category by outer joins, so a film without a category has a row too",
+   "rerun": true,
+   "request": [
+    "The view joins `film` with `film_category` and `category` by outer joins, so a film without a category still has a row, whose `category` is `NULL`.",
+    "Count the distinct films of the view which have a category, and the distinct films of `film_category`, and show both in one row, with the view's rows without a category in a third column."
+   ],
+   "sql": "SELECT (SELECT COUNT(DISTINCT FID) FROM film_list WHERE category IS NOT NULL) AS film_list,\n       (SELECT COUNT(DISTINCT film_id) FROM film_category)                    AS films_with_a_category,\n       (SELECT COUNT(*) FROM film_list WHERE category IS NULL)                AS film_list_without_a_category"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_01",
+   "_src": "both",
+   "_why": "the join compared category with =, so the rows of the films without a category, NULL there, never joined",
+   "rerun": true,
+   "request": [
+    "The two views should differ only in how the actors are written.",
+    "Join them row by row, by `FID` and `category`, and count the rows where any other column (`title`, `description`, `price`, `length`, `rating`) differs.",
+    "`category` is `NULL` for a film without one, and the other columns may be `NULL` too, so compare all of them, the join included, with the null-safe `<=>`, not with `=`.",
+    "The answer is `0`."
+   ],
+   "sql": "SELECT COUNT(*) AS differing\nFROM nicer_but_slower_film_list n\n         JOIN film_list l ON l.FID = n.FID AND l.category <=> n.category\nWHERE NOT (n.title <=> l.title AND n.description <=> l.description AND n.price <=> l.price\n           AND n.length <=> l.length AND n.rating <=> l.rating)"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_NICER_BUT_SLOWER_FILM_LIST_A_02",
+   "_src": "Claude",
+   "_why": "m.category = n.category never matched the NULL category, which dropped out of the answer",
+   "rerun": true,
+   "request": [
+    "For each category, the films without one included, find the longest `length` of its films, and count the films which are exactly that long.",
+    "Show the `category`, the longest length and the count, ordered by `category`.",
+    "A row is kept when its length equals the maximum of its own category, which is a correlated subquery; it compares the categories with `<=>`, so the films without a category form a group too."
+   ],
+   "sql": "SELECT n.category, n.length AS longest, COUNT(*) AS films\nFROM nicer_but_slower_film_list n\nWHERE n.length = (SELECT MAX(m.length) FROM nicer_but_slower_film_list m WHERE m.category <=> n.category)\nGROUP BY n.category, n.length\nORDER BY n.category"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_NICER_BUT_SLOWER_FILM_LIST_B_01",
+   "_src": "Codex",
+   "_why": "the request compares the two views' rows, but the SQL read one",
+   "rerun": true,
+   "request": [
+    "`nicer_but_slower_film_list` is `film_list` with the actors' names written with only the first letter of each name in upper case.",
+    "Show the film `1`'s `FID`, `title` and `actors` from both views, one row each, with a column naming the view, to compare how they write the actors."
+   ],
+   "sql": "SELECT 'nicer_but_slower_film_list' AS view, FID, title, actors\nFROM nicer_but_slower_film_list\nWHERE FID = 1\nUNION ALL\nSELECT 'film_list', FID, title, actors\nFROM film_list\nWHERE FID = 1"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_CATEGORY_I_02",
+   "_src": "both",
+   "_why": "ordered by the rounded average with no tie-break, so LIMIT 1 could keep the wrong category",
+   "rerun": true,
+   "request": [
+    "For each category, take the average `length` of its films, and find the category whose average is the largest.",
+    "Show its name and the average, rounded to two decimal places.",
+    "Order the groups by the average itself, not the rounded one, then by name, and keep only the first."
+   ],
+   "sql": "SELECT c.*, ROUND(AVG(f.length), 2) AS average_length\nFROM category c\n         JOIN film_category fc ON fc.category_id = c.category_id\n         JOIN film f ON f.film_id = fc.film_id\nGROUP BY c.category_id\nORDER BY AVG(f.length) DESC, c.name\nLIMIT 1"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_CATEGORY_I_01",
+   "_src": "Codex",
+   "_why": "the inner join left out a category with no film, though the request counts each category",
+   "rerun": true,
+   "request": [
+    "Count the films of each category through the `film_category` link table, a category without a film included, with `0`.",
+    "Show each category's name and its number of films, the most first; categories with the same count are ordered by name."
+   ],
+   "sql": "SELECT c.*, COUNT(fc.film_id) AS films\nFROM category c\n         LEFT JOIN film_category fc ON fc.category_id = c.category_id\nGROUP BY c.category_id\nORDER BY films DESC, c.name"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_FILM_CATEGORY_I_03",
+   "_src": "Codex",
+   "_why": "the query started from film_category, so a category with no film was left out",
+   "rerun": true,
+   "request": [
+    "For each category, a category without a film included, count its films, and, in the same row, those of them whose `rating` is `R`.",
+    "Show the category's name with both counts, ordered by the name.",
+    "Count the R-rated films with a `CASE` inside a `SUM`, so that one pass over the rows gives both counts; the query starts from `category`, with outer joins."
+   ],
+   "sql": "SELECT c.*,\n       COUNT(f.film_id) AS films,\n       SUM(CASE WHEN f.rating = 'R' THEN 1 ELSE 0 END) AS r_rated\nFROM category c\n         LEFT JOIN film_category fc ON fc.category_id = c.category_id\n         LEFT JOIN film f ON f.film_id = fc.film_id\nGROUP BY c.category_id\nORDER BY c.name"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_FILM_LIST_A_02",
+   "after": "last",
+   "_src": "both",
+   "_why": "FILM_LIST has no live Advanced exercise; Claude's, which reads the view's own actors string, over Codex's three cheapest per category",
+   "rerun": true,
+   "title": "the films with the most actors in each category",
+   "file_header": "Exercises at the advanced level on film_list: a window function over the view's rows. Each poses a question, answers it, and shows what the installed data gives back.",
+   "request": [
+    "Count each film's actors from the view's `actors` string, one more than its commas, or `0` when it is `NULL`.",
+    "In each category, find the films with the most actors, all of them when several tie.",
+    "Show the `category`, `FID`, `title` and the number of actors, ordered by `category` and then by `FID`.",
+    "`RANK()` over each category keeps the ties."
+   ],
+   "sql": "WITH counted AS (SELECT category,\n                        FID,\n                        title,\n                        CASE WHEN actors IS NULL THEN 0\n                             ELSE LENGTH(actors) - LENGTH(REPLACE(actors, ',', '')) + 1 END AS actor_count\n                 FROM film_list)\nSELECT category, FID, title, actor_count\nFROM (SELECT counted.*, RANK() OVER (PARTITION BY category ORDER BY actor_count DESC) AS actor_rank\n      FROM counted) ranked\nWHERE actor_rank = 1\nORDER BY category, FID"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_INVENTORY_I_06",
+   "after": "last",
+   "_src": "both",
+   "_why": "SAKILA_INVENTORY_I_03, I_05 and A_01 assume a copy is out on one rental at most, which the DDL does not enforce",
+   "rerun": true,
+   "title": "the copies which are out on more than one rental at once",
+   "request": [
+    "A copy can be out on only one rental at a time; SAKILA_INVENTORY_I_03 counts open rentals as copies out on that ground, and nothing in the schema enforces it.",
+    "Find the copies which have more than one rental with no `return_date`, with their number of open rentals, ordered by `inventory_id`; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT i.*, COUNT(*) AS open_rentals\nFROM inventory i\n         JOIN rental r ON r.inventory_id = i.inventory_id\nWHERE r.return_date IS NULL\nGROUP BY i.inventory_id\nHAVING COUNT(*) > 1\nORDER BY i.inventory_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_INVENTORY_A_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "film.rental_duration is never used, and overdue copies are the first thing a store asks about; a fixed 'now' keeps the answer stable",
+   "rerun": true,
+   "title": "the ten copies most overdue, as of the last rental",
+   "request": [
+    "Take the date of the last rental in the data as now.",
+    "A copy is overdue when its open rental, with no `return_date`, is older than its film's `rental_duration` in days.",
+    "Show the ten most overdue: the `rental_id`, the `inventory_id`, the film's `title`, the `rental_date` and the days overdue, the most first; ties are ordered by `rental_id`."
+   ],
+   "sql": "SELECT r.rental_id,\n       i.inventory_id,\n       f.title,\n       r.rental_date,\n       DATEDIFF(m.last_rental, r.rental_date) - f.rental_duration AS days_overdue\nFROM rental r\n         JOIN inventory i ON i.inventory_id = r.inventory_id\n         JOIN film f ON f.film_id = i.film_id\n         CROSS JOIN (SELECT MAX(rental_date) AS last_rental FROM rental) m\nWHERE r.return_date IS NULL\n  AND r.rental_date + INTERVAL f.rental_duration DAY < m.last_rental\nORDER BY days_overdue DESC, r.rental_id\nLIMIT 10"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_FILM_CATEGORY_B_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "listing a category's films by its name, across both foreign keys of the link table, has no Basic exercise",
+   "rerun": true,
+   "title": "the films of the Comedy category",
+   "request": [
+    "Find the films whose category is `Comedy`, through `film_category`.",
+    "Show the films' whole rows, ordered by `title`; ties are ordered by `film_id`."
+   ],
+   "sql": "SELECT f.*\nFROM film f\n         JOIN film_category fc ON fc.film_id = f.film_id\n         JOIN category c ON c.category_id = fc.category_id\nWHERE c.name = 'Comedy'\nORDER BY f.title, f.film_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_SALES_BY_FILM_CATEGORY_I_04",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "payment.rental_id is nullable and a film may have several categories; this checks what SAKILA_SALES_BY_FILM_CATEGORY_I_01 assumes",
+   "rerun": true,
+   "title": "the payments which reach no category, or more than one",
+   "request": [
+    "A payment reaches its category through its rental, the rental's copy and the copy's film; `rental_id` may be `NULL`, and a film may have more than one category.",
+    "Find the payments which reach no category or more than one: the `payment_id`, the `amount` and the number of categories, ordered by `payment_id`; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT p.payment_id, p.amount, COUNT(fc.category_id) AS categories\nFROM payment p\n         LEFT JOIN rental r ON r.rental_id = p.rental_id\n         LEFT JOIN inventory i ON i.inventory_id = r.inventory_id\n         LEFT JOIN film_category fc ON fc.film_id = i.film_id\nGROUP BY p.payment_id\nHAVING COUNT(fc.category_id) <> 1\nORDER BY p.payment_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_SALES_BY_FILM_CATEGORY_A_04",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the view hides the store; subtotals with WITH ROLLUP and GROUPING() check its totals against the tables",
+   "rerun": true,
+   "title": "each category's sales at each store, with the view's total beside them",
+   "request": [
+    "Sum the payments of each category at each store, through rental, copy and `film_category`, with a subtotal for each category and a grand total.",
+    "Show the `category`, the `store_id`, the sales and, on each category's subtotal row, the view's `total_sales`, which should be equal.",
+    "Order by the category, then by the store, with the subtotal after its stores and the grand total last.",
+    "`WITH ROLLUP` adds the subtotal rows, and `GROUPING()` tells them from the others."
+   ],
+   "sql": "SELECT g.category, g.store_id, g.sales, s.total_sales\nFROM (SELECT c.name                AS category,\n             i.store_id,\n             SUM(p.amount)         AS sales,\n             GROUPING(c.name)      AS g_category,\n             GROUPING(i.store_id)  AS g_store\n      FROM payment p\n               JOIN rental r ON r.rental_id = p.rental_id\n               JOIN inventory i ON i.inventory_id = r.inventory_id\n               JOIN film_category fc ON fc.film_id = i.film_id\n               JOIN category c ON c.category_id = fc.category_id\n      GROUP BY c.name, i.store_id\n      WITH ROLLUP) g\n         LEFT JOIN sales_by_film_category s ON s.category = g.category AND g.g_store = 1\nORDER BY g.g_category, g.category, g.g_store, g.store_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_CATEGORY_I_06",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "the DDL does not make a category name unique, while the views group and join by it",
+   "rerun": true,
+   "title": "the category names which more than one category has",
+   "request": [
+    "`sales_by_film_category` and `film_list` work with the category's name, which the schema does not make unique.",
+    "Find the names which more than one category has, with how many, ordered by the name; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT name, COUNT(*) AS categories\nFROM category\nGROUP BY name\nHAVING COUNT(*) > 1\nORDER BY name"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_STAFF_I_01",
+   "_src": "both",
+   "_why": "the inner join dropped a staff member who handled no rental, though the request counts each",
+   "rerun": true,
+   "request": [
+    "Count the rentals each staff member handled, by `rental.staff_id`.",
+    "Show each staff member's `staff_id` and `first_name` with the count, `0` for one who handled none, ordered by `staff_id`."
+   ],
+   "sql": "SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update, COUNT(r.rental_id) AS rentals -- every column but picture, a BLOB which does not print\nFROM staff s\n         LEFT JOIN rental r ON r.staff_id = s.staff_id\nGROUP BY s.staff_id\nORDER BY s.staff_id"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_STAFF_I_03",
+   "_src": "both",
+   "_why": "the inner joins dropped a staff member with no rental",
+   "rerun": true,
+   "request": [
+    "A staff member works at one store, but may rent out a copy of another store.",
+    "For each staff member, count the rentals they handled whose copy is at their own store, and those whose copy is elsewhere, with `CASE` inside `SUM`; a staff member with no rental shows two zeros.",
+    "Show the `staff_id`, `first_name`, `store_id` and the two counts, ordered by `staff_id`."
+   ],
+   "sql": "SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update, -- every column but picture, a BLOB which does not print\n       SUM(CASE WHEN i.store_id = s.store_id THEN 1 ELSE 0 END) AS own_store,\n       SUM(CASE WHEN i.store_id <> s.store_id THEN 1 ELSE 0 END) AS other_store\nFROM staff s\n         LEFT JOIN rental r ON r.staff_id = s.staff_id\n         LEFT JOIN inventory i ON i.inventory_id = r.inventory_id\nGROUP BY s.staff_id\nORDER BY s.staff_id"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_STAFF_LIST_I_02",
+   "_src": "Claude",
+   "_why": "the title asks whether, but the SQL never compared the two cities, and city names repeat across countries",
+   "rerun": true,
+   "request": [
+    "The view's `city` and `country` are where the staff member lives, and `SID` is the store they work at.",
+    "Join each row to its store, the store's address, city and country, and show the `ID`, `name`, where they live, where they work, and whether the two are the same city of the same country, ordered by `ID`.",
+    "City names repeat across countries, so the comparison takes the country too."
+   ],
+   "sql": "SELECT l.*,\n       ci.city                                        AS store_city,\n       co.country                                     AS store_country,\n       (l.city = ci.city AND l.country = co.country) AS lives_in_store_city\nFROM staff_list l\n         JOIN store st ON st.store_id = l.SID\n         JOIN address a ON a.address_id = st.address_id\n         JOIN city ci ON ci.city_id = a.city_id\n         JOIN country co ON co.country_id = ci.country_id\nORDER BY l.ID"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_CUSTOMER_B_03",
+   "_src": "Claude",
+   "_why": "no ORDER BY, so the order of the groups was unspecified",
+   "rerun": true,
+   "request": [
+    "Every customer has an `email`; SAKILA_CUSTOMER_B_06 checks it.",
+    "Take the part after the `@` as the domain, group the customers by it, and show each domain with the number of its customers, the most first; domains with the same number are ordered by name.",
+    "The group is by an expression, not by a column."
+   ],
+   "sql": "SELECT SUBSTRING_INDEX(email, '@', -1) AS domain, COUNT(*) AS customers\nFROM customer\nGROUP BY domain\nORDER BY customers DESC, domain"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_STORE_A_01",
+   "_src": "Codex",
+   "_why": "the inner join dropped a store with no copy, though the request counts each store",
+   "rerun": true,
+   "request": [
+    "For each store, a store without a copy included, count the distinct films it has at least one copy of, and, of those, the films no other store has a copy of.",
+    "Show the `store_id` and both counts, ordered by `store_id`.",
+    "The second count needs a correlated condition on the inventory of the other stores."
+   ],
+   "sql": "SELECT st.*,\n       COUNT(DISTINCT i.film_id)                  AS films,\n       COUNT(DISTINCT CASE\n                          WHEN NOT EXISTS (SELECT 1\n                                           FROM inventory o\n                                           WHERE o.film_id = i.film_id\n                                             AND o.store_id <> st.store_id)\n                              THEN i.film_id END) AS films_only_here\nFROM store st\n         LEFT JOIN inventory i ON i.store_id = st.store_id\nGROUP BY st.store_id\nORDER BY st.store_id"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_CITY_B_01",
+   "_src": "Codex",
+   "_why": "city names repeat (across countries), so ordering by the name alone does not fix the order of the rows",
+   "rerun": true,
+   "request": [
+    "Find the cities whose name starts with the letter `Q`.",
+    "Show the whole rows, ordered by the name, then by `city_id`; names repeat across countries.",
+    "A `LIKE` with a trailing wildcard."
+   ],
+   "sql": "SELECT *\nFROM city\nWHERE city LIKE 'Q%'\nORDER BY city, city_id"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_CITY_I_04",
+   "_src": "Codex",
+   "_why": "two cities may share the name and the count; city_id breaks the tie",
+   "rerun": true,
+   "request": [
+    "Count the addresses of each city, and keep the cities with more than one.",
+    "Show the `city_id`, the `city` and the count, the most first; cities with the same count are ordered by the name, then by `city_id`."
+   ],
+   "sql": "SELECT ci.*, COUNT(*) AS addresses\nFROM city ci\n         JOIN address a ON a.city_id = ci.city_id\nGROUP BY ci.city_id\nHAVING COUNT(*) > 1\nORDER BY addresses DESC, ci.city, ci.city_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_STAFF_LIST_A_01",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "STAFF_LIST has no Advanced exercise; the view's home country against the rental-to-customer path",
+   "rerun": true,
+   "title": "the staff members who served a customer living outside their own country",
+   "file_header": "Exercises at the advanced level on staff_list: a correlated EXISTS across the rentals, customers and their addresses. Each poses a question, answers it, and shows what the installed data gives back.",
+   "request": [
+    "Find the staff members who handled at least one rental for a customer who lives in another country than the staff member does, as the view says.",
+    "Show their `ID`, `name` and `country`, ordered by `ID`.",
+    "A correlated `EXISTS` walks from the staff member's rentals to the customers' countries."
+   ],
+   "sql": "SELECT l.ID, l.name, l.country\nFROM staff_list l\nWHERE EXISTS (SELECT 1\n              FROM rental r\n                       JOIN customer cu ON cu.customer_id = r.customer_id\n                       JOIN address a ON a.address_id = cu.address_id\n                       JOIN city ci ON ci.city_id = a.city_id\n                       JOIN country co ON co.country_id = ci.country_id\n              WHERE r.staff_id = l.ID\n                AND co.country <> l.country)\nORDER BY l.ID"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_CUSTOMER_B_06",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "email is nullable, and SAKILA_CUSTOMER_B_03 takes the domain after the @ of every one",
+   "rerun": true,
+   "title": "the customers whose email is missing or not one address",
+   "request": [
+    "SAKILA_CUSTOMER_B_03 takes the part of each `email` after the `@`, which `email`, nullable, does not promise.",
+    "Find the customers whose `email` is `NULL`, holds a space, or does not have exactly one `@` with something on both sides; show their `customer_id`, names and `email`, ordered by `customer_id`; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT customer_id, first_name, last_name, email\nFROM customer\nWHERE email IS NULL\n   OR email NOT LIKE '_%@_%'\n   OR CHAR_LENGTH(email) - CHAR_LENGTH(REPLACE(email, '@', '')) <> 1\n   OR email REGEXP '[[:space:]]'\nORDER BY customer_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_CUSTOMER_I_06",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "the spending exercises join payment with inner joins, assuming every customer has paid",
+   "rerun": true,
+   "title": "the customers with no payment",
+   "request": [
+    "The exercises on what customers spent join `payment` with inner joins, which drops a customer who never paid.",
+    "Find the customers with no payment: their `customer_id` and names, ordered by `customer_id`; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT c.customer_id, c.first_name, c.last_name\nFROM customer c\nWHERE NOT EXISTS (SELECT 1 FROM payment p WHERE p.customer_id = c.customer_id)\nORDER BY c.customer_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_CUSTOMER_I_07",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "film.rental_duration against the rental dates is the schema's own notion of lateness (get_customer_balance), and no exercise uses it per customer",
+   "rerun": true,
+   "title": "the five customers who returned late most often",
+   "request": [
+    "A rental is late when it was returned more days after it was rented than its film's `rental_duration`, as `get_customer_balance` counts it.",
+    "Show the five customers with the most late returns, with their counts, the most first; ties are ordered by `customer_id`.",
+    "A rental not yet returned has no `return_date`, so it drops out of the comparison."
+   ],
+   "sql": "SELECT c.*, COUNT(*) AS late_returns\nFROM customer c\n         JOIN rental r ON r.customer_id = c.customer_id\n         JOIN inventory i ON i.inventory_id = r.inventory_id\n         JOIN film f ON f.film_id = i.film_id\nWHERE DATEDIFF(r.return_date, r.rental_date) > f.rental_duration\nGROUP BY c.customer_id\nORDER BY late_returns DESC, c.customer_id\nLIMIT 5"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_CUSTOMER_A_04",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "no exercise uses LAG over dates, which rental_date makes natural",
+   "rerun": true,
+   "title": "the five customers with the longest gap between two rentals",
+   "request": [
+    "For each customer, take the days between each rental and the customer's previous one, and keep the longest.",
+    "Show the five customers with the longest gap, with the gap in days, the longest first; ties are ordered by `customer_id`.",
+    "`LAG` gives each rental the one before it; `rental_id` breaks a tie of `rental_date`, which is not unique per customer."
+   ],
+   "sql": "WITH gaps AS (SELECT r.customer_id,\n                     DATEDIFF(r.rental_date,\n                              LAG(r.rental_date) OVER (PARTITION BY r.customer_id ORDER BY r.rental_date, r.rental_id)) AS gap_days\n              FROM rental r)\nSELECT c.*, MAX(g.gap_days) AS longest_gap\nFROM customer c\n         JOIN gaps g ON g.customer_id = c.customer_id\nGROUP BY c.customer_id\nORDER BY longest_gap DESC, c.customer_id\nLIMIT 5"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_COUNTRY_I_05",
+   "after": "last",
+   "_src": "both",
+   "_why": "SAKILA_COUNTRY_B_02 says the names are unique and the A tier orders by them, but country.country has no unique key",
+   "rerun": true,
+   "title": "the country names found more than once",
+   "request": [
+    "SAKILA_COUNTRY_B_02 relies on the country names being unique, and the Advanced exercises order by them; the schema does not make them unique.",
+    "Find the names that more than one row of `country` has, with how many, ordered by the name; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT country, COUNT(*) AS countries\nFROM country\nGROUP BY country\nHAVING COUNT(*) > 1\nORDER BY country"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_CITY_I_06",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "city names identify a city within its country in several exercises, which no key enforces",
+   "rerun": true,
+   "title": "the city names found more than once in a country",
+   "request": [
+    "Some exercises name a city by its country and its name, which no key of `city` makes unique.",
+    "Find each `country_id` and city name that more than one city has, with how many, ordered by `country_id` and the name; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT country_id, city, COUNT(*) AS cities\nFROM city\nGROUP BY country_id, city\nHAVING COUNT(*) > 1\nORDER BY country_id, city"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_ADDRESS_B_05",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "postal_code is nullable, and no exercise shows that a missing one takes two forms, nor that = '' is not true for NULL",
+   "rerun": true,
+   "title": "how many addresses have no postal code, as NULL and as an empty string",
+   "request": [
+    "A missing `postal_code` may be `NULL` or the empty string.",
+    "Count the addresses whose `postal_code` is `NULL`, and, apart, those whose `postal_code` is the empty string, in one row.",
+    "`postal_code = ''` is not true for a `NULL`; in MySQL a condition sums as `1` or `0`."
+   ],
+   "sql": "SELECT SUM(postal_code IS NULL) AS null_postal_codes,\n       SUM(postal_code = '')    AS empty_postal_codes\nFROM address"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_CUSTOMER_LIST_B_05",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the view's `zip code` column has a space in its name, which only backticks quote, and no exercise reads it",
+   "rerun": true,
+   "title": "the first ten customers in the United States by zip code",
+   "request": [
+    "The view's `zip code` column has a space in its name, so a query quotes it with backticks; it may be `NULL`, which MySQL sorts first.",
+    "Show the first ten customers in the United States, the whole rows of the view, ordered by their zip code and then by `ID`."
+   ],
+   "sql": "SELECT *\nFROM customer_list\nWHERE country = 'United States'\nORDER BY `zip code`, ID\nLIMIT 10"
+  },
+  {
+   "op": "remove",
+   "id": "SAKILA_CUSTOMER_LIST_I_03",
+   "_src": "both",
+   "_why": "the view defines name as exactly that CONCAT, so the query can never return a row"
+  },
+  {
+   "op": "remove",
+   "id": "SAKILA_ADDRESS_A_01",
+   "_src": "Claude",
+   "_why": "SAKILA_ADDRESS_I_03's 'none' class counts exactly these addresses; three NOT EXISTS is not Advanced either"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SCHEMA_A_01",
+   "_src": "both",
+   "_why": "RANK() gave a country with a tie two rows, so LIMIT 5 cut rows, not countries; the country was grouped by its name, which is not unique; no tie-break on the country's total",
+   "rerun": true,
+   "request": [
+    "Sum each customer's payments, and their country's.",
+    "For each country, find the customer who paid the most, numbering the customers within the country with a window function (`ROW_NUMBER() OVER (PARTITION BY ...)`), the largest total first and ties by `customer_id`, and take the country's total with another (`SUM() OVER (PARTITION BY ...)`).",
+    "Show, for the five countries which paid the most, the country, its top customer's `customer_id`, `first_name`, `last_name` and total, and the country's total, the largest country first; ties by `country_id`.",
+    "`ROW_NUMBER` gives each country one first row, so `LIMIT 5` keeps five countries; `RANK` would give a tie two."
+   ],
+   "sql": "WITH paid AS (SELECT co.country_id, co.country, cu.customer_id, cu.first_name, cu.last_name, SUM(p.amount) AS total\n              FROM payment p\n                       JOIN customer cu ON cu.customer_id = p.customer_id\n                       JOIN address a ON a.address_id = cu.address_id\n                       JOIN city ci ON ci.city_id = a.city_id\n                       JOIN country co ON co.country_id = ci.country_id\n              GROUP BY co.country_id, co.country, cu.customer_id, cu.first_name, cu.last_name),\n     ranked AS (SELECT paid.*,\n                       ROW_NUMBER() OVER (PARTITION BY country_id ORDER BY total DESC, customer_id) AS rank_in_country,\n                       SUM(total) OVER (PARTITION BY country_id)                                   AS country_total\n                FROM paid)\nSELECT country, customer_id, first_name, last_name, total, country_total\nFROM ranked\nWHERE rank_in_country = 1\nORDER BY country_total DESC, country_id\nLIMIT 5"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SCHEMA_A_04",
+   "_src": "Codex",
+   "_why": "the payments skip months (2005-09 to 2006-01), so LAG compared February 2006 with August 2005; a calendar of months fills the gap with 0",
+   "rerun": true,
+   "request": [
+    "Sum the payments of each month, written as `YYYY-MM`, from the first month with a payment to the last, a month without any included with `0`, and, for each month, the difference from the month before it, taken with `LAG`.",
+    "The payments skip months, so a recursive `WITH` lists every month of the span first; `LAG` over the payment months alone would compare a month with an older one.",
+    "The first month has none, so its difference is `NULL`.",
+    "Show each month with its total and the difference."
+   ],
+   "sql": "WITH RECURSIVE monthly AS (SELECT CAST(DATE_FORMAT(payment_date, '%Y-%m-01') AS DATE) AS month, SUM(amount) AS total\n                           FROM payment\n                           GROUP BY month),\n               months AS (SELECT MIN(month) AS month\n                          FROM monthly\n                          UNION ALL\n                          SELECT month + INTERVAL 1 MONTH\n                          FROM months\n                          WHERE month < (SELECT MAX(month) FROM monthly))\nSELECT DATE_FORMAT(m.month, '%Y-%m')                                           AS month,\n       COALESCE(p.total, 0)                                                    AS total,\n       COALESCE(p.total, 0) - LAG(COALESCE(p.total, 0)) OVER (ORDER BY m.month) AS change_from_previous\nFROM months m\n         LEFT JOIN monthly p ON p.month = m.month\nORDER BY m.month"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SCHEMA_I_09",
+   "_src": "Codex",
+   "_why": "a NULL length fell into ELSE 'long', as in SAKILA_FILM_I_03; the same 'unknown' group",
+   "rerun": true,
+   "request": [
+    "Sort the films into four groups by `length`: `short` under 60 minutes, `medium` from 60 to 120, `long` over 120, and `unknown` where `length` is NULL.",
+    "Count the rentals of each group's films, through the copy, and sum their payments; a rental may have no payment, so the payments are joined with an outer join.",
+    "Show each group with its count and sum, from the group of the shortest films to the group of the longest, `unknown` last.",
+    "The group is a `CASE` expression, and the statement groups by it; a rental has one payment at most, which SAKILA_PAYMENT_B_06 checks, so `COUNT(*)` counts the rentals."
+   ],
+   "sql": "SELECT CASE\n           WHEN f.length IS NULL THEN 'unknown'\n           WHEN f.length < 60 THEN 'short'\n           WHEN f.length <= 120 THEN 'medium'\n           ELSE 'long'\n           END       AS length_group,\n       COUNT(*)      AS rentals,\n       SUM(p.amount) AS total\nFROM rental r\n         JOIN inventory i ON i.inventory_id = r.inventory_id\n         JOIN film f ON f.film_id = i.film_id\n         LEFT JOIN payment p ON p.rental_id = r.rental_id\nGROUP BY length_group\nORDER BY CASE length_group WHEN 'short' THEN 1 WHEN 'medium' THEN 2 WHEN 'long' THEN 3 ELSE 4 END"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_RENTAL_A_02",
+   "_src": "both",
+   "_why": "'in 2005' had no lower bound; rental_id joins the final tie-break",
+   "rerun": true,
+   "request": [
+    "For each rental made in 2005, find the same customer's rental just before it in 2005, and the number of days between the two.",
+    "Show the five longest waits: the `customer_id`, the earlier and the later `rental_date`, and the days, the longest first; on a tie, by `customer_id`, then by the later `rental_date`, then by `rental_id`.",
+    "The rental just before is `LAG(...) OVER (PARTITION BY customer_id ORDER BY rental_date, rental_id)`, over the rentals from January 1, 2005 up to January 1, 2006."
+   ],
+   "sql": "SELECT customer_id, previous_rental, rental_date, DATEDIFF(rental_date, previous_rental) AS days\nFROM (SELECT rental_id,\n             customer_id,\n             rental_date,\n             LAG(rental_date) OVER (PARTITION BY customer_id ORDER BY rental_date, rental_id) AS previous_rental\n      FROM rental\n      WHERE rental_date >= '2005-01-01'\n        AND rental_date < '2006-01-01') g\nWHERE previous_rental IS NOT NULL\nORDER BY days DESC, customer_id, rental_date, rental_id\nLIMIT 5"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_RENTAL_B_04",
+   "_src": "both",
+   "_why": "LIMIT 1 with no tie-break",
+   "rerun": true,
+   "request": [
+    "Group the rentals by the name of the day of the week of `rental_date` (`Monday`, `Tuesday`, ...).",
+    "Show the day on which the most rentals were made, with its count; on a tie, the day whose name comes first."
+   ],
+   "sql": "SELECT DAYNAME(rental_date) AS day, COUNT(*) AS rentals\nFROM rental\nGROUP BY day\nORDER BY rentals DESC, day\nLIMIT 1"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SCHEMA_I_03",
+   "_src": "both",
+   "_why": "a tie at the fifth place made LIMIT 5 unstable",
+   "rerun": true,
+   "request": [
+    "Sum the payments by the country of the customer who paid them, through the customer, the address and the city.",
+    "Show the five countries which paid the most, each with the number of its distinct customers who paid and the sum, the largest first; ties by `country_id`."
+   ],
+   "sql": "SELECT co.*, COUNT(DISTINCT cu.customer_id) AS customers, SUM(p.amount) AS total\nFROM payment p\n         JOIN customer cu ON cu.customer_id = p.customer_id\n         JOIN address a ON a.address_id = cu.address_id\n         JOIN city ci ON ci.city_id = a.city_id\n         JOIN country co ON co.country_id = ci.country_id\nGROUP BY co.country_id\nORDER BY total DESC, co.country_id\nLIMIT 5"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_RENTAL_A_01",
+   "_src": "Claude",
+   "_why": "late by the clock here, by calendar days in SAKILA_RENTAL_I_03 and in the schema's get_customer_balance; one rule, the schema's",
+   "rerun": true,
+   "request": [
+    "Each film has a `rental_duration`, the number of days a rental may last.",
+    "Count the returned rentals which were out more calendar days than that, as the schema's `get_customer_balance` counts them: `DATEDIFF(return_date, rental_date)` is larger than the film's `rental_duration`.",
+    "The duration is on the film, so the query goes from the rental through the copy to the film, and does arithmetic on dates."
+   ],
+   "sql": "SELECT COUNT(*) AS late\nFROM rental r\n         JOIN inventory i ON i.inventory_id = r.inventory_id\n         JOIN film f ON f.film_id = i.film_id\nWHERE DATEDIFF(r.return_date, r.rental_date) > f.rental_duration"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_PAYMENT_B_05",
+   "_src": "Claude",
+   "_why": "BETWEEN ... '23:59:59' holds only while payment_date has no fraction of a second; a half-open range holds for any",
+   "rerun": true,
+   "request": [
+    "Show the payments of the customer `1` whose `payment_date` falls in July 2005: the `payment_id`, `amount` and `payment_date`.",
+    "Order them by `payment_date`, then by `payment_id`.",
+    "`payment_date` has a time, so the range runs from July 1 inclusive up to August 1 exclusive."
+   ],
+   "sql": "SELECT *\nFROM payment\nWHERE customer_id = 1\n  AND payment_date >= '2005-07-01'\n  AND payment_date < '2005-08-01'\nORDER BY payment_date, payment_id"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SCHEMA_B_02",
+   "_src": "Claude",
+   "_why": "the rows of a UNION ALL come in no stated order",
+   "rerun": true,
+   "request": [
+    "Count the rows of each of the sixteen tables, and show each table's name with its count, one row per table, ordered by the name.",
+    "`information_schema` gives only an estimate of the rows, so count them, one `SELECT` per table, joined with `UNION ALL`."
+   ],
+   "sql": "SELECT 'actor' AS table_name, COUNT(*) AS row_count FROM actor\nUNION ALL SELECT 'address', COUNT(*) FROM address\nUNION ALL SELECT 'category', COUNT(*) FROM category\nUNION ALL SELECT 'city', COUNT(*) FROM city\nUNION ALL SELECT 'country', COUNT(*) FROM country\nUNION ALL SELECT 'customer', COUNT(*) FROM customer\nUNION ALL SELECT 'film', COUNT(*) FROM film\nUNION ALL SELECT 'film_actor', COUNT(*) FROM film_actor\nUNION ALL SELECT 'film_category', COUNT(*) FROM film_category\nUNION ALL SELECT 'film_text', COUNT(*) FROM film_text\nUNION ALL SELECT 'inventory', COUNT(*) FROM inventory\nUNION ALL SELECT 'language', COUNT(*) FROM language\nUNION ALL SELECT 'payment', COUNT(*) FROM payment\nUNION ALL SELECT 'rental', COUNT(*) FROM rental\nUNION ALL SELECT 'staff', COUNT(*) FROM staff\nUNION ALL SELECT 'store', COUNT(*) FROM store\nORDER BY table_name"
+  },
+  {
+   "op": "fix",
+   "id": "SAKILA_SALES_BY_STORE_B_01",
+   "_src": "Claude",
+   "_why": "the rows came in the view's own order, which a query of the view need not keep",
+   "rerun": true,
+   "request": [
+    "The `sales_by_store` view sums the payments of each store, and names the store by its city and country, and its manager.",
+    "Show every row: the `store`, the `manager` and the `total_sales`, ordered by `store`."
+   ],
+   "sql": "SELECT *\nFROM sales_by_store\nORDER BY store"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_PAYMENT_B_06",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "SAKILA_SCHEMA_I_07 and I_09 count rentals with COUNT(*) over rental LEFT JOIN payment, right only if a rental has one payment, which no key enforces",
+   "rerun": true,
+   "title": "the rentals paid more than once",
+   "request": [
+    "`payment.rental_id` is not unique in the schema, while SAKILA_SCHEMA_I_07 and I_09 count the rentals joined to their payments as if a rental had one payment at most.",
+    "Find the rentals which have more than one payment: each `rental_id` with its number of payments, ordered by `rental_id`; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT rental_id, COUNT(*) AS payments\nFROM payment\nWHERE rental_id IS NOT NULL\nGROUP BY rental_id\nHAVING COUNT(*) > 1\nORDER BY rental_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_PAYMENT_I_04",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "payment and rental both name the customer, and nothing makes them agree, nor a payment no earlier than its rental",
+   "rerun": true,
+   "title": "the payments which do not agree with their rental",
+   "request": [
+    "A payment names its customer, and so does the rental it pays for; nothing in the schema makes them the same, or the payment no earlier than the rental.",
+    "Count the payments whose customer is not their rental's customer, and those made before their rental, in one row; both counts are `0` when the data agrees."
+   ],
+   "sql": "SELECT SUM(CASE WHEN p.customer_id <> r.customer_id THEN 1 ELSE 0 END) AS other_customer,\n       SUM(CASE WHEN p.payment_date < r.rental_date THEN 1 ELSE 0 END) AS before_rental\nFROM payment p\n         JOIN rental r ON r.rental_id = p.rental_id"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_SALES_BY_STORE_A_01",
+   "after": "last",
+   "_src": "both",
+   "_why": "SALES_BY_STORE has no Advanced exercise; a window over the whole result, SUM() OVER ()",
+   "rerun": true,
+   "title": "each store's share of all sales",
+   "file_header": "Exercises at the advanced level on sales_by_store: a window over the whole result. Each poses a question, answers it, and shows what the installed data gives back.",
+   "request": [
+    "Show every row of `sales_by_store` with the store's share of the sum of all stores' `total_sales`, as a percentage rounded to two decimal places, the largest first; ties by `store`.",
+    "`SUM(...) OVER ()`, a window with no partition and no order, gives every row the sum of all rows."
+   ],
+   "sql": "SELECT v.*, ROUND(100 * v.total_sales / SUM(v.total_sales) OVER (), 2) AS percent\nFROM sales_by_store v\nORDER BY v.total_sales DESC, v.store"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_SCHEMA_A_10",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "SAKILA_SCHEMA_B_06 lists the stored functions, but no exercise calls one",
+   "rerun": true,
+   "title": "the five customers who owed the most at the end of the data",
+   "request": [
+    "The function `get_customer_balance(customer_id, date)` gives what a customer owes on a date: the rates of the films rented, a late fee for each day over the rental duration, less the payments made.",
+    "Take 2006-02-15, the day after the last rental, and show the five customers who owed the most: the customer and the balance, the largest first; ties by `customer_id`.",
+    "A query calls a stored function as it calls a built-in one."
+   ],
+   "sql": "SELECT c.*, get_customer_balance(c.customer_id, '2006-02-15') AS balance\nFROM customer c\nORDER BY balance DESC, c.customer_id\nLIMIT 5"
+  },
+  {
+   "op": "add",
+   "id": "SAKILA_SCHEMA_I_14",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "SAKILA_SALES_BY_STORE_I_02 joins by the manager's name, which no key makes unique",
+   "rerun": true,
+   "title": "the manager names of sales_by_store which more than one staff member has",
+   "request": [
+    "`sales_by_store` names each store's manager by first and last name, and SAKILA_SALES_BY_STORE_I_02 joins back to `staff` by that name, which nothing makes unique.",
+    "Find the manager names of the view which more than one staff member has, with how many, ordered by the name; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT CONCAT(s.first_name, ' ', s.last_name) AS manager, COUNT(*) AS staff_members\nFROM staff s\nWHERE EXISTS (SELECT 1 FROM sales_by_store v WHERE v.manager = CONCAT(s.first_name, ' ', s.last_name))\nGROUP BY CONCAT(s.first_name, ' ', s.last_name)\nHAVING COUNT(*) > 1\nORDER BY manager"
+  },
+  {
+   "op": "remove",
+   "id": "SAKILA_SCHEMA_A_03",
+   "_src": "Claude",
+   "_why": "a running total over payment alone, which SAKILA_PAYMENT_A_01 teaches already"
+  }
+ ]
+}

@@ -1,0 +1,391 @@
+# Registry of the exercises in EXERCISES.asciidoc and the <section>/<NN>_<level>.sql files beside it.
+#
+# An id is SAKILA_<SECTION>_<TIER>_<NN>: the table or view the exercise reads alone, or SCHEMA for one that reads more
+# than one, the tier (B for Basic, I for Intermediate, A for Advanced), and a number within that section and tier.
+#
+# Ids are permanent. A new exercise takes the next unused number of its section and tier; an exercise that moves or
+# changes tier keeps its id; an id of a removed exercise is marked `retired: true` and never reused. EXERCISES.asciidoc
+# carries each id as the anchor and the prefix of the exercise's heading, and the .sql file repeats it in the marker
+# above the statement.
+#
+# `sql` is the file that answers the exercise in SQL; `test` is the integration test, and its nested class, that
+# answers it in JPQL and with the Criteria API. The nested class is numbered by the exercise's place in its file, which
+# may change; the id does not.
+
+# ---- actor
+
+- id: SAKILA_ACTOR_B_01
+  section: "ACTOR"
+  tier: Basic
+  title: "the actors of a given last name, ordered by actor_id"
+  sql: src/test/sql-exercises/actor/01_basic.sql
+  test: Actor_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_B_01_Test
+- id: SAKILA_ACTOR_B_02
+  section: "ACTOR"
+  tier: Basic
+  title: "the actors whose first name starts with JU, ordered by first name"
+  sql: src/test/sql-exercises/actor/01_basic.sql
+  test: Actor_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_B_02_Test
+- id: SAKILA_ACTOR_B_03
+  section: "ACTOR"
+  tier: Basic
+  title: "the actors whose last name starts with WA, ordered by last name"
+  retired: true
+- id: SAKILA_ACTOR_B_04
+  section: "ACTOR"
+  tier: Basic
+  title: "the actors whose first and last names start with the same letter"
+  sql: src/test/sql-exercises/actor/01_basic.sql
+  test: Actor_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_B_04_Test
+- id: SAKILA_ACTOR_B_05
+  section: "ACTOR"
+  tier: Basic
+  title: "how many different first names and last names there are"
+  sql: src/test/sql-exercises/actor/01_basic.sql
+  test: Actor_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_B_05_Test
+- id: SAKILA_ACTOR_I_01
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the last names shared by more than three actors, the most shared first"
+  sql: src/test/sql-exercises/actor/02_intermediate.sql
+  test: Actor_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_I_01_Test
+- id: SAKILA_ACTOR_I_02
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the top n actors by their number of films"
+  sql: src/test/sql-exercises/actor/02_intermediate.sql
+  test: Actor_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_I_02_Test
+- id: SAKILA_ACTOR_I_03
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the actors who appear in no film"
+  sql: src/test/sql-exercises/actor/02_intermediate.sql
+  test: Actor_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_I_03_Test
+- id: SAKILA_ACTOR_I_04
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the five most common first names"
+  sql: src/test/sql-exercises/actor/02_intermediate.sql
+  test: Actor_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_I_04_Test
+- id: SAKILA_ACTOR_I_05
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the five most common last names"
+  retired: true
+- id: SAKILA_ACTOR_I_06
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the five actors whose films are, on average, the longest"
+  sql: src/test/sql-exercises/actor/02_intermediate.sql
+  test: Actor_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_I_06_Test
+- id: SAKILA_ACTOR_I_07
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the films of the first five actors, counted by rating"
+  sql: src/test/sql-exercises/actor/02_intermediate.sql
+  test: Actor_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_I_07_Test
+- id: SAKILA_ACTOR_I_08
+  section: "ACTOR"
+  tier: Intermediate
+  title: "the actors who never appeared in a G-rated film"
+  sql: src/test/sql-exercises/actor/02_intermediate.sql
+  test: Actor_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_I_08_Test
+- id: SAKILA_ACTOR_A_01
+  section: "ACTOR"
+  tier: Advanced
+  title: "the actors who appear in a film of every rating"
+  sql: src/test/sql-exercises/actor/03_advanced.sql
+  test: Actor_Exercises_03_Advanced_PersistenceIT.SAKILA_ACTOR_A_01_Test
+- id: SAKILA_ACTOR_A_02
+  section: "ACTOR"
+  tier: Advanced
+  title: "the actors in the top seven film counts, ties included"
+  sql: src/test/sql-exercises/actor/03_advanced.sql
+  test: Actor_Exercises_03_Advanced_PersistenceIT.SAKILA_ACTOR_A_02_Test
+- id: SAKILA_ACTOR_A_03
+  section: "ACTOR"
+  tier: Advanced
+  title: "the longest film of each of the first five actors"
+  sql: src/test/sql-exercises/actor/03_advanced.sql
+  test: Actor_Exercises_03_Advanced_PersistenceIT.SAKILA_ACTOR_A_03_Test
+
+# ---- actor_info
+
+- id: SAKILA_ACTOR_INFO_B_01
+  section: "ACTOR_INFO"
+  tier: Basic
+  title: "the film_info of the actor 1"
+  sql: src/test/sql-exercises/actor_info/01_basic.sql
+  test: ActorInfo_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_INFO_B_01_Test
+- id: SAKILA_ACTOR_INFO_B_02
+  section: "ACTOR_INFO"
+  tier: Basic
+  title: "how many actors appear in a Horror film, as film_info says"
+  sql: src/test/sql-exercises/actor_info/01_basic.sql
+  test: ActorInfo_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_INFO_B_02_Test
+- id: SAKILA_ACTOR_INFO_B_03
+  section: "ACTOR_INFO"
+  tier: Basic
+  title: "the actors of ACADEMY DINOSAUR, as film_info says"
+  sql: src/test/sql-exercises/actor_info/01_basic.sql
+  test: ActorInfo_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_INFO_B_03_Test
+- id: SAKILA_ACTOR_INFO_B_04
+  section: "ACTOR_INFO"
+  tier: Basic
+  title: "the five actors with the longest film_info"
+  sql: src/test/sql-exercises/actor_info/01_basic.sql
+  test: ActorInfo_Exercises_01_Basic_PersistenceIT.SAKILA_ACTOR_INFO_B_04_Test
+- id: SAKILA_ACTOR_INFO_I_01
+  section: "ACTOR_INFO"
+  tier: Intermediate
+  title: "whether the view has a row for every actor"
+  sql: src/test/sql-exercises/actor_info/02_intermediate.sql
+  test: ActorInfo_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_INFO_I_01_Test
+- id: SAKILA_ACTOR_INFO_I_02
+  section: "ACTOR_INFO"
+  tier: Intermediate
+  title: "the actors whose film_info covers every category"
+  sql: src/test/sql-exercises/actor_info/02_intermediate.sql
+  test: ActorInfo_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_INFO_I_02_Test
+- id: SAKILA_ACTOR_INFO_I_03
+  section: "ACTOR_INFO"
+  tier: Intermediate
+  title: "how many actors cover how many categories"
+  sql: src/test/sql-exercises/actor_info/02_intermediate.sql
+  test: ActorInfo_Exercises_02_Intermediate_PersistenceIT.SAKILA_ACTOR_INFO_I_03_Test
+  native-only: true
+- id: SAKILA_ACTOR_INFO_A_01
+  section: "ACTOR_INFO"
+  tier: Advanced
+  title: "the actors whose film_info disagrees with the tables on the number of categories"
+  sql: src/test/sql-exercises/actor_info/03_advanced.sql
+  test: ActorInfo_Exercises_03_Advanced_PersistenceIT.SAKILA_ACTOR_INFO_A_01_Test
+
+# ---- address
+
+- id: SAKILA_FILM_B_01
+  section: "FILM"
+  tier: Basic
+  title: "how many films each rating has"
+  sql: src/test/sql-exercises/film/01_basic.sql
+  test: Film_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_B_01_Test
+- id: SAKILA_FILM_B_02
+  section: "FILM"
+  tier: Basic
+  title: "the films longer than three hours, the longest first"
+  sql: src/test/sql-exercises/film/01_basic.sql
+  test: Film_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_B_02_Test
+- id: SAKILA_FILM_B_03
+  section: "FILM"
+  tier: Basic
+  title: "the average rental rate of each rating"
+  sql: src/test/sql-exercises/film/01_basic.sql
+  test: Film_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_B_03_Test
+- id: SAKILA_FILM_B_04
+  section: "FILM"
+  tier: Basic
+  title: "how many films have Behind the Scenes among their special features"
+  sql: src/test/sql-exercises/film/01_basic.sql
+  test: Film_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_B_04_Test
+- id: SAKILA_FILM_B_05
+  section: "FILM"
+  tier: Basic
+  title: "the five shortest films"
+  retired: true
+- id: SAKILA_FILM_B_06
+  section: "FILM"
+  tier: Basic
+  title: "the films cheapest to rent and dearest to replace"
+  sql: src/test/sql-exercises/film/01_basic.sql
+  test: Film_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_B_06_Test
+- id: SAKILA_FILM_I_01
+  section: "FILM"
+  tier: Intermediate
+  title: "how many films have no copy in the inventory"
+  sql: src/test/sql-exercises/film/02_intermediate.sql
+  test: Film_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_I_01_Test
+- id: SAKILA_FILM_I_02
+  section: "FILM"
+  tier: Intermediate
+  title: "the five films rented the most"
+  sql: src/test/sql-exercises/film/02_intermediate.sql
+  test: Film_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_I_02_Test
+- id: SAKILA_FILM_I_03
+  section: "FILM"
+  tier: Intermediate
+  title: "how many films are short, medium and long"
+  sql: src/test/sql-exercises/film/02_intermediate.sql
+  test: Film_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_I_03_Test
+- id: SAKILA_FILM_I_04
+  section: "FILM"
+  tier: Intermediate
+  title: "the ratings whose films are longer than the average film"
+  sql: src/test/sql-exercises/film/02_intermediate.sql
+  test: Film_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_I_04_Test
+- id: SAKILA_FILM_A_01
+  section: "FILM"
+  tier: Advanced
+  title: "how many films of each rating are longer than their rating's average"
+  sql: src/test/sql-exercises/film/03_advanced.sql
+  test: Film_Exercises_03_Advanced_PersistenceIT.SAKILA_FILM_A_01_Test
+
+# ---- film_actor
+
+- id: SAKILA_FILM_ACTOR_B_01
+  section: "FILM_ACTOR"
+  tier: Basic
+  title: "how many films the actor 1 appears in"
+  sql: src/test/sql-exercises/film_actor/01_basic.sql
+  test: FilmActor_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_ACTOR_B_01_Test
+- id: SAKILA_FILM_ACTOR_B_02
+  section: "FILM_ACTOR"
+  tier: Basic
+  title: "how many castings, actors and films the table has"
+  sql: src/test/sql-exercises/film_actor/01_basic.sql
+  test: FilmActor_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_ACTOR_B_02_Test
+- id: SAKILA_FILM_ACTOR_I_01
+  section: "FILM_ACTOR"
+  tier: Intermediate
+  title: "the five films with the most actors"
+  sql: src/test/sql-exercises/film_actor/02_intermediate.sql
+  test: FilmActor_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_ACTOR_I_01_Test
+- id: SAKILA_FILM_ACTOR_I_02
+  section: "FILM_ACTOR"
+  tier: Intermediate
+  title: "how many actors a film has, on average"
+  sql: src/test/sql-exercises/film_actor/02_intermediate.sql
+  test: FilmActor_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_ACTOR_I_02_Test
+- id: SAKILA_FILM_ACTOR_I_03
+  section: "FILM_ACTOR"
+  tier: Intermediate
+  title: "the five actors who appear most often with the actor 1"
+  sql: src/test/sql-exercises/film_actor/02_intermediate.sql
+  test: FilmActor_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_ACTOR_I_03_Test
+- id: SAKILA_FILM_ACTOR_I_04
+  section: "FILM_ACTOR"
+  tier: Intermediate
+  title: "how many films have one actor, two actors, and so on"
+  sql: src/test/sql-exercises/film_actor/02_intermediate.sql
+  test: FilmActor_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_ACTOR_I_04_Test
+  native-only: true
+- id: SAKILA_FILM_ACTOR_A_01
+  section: "FILM_ACTOR"
+  tier: Advanced
+  title: "the three pairs of actors who appear together the most"
+  sql: src/test/sql-exercises/film_actor/03_advanced.sql
+  test: FilmActor_Exercises_03_Advanced_PersistenceIT.SAKILA_FILM_ACTOR_A_01_Test
+- id: SAKILA_FILM_ACTOR_A_02
+  section: "FILM_ACTOR"
+  tier: Advanced
+  title: "the actor who appears in the most films of each category"
+  sql: src/test/sql-exercises/film_actor/03_advanced.sql
+  test: FilmActor_Exercises_03_Advanced_PersistenceIT.SAKILA_FILM_ACTOR_A_02_Test
+- id: SAKILA_FILM_ACTOR_A_03
+  section: "FILM_ACTOR"
+  tier: Advanced
+  title: "the pairs of films which have exactly the same actors"
+  sql: src/test/sql-exercises/film_actor/03_advanced.sql
+  test: FilmActor_Exercises_03_Advanced_PersistenceIT.SAKILA_FILM_ACTOR_A_03_Test
+
+# ---- film_category
+
+- id: SAKILA_FILM_TEXT_B_01
+  section: "FILM_TEXT"
+  tier: Basic
+  title: "the films whose description has both a Crocodile and a Shark"
+  sql: src/test/sql-exercises/film_text/01_basic.sql
+  test: FilmText_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_TEXT_B_01_Test
+- id: SAKILA_FILM_TEXT_B_02
+  section: "FILM_TEXT"
+  tier: Basic
+  title: "the five longest descriptions"
+  sql: src/test/sql-exercises/film_text/01_basic.sql
+  test: FilmText_Exercises_01_Basic_PersistenceIT.SAKILA_FILM_TEXT_B_02_Test
+- id: SAKILA_FILM_TEXT_I_01
+  section: "FILM_TEXT"
+  tier: Intermediate
+  title: "whether film_text has a row for every film"
+  sql: src/test/sql-exercises/film_text/02_intermediate.sql
+  test: FilmText_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_TEXT_I_01_Test
+- id: SAKILA_FILM_TEXT_I_02
+  section: "FILM_TEXT"
+  tier: Intermediate
+  title: "how many films mention a Drama, by the full-text index"
+  sql: src/test/sql-exercises/film_text/02_intermediate.sql
+  test: FilmText_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_TEXT_I_02_Test
+- id: SAKILA_FILM_TEXT_I_03
+  section: "FILM_TEXT"
+  tier: Intermediate
+  title: "the films whose film_text title differs from their title"
+  sql: src/test/sql-exercises/film_text/02_intermediate.sql
+  test: FilmText_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_TEXT_I_03_Test
+- id: SAKILA_FILM_TEXT_I_04
+  section: "FILM_TEXT"
+  tier: Intermediate
+  title: "how many films mention a Boat but not a Shark, by the full-text index"
+  sql: src/test/sql-exercises/film_text/02_intermediate.sql
+  test: FilmText_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_TEXT_I_04_Test
+  native-only: true
+- id: SAKILA_FILM_TEXT_I_05
+  section: "FILM_TEXT"
+  tier: Intermediate
+  title: "how many films mention a Crocodile or a Shark, and how many mention both"
+  sql: src/test/sql-exercises/film_text/02_intermediate.sql
+  test: FilmText_Exercises_02_Intermediate_PersistenceIT.SAKILA_FILM_TEXT_I_05_Test
+  native-only: true
+- id: SAKILA_FILM_TEXT_A_01
+  section: "FILM_TEXT"
+  tier: Advanced
+  title: "the most common kind of story in each category"
+  sql: src/test/sql-exercises/film_text/03_advanced.sql
+  test: FilmText_Exercises_03_Advanced_PersistenceIT.SAKILA_FILM_TEXT_A_01_Test
+  native-only: true
+- id: SAKILA_FILM_TEXT_A_02
+  section: "FILM_TEXT"
+  tier: Advanced
+  title: "the chain of titles from ACADEMY DINOSAUR"
+  sql: src/test/sql-exercises/film_text/03_advanced.sql
+  test: FilmText_Exercises_03_Advanced_PersistenceIT.SAKILA_FILM_TEXT_A_02_Test
+  native-only: true
+
+# ---- inventory
+
+- id: SAKILA_LANGUAGE_B_01
+  section: "LANGUAGE"
+  tier: Basic
+  title: "every language"
+  sql: src/test/sql-exercises/language/01_basic.sql
+  test: Language_Exercises_01_Basic_PersistenceIT.SAKILA_LANGUAGE_B_01_Test
+- id: SAKILA_LANGUAGE_B_02
+  section: "LANGUAGE"
+  tier: Basic
+  title: "how many films have an original language"
+  sql: src/test/sql-exercises/language/01_basic.sql
+  test: Language_Exercises_01_Basic_PersistenceIT.SAKILA_LANGUAGE_B_02_Test
+- id: SAKILA_LANGUAGE_B_03
+  section: "LANGUAGE"
+  tier: Basic
+  title: "which of four languages the table has"
+  sql: src/test/sql-exercises/language/01_basic.sql
+  test: Language_Exercises_01_Basic_PersistenceIT.SAKILA_LANGUAGE_B_03_Test
+- id: SAKILA_LANGUAGE_B_04
+  section: "LANGUAGE"
+  tier: Basic
+  title: "the languages whose name ends with an or ese"
+  sql: src/test/sql-exercises/language/01_basic.sql
+  test: Language_Exercises_01_Basic_PersistenceIT.SAKILA_LANGUAGE_B_04_Test
+- id: SAKILA_LANGUAGE_I_01
+  section: "LANGUAGE"
+  tier: Intermediate
+  title: "how many films each language has"
+  sql: src/test/sql-exercises/language/02_intermediate.sql
+  test: Language_Exercises_02_Intermediate_PersistenceIT.SAKILA_LANGUAGE_I_01_Test
+- id: SAKILA_LANGUAGE_I_02
+  section: "LANGUAGE"
+  tier: Intermediate
+  title: "the languages no film uses, either as its language or as its original language"
+  sql: src/test/sql-exercises/language/02_intermediate.sql
+  test: Language_Exercises_02_Intermediate_PersistenceIT.SAKILA_LANGUAGE_I_02_Test
+
+# ---- nicer_but_slower_film_list
+

@@ -1,0 +1,428 @@
+# Registry of the exercises in EXERCISES.asciidoc and the <section>/<NN>_<level>.sql files beside it.
+#
+# An id is SAKILA_<SECTION>_<TIER>_<NN>: the table or view the exercise reads alone, or SCHEMA for one that reads more
+# than one, the tier (B for Basic, I for Intermediate, A for Advanced), and a number within that section and tier.
+#
+# Ids are permanent. A new exercise takes the next unused number of its section and tier; an exercise that moves or
+# changes tier keeps its id; an id of a removed exercise is marked `retired: true` and never reused. EXERCISES.asciidoc
+# carries each id as the anchor and the prefix of the exercise's heading, and the .sql file repeats it in the marker
+# above the statement.
+#
+# `sql` is the file that answers the exercise in SQL; `test` is the integration test, and its nested class, that
+# answers it in JPQL and with the Criteria API. The nested class is numbered by the exercise's place in its file, which
+# may change; the id does not.
+
+# ---- actor
+
+- id: SAKILA_ADDRESS_B_01
+  section: "ADDRESS"
+  tier: Basic
+  title: "how many addresses are in the district of California"
+  sql: src/test/sql-exercises/address/01_basic.sql
+  test: Address_Exercises_01_Basic_PersistenceIT.SAKILA_ADDRESS_B_01_Test
+- id: SAKILA_ADDRESS_B_02
+  section: "ADDRESS"
+  tier: Basic
+  title: "the five districts with the most addresses"
+  sql: src/test/sql-exercises/address/01_basic.sql
+  test: Address_Exercises_01_Basic_PersistenceIT.SAKILA_ADDRESS_B_02_Test
+- id: SAKILA_ADDRESS_B_03
+  section: "ADDRESS"
+  tier: Basic
+  title: "the addresses whose address2 is NULL"
+  sql: src/test/sql-exercises/address/01_basic.sql
+  test: Address_Exercises_01_Basic_PersistenceIT.SAKILA_ADDRESS_B_03_Test
+- id: SAKILA_ADDRESS_B_04
+  section: "ADDRESS"
+  tier: Basic
+  title: "the addresses with an empty district"
+  sql: src/test/sql-exercises/address/01_basic.sql
+  test: Address_Exercises_01_Basic_PersistenceIT.SAKILA_ADDRESS_B_04_Test
+- id: SAKILA_ADDRESS_I_01
+  section: "ADDRESS"
+  tier: Intermediate
+  title: "the first five addresses, with their city and country"
+  sql: src/test/sql-exercises/address/02_intermediate.sql
+  test: Address_Exercises_02_Intermediate_PersistenceIT.SAKILA_ADDRESS_I_01_Test
+- id: SAKILA_ADDRESS_I_02
+  section: "ADDRESS"
+  tier: Intermediate
+  title: "the district names found in more than one country"
+  sql: src/test/sql-exercises/address/02_intermediate.sql
+  test: Address_Exercises_02_Intermediate_PersistenceIT.SAKILA_ADDRESS_I_02_Test
+- id: SAKILA_ADDRESS_I_03
+  section: "ADDRESS"
+  tier: Intermediate
+  title: "how many addresses belong to a store, a staff member or a customer"
+  sql: src/test/sql-exercises/address/02_intermediate.sql
+  test: Address_Exercises_02_Intermediate_PersistenceIT.SAKILA_ADDRESS_I_03_Test
+- id: SAKILA_ADDRESS_A_01
+  section: "ADDRESS"
+  tier: Advanced
+  title: "the addresses no customer, staff member or store has"
+  sql: src/test/sql-exercises/address/03_advanced.sql
+  test: Address_Exercises_03_Advanced_PersistenceIT.SAKILA_ADDRESS_A_01_Test
+- id: SAKILA_ADDRESS_A_02
+  section: "ADDRESS"
+  tier: Advanced
+  title: "the pairs of addresses which share a postal code"
+  sql: src/test/sql-exercises/address/03_advanced.sql
+  test: Address_Exercises_03_Advanced_PersistenceIT.SAKILA_ADDRESS_A_02_Test
+- id: SAKILA_ADDRESS_A_03
+  section: "ADDRESS"
+  tier: Advanced
+  title: "the three districts with the most addresses in each of India, China and the United States"
+  sql: src/test/sql-exercises/address/03_advanced.sql
+  test: Address_Exercises_03_Advanced_PersistenceIT.SAKILA_ADDRESS_A_03_Test
+  native-only: true
+
+# ---- category
+
+- id: SAKILA_CITY_B_01
+  section: "CITY"
+  tier: Basic
+  title: "the cities whose name starts with Q"
+  sql: src/test/sql-exercises/city/01_basic.sql
+  test: City_Exercises_01_Basic_PersistenceIT.SAKILA_CITY_B_01_Test
+- id: SAKILA_CITY_B_02
+  section: "CITY"
+  tier: Basic
+  title: "how many city names have more than one word"
+  sql: src/test/sql-exercises/city/01_basic.sql
+  test: City_Exercises_01_Basic_PersistenceIT.SAKILA_CITY_B_02_Test
+- id: SAKILA_CITY_B_03
+  section: "CITY"
+  tier: Basic
+  title: "the five longest city names"
+  retired: true
+- id: SAKILA_CITY_I_01
+  section: "CITY"
+  tier: Intermediate
+  title: "the cities of Canada"
+  sql: src/test/sql-exercises/city/02_intermediate.sql
+  test: City_Exercises_02_Intermediate_PersistenceIT.SAKILA_CITY_I_01_Test
+- id: SAKILA_CITY_I_02
+  section: "CITY"
+  tier: Intermediate
+  title: "the five countries with the most cities"
+  sql: src/test/sql-exercises/city/02_intermediate.sql
+  test: City_Exercises_02_Intermediate_PersistenceIT.SAKILA_CITY_I_02_Test
+- id: SAKILA_CITY_I_03
+  section: "CITY"
+  tier: Intermediate
+  title: "how many cities have no address"
+  sql: src/test/sql-exercises/city/02_intermediate.sql
+  test: City_Exercises_02_Intermediate_PersistenceIT.SAKILA_CITY_I_03_Test
+- id: SAKILA_CITY_I_04
+  section: "CITY"
+  tier: Intermediate
+  title: "the cities with more than one address"
+  sql: src/test/sql-exercises/city/02_intermediate.sql
+  test: City_Exercises_02_Intermediate_PersistenceIT.SAKILA_CITY_I_04_Test
+- id: SAKILA_CITY_I_05
+  section: "CITY"
+  tier: Intermediate
+  title: "the city names found in more than one country"
+  sql: src/test/sql-exercises/city/02_intermediate.sql
+  test: City_Exercises_02_Intermediate_PersistenceIT.SAKILA_CITY_I_05_Test
+- id: SAKILA_CITY_A_01
+  section: "CITY"
+  tier: Advanced
+  title: "the first ten cities which are the only city of their country"
+  sql: src/test/sql-exercises/city/03_advanced.sql
+  test: City_Exercises_03_Advanced_PersistenceIT.SAKILA_CITY_A_01_Test
+- id: SAKILA_CITY_A_02
+  section: "CITY"
+  tier: Advanced
+  title: "the cities whose customers are all inactive"
+  sql: src/test/sql-exercises/city/03_advanced.sql
+  test: City_Exercises_03_Advanced_PersistenceIT.SAKILA_CITY_A_02_Test
+
+# ---- country
+
+- id: SAKILA_COUNTRY_B_01
+  section: "COUNTRY"
+  tier: Basic
+  title: "how many countries there are"
+  sql: src/test/sql-exercises/country/01_basic.sql
+  test: Country_Exercises_01_Basic_PersistenceIT.SAKILA_COUNTRY_B_01_Test
+- id: SAKILA_COUNTRY_B_02
+  section: "COUNTRY"
+  tier: Basic
+  title: "the countries whose name starts with S, ordered by name"
+  sql: src/test/sql-exercises/country/01_basic.sql
+  test: Country_Exercises_01_Basic_PersistenceIT.SAKILA_COUNTRY_B_02_Test
+- id: SAKILA_COUNTRY_B_03
+  section: "COUNTRY"
+  tier: Basic
+  title: "the five countries with the longest names"
+  sql: src/test/sql-exercises/country/01_basic.sql
+  test: Country_Exercises_01_Basic_PersistenceIT.SAKILA_COUNTRY_B_03_Test
+- id: SAKILA_COUNTRY_I_01
+  section: "COUNTRY"
+  tier: Intermediate
+  title: "the countries with no city"
+  sql: src/test/sql-exercises/country/02_intermediate.sql
+  test: Country_Exercises_02_Intermediate_PersistenceIT.SAKILA_COUNTRY_I_01_Test
+- id: SAKILA_COUNTRY_I_02
+  section: "COUNTRY"
+  tier: Intermediate
+  title: "the five countries with the most customers"
+  sql: src/test/sql-exercises/country/02_intermediate.sql
+  test: Country_Exercises_02_Intermediate_PersistenceIT.SAKILA_COUNTRY_I_02_Test
+- id: SAKILA_COUNTRY_I_03
+  section: "COUNTRY"
+  tier: Intermediate
+  title: "how many countries have exactly one city"
+  sql: src/test/sql-exercises/country/02_intermediate.sql
+  test: Country_Exercises_02_Intermediate_PersistenceIT.SAKILA_COUNTRY_I_03_Test
+- id: SAKILA_COUNTRY_I_04
+  section: "COUNTRY"
+  tier: Intermediate
+  title: "the countries which have a city but no customer"
+  sql: src/test/sql-exercises/country/02_intermediate.sql
+  test: Country_Exercises_02_Intermediate_PersistenceIT.SAKILA_COUNTRY_I_04_Test
+- id: SAKILA_COUNTRY_A_01
+  section: "COUNTRY"
+  tier: Advanced
+  title: "the fewest countries which hold half of the customers"
+  sql: src/test/sql-exercises/country/03_advanced.sql
+  test: Country_Exercises_03_Advanced_PersistenceIT.SAKILA_COUNTRY_A_01_Test
+  native-only: true
+- id: SAKILA_COUNTRY_A_02
+  section: "COUNTRY"
+  tier: Advanced
+  title: "the countries ranked in the top ten by customers, ties sharing a rank"
+  sql: src/test/sql-exercises/country/03_advanced.sql
+  test: Country_Exercises_03_Advanced_PersistenceIT.SAKILA_COUNTRY_A_02_Test
+  native-only: true
+
+# ---- customer
+
+- id: SAKILA_CUSTOMER_B_01
+  section: "CUSTOMER"
+  tier: Basic
+  title: "how many customers are active, and how many are not"
+  sql: src/test/sql-exercises/customer/01_basic.sql
+  test: Customer_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_B_01_Test
+- id: SAKILA_CUSTOMER_B_02
+  section: "CUSTOMER"
+  tier: Basic
+  title: "how many customers each store has"
+  sql: src/test/sql-exercises/customer/01_basic.sql
+  test: Customer_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_B_02_Test
+- id: SAKILA_CUSTOMER_B_03
+  section: "CUSTOMER"
+  tier: Basic
+  title: "the domains of the customers' emails"
+  sql: src/test/sql-exercises/customer/01_basic.sql
+  test: Customer_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_B_03_Test
+- id: SAKILA_CUSTOMER_B_04
+  section: "CUSTOMER"
+  tier: Basic
+  title: "the customers who are not active"
+  sql: src/test/sql-exercises/customer/01_basic.sql
+  test: Customer_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_B_04_Test
+- id: SAKILA_CUSTOMER_B_05
+  section: "CUSTOMER"
+  tier: Basic
+  title: "how many customers have the same initial in both names"
+  retired: true
+- id: SAKILA_CUSTOMER_I_01
+  section: "CUSTOMER"
+  tier: Intermediate
+  title: "the five customers who paid the most"
+  sql: src/test/sql-exercises/customer/02_intermediate.sql
+  test: Customer_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_I_01_Test
+- id: SAKILA_CUSTOMER_I_02
+  section: "CUSTOMER"
+  tier: Intermediate
+  title: "the customers who never rented"
+  sql: src/test/sql-exercises/customer/02_intermediate.sql
+  test: Customer_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_I_02_Test
+- id: SAKILA_CUSTOMER_I_03
+  section: "CUSTOMER"
+  tier: Intermediate
+  title: "the customers who rented forty times or more"
+  sql: src/test/sql-exercises/customer/02_intermediate.sql
+  test: Customer_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_I_03_Test
+- id: SAKILA_CUSTOMER_I_04
+  section: "CUSTOMER"
+  tier: Intermediate
+  title: "the five customers holding the most rentals not returned yet"
+  sql: src/test/sql-exercises/customer/02_intermediate.sql
+  test: Customer_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_I_04_Test
+- id: SAKILA_CUSTOMER_I_05
+  section: "CUSTOMER"
+  tier: Intermediate
+  title: "the first ten customers of the store 1, each with the rentals they have out, zero included"
+  sql: src/test/sql-exercises/customer/02_intermediate.sql
+  test: Customer_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_I_05_Test
+- id: SAKILA_CUSTOMER_A_01
+  section: "CUSTOMER"
+  tier: Advanced
+  title: "the three customers who paid the most at each store"
+  sql: src/test/sql-exercises/customer/03_advanced.sql
+  test: Customer_Exercises_03_Advanced_PersistenceIT.SAKILA_CUSTOMER_A_01_Test
+  native-only: true
+- id: SAKILA_CUSTOMER_A_02
+  section: "CUSTOMER"
+  tier: Advanced
+  title: "how many customers of each store paid more than that store's average customer"
+  sql: src/test/sql-exercises/customer/03_advanced.sql
+  test: Customer_Exercises_03_Advanced_PersistenceIT.SAKILA_CUSTOMER_A_02_Test
+- id: SAKILA_CUSTOMER_A_03
+  section: "CUSTOMER"
+  tier: Advanced
+  title: "the customers in four bands by what they paid"
+  sql: src/test/sql-exercises/customer/03_advanced.sql
+  test: Customer_Exercises_03_Advanced_PersistenceIT.SAKILA_CUSTOMER_A_03_Test
+  native-only: true
+
+# ---- customer_list
+
+- id: SAKILA_CUSTOMER_LIST_B_01
+  section: "CUSTOMER_LIST"
+  tier: Basic
+  title: "the customers in Japan"
+  sql: src/test/sql-exercises/customer_list/01_basic.sql
+  test: CustomerList_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_LIST_B_01_Test
+- id: SAKILA_CUSTOMER_LIST_B_02
+  section: "CUSTOMER_LIST"
+  tier: Basic
+  title: "how many customers each store has, as the view's SID says"
+  sql: src/test/sql-exercises/customer_list/01_basic.sql
+  test: CustomerList_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_LIST_B_02_Test
+- id: SAKILA_CUSTOMER_LIST_B_03
+  section: "CUSTOMER_LIST"
+  tier: Basic
+  title: "how many customers the view's notes call active"
+  sql: src/test/sql-exercises/customer_list/01_basic.sql
+  test: CustomerList_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_LIST_B_03_Test
+- id: SAKILA_CUSTOMER_LIST_B_04
+  section: "CUSTOMER_LIST"
+  tier: Basic
+  title: "how many customers live on an Avenue"
+  sql: src/test/sql-exercises/customer_list/01_basic.sql
+  test: CustomerList_Exercises_01_Basic_PersistenceIT.SAKILA_CUSTOMER_LIST_B_04_Test
+- id: SAKILA_CUSTOMER_LIST_I_01
+  section: "CUSTOMER_LIST"
+  tier: Intermediate
+  title: "whether the view has a row for every customer"
+  sql: src/test/sql-exercises/customer_list/02_intermediate.sql
+  test: CustomerList_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_LIST_I_01_Test
+- id: SAKILA_CUSTOMER_LIST_I_02
+  section: "CUSTOMER_LIST"
+  tier: Intermediate
+  title: "the cities with more than one customer"
+  sql: src/test/sql-exercises/customer_list/02_intermediate.sql
+  test: CustomerList_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_LIST_I_02_Test
+- id: SAKILA_CUSTOMER_LIST_I_03
+  section: "CUSTOMER_LIST"
+  tier: Intermediate
+  title: "the rows whose name is not the customer's first and last name"
+  sql: src/test/sql-exercises/customer_list/02_intermediate.sql
+  test: CustomerList_Exercises_02_Intermediate_PersistenceIT.SAKILA_CUSTOMER_LIST_I_03_Test
+- id: SAKILA_CUSTOMER_LIST_A_01
+  section: "CUSTOMER_LIST"
+  tier: Advanced
+  title: "the three countries with the most customers of each store"
+  sql: src/test/sql-exercises/customer_list/03_advanced.sql
+  test: CustomerList_Exercises_03_Advanced_PersistenceIT.SAKILA_CUSTOMER_LIST_A_01_Test
+  native-only: true
+
+# ---- film
+
+- id: SAKILA_STAFF_B_01
+  section: "STAFF"
+  tier: Basic
+  title: "every staff member, with their store"
+  sql: src/test/sql-exercises/staff/01_basic.sql
+  test: Staff_Exercises_01_Basic_PersistenceIT.SAKILA_STAFF_B_01_Test
+- id: SAKILA_STAFF_B_02
+  section: "STAFF"
+  tier: Basic
+  title: "the staff members who have no password"
+  sql: src/test/sql-exercises/staff/01_basic.sql
+  test: Staff_Exercises_01_Basic_PersistenceIT.SAKILA_STAFF_B_02_Test
+- id: SAKILA_STAFF_I_01
+  section: "STAFF"
+  tier: Intermediate
+  title: "how many rentals each staff member handled"
+  sql: src/test/sql-exercises/staff/02_intermediate.sql
+  test: Staff_Exercises_02_Intermediate_PersistenceIT.SAKILA_STAFF_I_01_Test
+- id: SAKILA_STAFF_I_02
+  section: "STAFF"
+  tier: Intermediate
+  title: "the staff members who manage the store they work at"
+  sql: src/test/sql-exercises/staff/02_intermediate.sql
+  test: Staff_Exercises_02_Intermediate_PersistenceIT.SAKILA_STAFF_I_02_Test
+- id: SAKILA_STAFF_I_03
+  section: "STAFF"
+  tier: Intermediate
+  title: "how many rentals each staff member handled for their own store's copies, and for the other's"
+  sql: src/test/sql-exercises/staff/02_intermediate.sql
+  test: Staff_Exercises_02_Intermediate_PersistenceIT.SAKILA_STAFF_I_03_Test
+- id: SAKILA_STAFF_A_01
+  section: "STAFF"
+  tier: Advanced
+  title: "the day on which each staff member took the most"
+  sql: src/test/sql-exercises/staff/03_advanced.sql
+  test: Staff_Exercises_03_Advanced_PersistenceIT.SAKILA_STAFF_A_01_Test
+
+# ---- staff_list
+
+- id: SAKILA_STAFF_LIST_B_01
+  section: "STAFF_LIST"
+  tier: Basic
+  title: "every row of the view"
+  sql: src/test/sql-exercises/staff_list/01_basic.sql
+  test: StaffList_Exercises_01_Basic_PersistenceIT.SAKILA_STAFF_LIST_B_01_Test
+- id: SAKILA_STAFF_LIST_I_01
+  section: "STAFF_LIST"
+  tier: Intermediate
+  title: "whether the view has a row for every staff member"
+  sql: src/test/sql-exercises/staff_list/02_intermediate.sql
+  test: StaffList_Exercises_02_Intermediate_PersistenceIT.SAKILA_STAFF_LIST_I_01_Test
+- id: SAKILA_STAFF_LIST_I_02
+  section: "STAFF_LIST"
+  tier: Intermediate
+  title: "whether each staff member lives in the city of their store"
+  sql: src/test/sql-exercises/staff_list/02_intermediate.sql
+  test: StaffList_Exercises_02_Intermediate_PersistenceIT.SAKILA_STAFF_LIST_I_02_Test
+
+# ---- store
+
+- id: SAKILA_STORE_B_01
+  section: "STORE"
+  tier: Basic
+  title: "every store, with its manager and address ids"
+  sql: src/test/sql-exercises/store/01_basic.sql
+  test: Store_Exercises_01_Basic_PersistenceIT.SAKILA_STORE_B_01_Test
+- id: SAKILA_STORE_I_01
+  section: "STORE"
+  tier: Intermediate
+  title: "every store, with its manager and city"
+  sql: src/test/sql-exercises/store/02_intermediate.sql
+  test: Store_Exercises_02_Intermediate_PersistenceIT.SAKILA_STORE_I_01_Test
+- id: SAKILA_STORE_I_02
+  section: "STORE"
+  tier: Intermediate
+  title: "how many customers, copies and staff members each store has"
+  sql: src/test/sql-exercises/store/02_intermediate.sql
+  test: Store_Exercises_02_Intermediate_PersistenceIT.SAKILA_STORE_I_02_Test
+- id: SAKILA_STORE_A_01
+  section: "STORE"
+  tier: Advanced
+  title: "how many films each store has a copy of, and how many of them only that store has"
+  sql: src/test/sql-exercises/store/03_advanced.sql
+  test: Store_Exercises_03_Advanced_PersistenceIT.SAKILA_STORE_A_01_Test
+- id: SAKILA_STORE_A_02
+  section: "STORE"
+  tier: Advanced
+  title: "each store's rentals in each month, and its share of the month"
+  sql: src/test/sql-exercises/store/03_advanced.sql
+  test: Store_Exercises_03_Advanced_PersistenceIT.SAKILA_STORE_A_02_Test
+
+# ---- schema
+

@@ -1,0 +1,1403 @@
+= Exercises
+:toc: left
+:toclevels: 3
+
+The exercises on the installed `sakila` database: a section for each table and view, with a section for each level, and, at the end, a section for the schema as a whole.
+Each exercise poses a problem; its answer, and what the installed data gives back, are in the `.sql` file, and are checked by an integration test.
+
+Run a file as a whole:
+
+[source,sh]
+----
+docker exec -i mysql-sakila mysql -uroot -p'Passw0rd!' -t sakila < src/test/sql-exercises/<section>/<NN>_<level>.sql
+----
+
+[[SAKILA_PAYMENT_B_01]]
+==== SAKILA_PAYMENT_B_01: how much each staff member took
+
+Group the payments by the staff member who took them.
+Show each
+`staff_id` with the number of payments and their sum, ordered by `staff_id`.
+
+.`payment/01_basic.sql`, SAKILA_PAYMENT_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT s.staff_id, s.first_name, s.last_name, s.address_id, s.email, s.store_id, s.active, s.username, s.password, s.last_update, COUNT(*) AS payments, SUM(p.amount) AS total -- every column but picture, a BLOB which does not print
+FROM payment p
+         JOIN staff s ON s.staff_id = p.staff_id
+GROUP BY s.staff_id
+ORDER BY s.staff_id
+----
+
+====
+
+
+[[SAKILA_PAYMENT_B_02]]
+==== SAKILA_PAYMENT_B_02: how much was paid in each month
+
+Group the payments by the month of `payment_date`, written as `YYYY-MM`.
+Show each month with the number of payments and their sum, ordered by the month.
+
+.`payment/01_basic.sql`, SAKILA_PAYMENT_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DATE_FORMAT(payment_date, '%Y-%m') AS month, COUNT(*) AS payments, SUM(amount) AS total
+FROM payment
+GROUP BY month
+ORDER BY month
+----
+
+====
+
+
+[[SAKILA_PAYMENT_B_03]]
+==== SAKILA_PAYMENT_B_03: how many payments have no rental
+
+`payment.rental_id` may be `NULL`.
+Count the payments which refer to no rental.
+
+.`payment/01_basic.sql`, SAKILA_PAYMENT_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS payments
+FROM payment
+WHERE rental_id IS NULL
+----
+
+====
+
+
+[[SAKILA_PAYMENT_B_04]]
+==== SAKILA_PAYMENT_B_04: the five amounts paid most often
+
+Group the payments by `amount`.
+Show the five amounts paid most often, with the number of payments, the most first; on a tie, the smaller amount first.
+
+.`payment/01_basic.sql`, SAKILA_PAYMENT_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT amount, COUNT(*) AS payments
+FROM payment
+GROUP BY amount
+ORDER BY payments DESC, amount
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_PAYMENT_B_05]]
+==== SAKILA_PAYMENT_B_05: the payments of the customer 1 in July 2005
+
+Show the payments of the customer `1` whose `payment_date` falls in July 2005: the `payment_id`, `amount` and `payment_date`.
+Order them by `payment_date`, then by `payment_id`.
+`payment_date` has a time, so the range ends at the last second of July 31.
+
+.`payment/01_basic.sql`, SAKILA_PAYMENT_B_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM payment
+WHERE customer_id = 1
+  AND payment_date BETWEEN '2005-07-01 00:00:00' AND '2005-07-31 23:59:59'
+ORDER BY payment_date, payment_id
+----
+
+====
+
+Answered by `Payment_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_PAYMENT_I_01]]
+==== SAKILA_PAYMENT_I_01: the largest payment, and how many payments are that large
+
+Find the largest `amount` of all payments, and count how many payments are exactly that large.
+Show both in one row; the count needs the largest amount, so it compares with a subquery.
+
+.`payment/02_intermediate.sql`, SAKILA_PAYMENT_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT MAX(amount) AS largest,
+       (SELECT COUNT(*) FROM payment WHERE amount = (SELECT MAX(amount) FROM payment)) AS payments
+FROM payment
+----
+
+====
+
+
+[[SAKILA_PAYMENT_I_02]]
+==== SAKILA_PAYMENT_I_02: the customers who paid more than 180 in all
+
+Sum the payments of each customer, and keep the customers whose sum is over `180`.
+Show the `customer_id`, the customer's `first_name` and `last_name`, and the sum, the largest first; on a tie, by `customer_id`.
+
+.`payment/02_intermediate.sql`, SAKILA_PAYMENT_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, SUM(p.amount) AS total
+FROM payment p
+         JOIN customer c ON c.customer_id = p.customer_id
+GROUP BY c.customer_id
+HAVING SUM(p.amount) > 180
+ORDER BY total DESC, c.customer_id
+----
+
+====
+
+
+[[SAKILA_PAYMENT_I_03]]
+==== SAKILA_PAYMENT_I_03: how many payments were less than, equal to, or more than the film's rental rate
+
+Compare each payment's `amount` with the `rental_rate` of the film it paid for, reached through the rental and the copy.
+Name the result `less`, `the rate` or `more` with a `CASE` expression, and count the payments of each, ordered by that name.
+A payment over the rate carries a late fee.
+
+.`payment/02_intermediate.sql`, SAKILA_PAYMENT_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT CASE
+           WHEN p.amount < f.rental_rate THEN 'less'
+           WHEN p.amount = f.rental_rate THEN 'the rate'
+           ELSE 'more' END AS paid,
+       COUNT(*) AS payments
+FROM payment p
+         JOIN rental r ON r.rental_id = p.rental_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film f ON f.film_id = i.film_id
+GROUP BY paid
+ORDER BY paid
+----
+
+====
+
+Answered by `Payment_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_PAYMENT_A_01]]
+==== SAKILA_PAYMENT_A_01: the running total of the customer 1's payments, the first ten
+
+Show the first ten payments of the customer `1`, ordered by `payment_date` and then by `payment_id`: the `payment_id`, `payment_date`, `amount`, and the sum of the amounts so far.
+The sum so far is a window function, `SUM(...) OVER (ORDER BY ...)`, with the same order.
+
+.`payment/03_advanced.sql`, SAKILA_PAYMENT_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *,
+       SUM(amount) OVER (ORDER BY payment_date, payment_id) AS running_total
+FROM payment
+WHERE customer_id = 1
+ORDER BY payment_date, payment_id
+LIMIT 10
+----
+
+====
+
+
+[[SAKILA_PAYMENT_A_02]]
+==== SAKILA_PAYMENT_A_02: the runs of consecutive days on which payments were made
+
+The payments were not made on every day; they come in runs of consecutive days.
+Find each run: its first day, its last day and the number of days in it, ordered by the first day.
+Number the distinct days in order; a day minus its number is the same for every day of a run, and the query groups by it (gaps and islands).
+
+.`payment/03_advanced.sql`, SAKILA_PAYMENT_A_02
+[%collapsible]
+====
+[source,sql]
+----
+WITH days AS (SELECT DISTINCT DATE(payment_date) AS day FROM payment),
+     islands AS (SELECT day, DATE_SUB(day, INTERVAL ROW_NUMBER() OVER (ORDER BY day) DAY) AS island FROM days)
+SELECT MIN(day) AS first_day, MAX(day) AS last_day, COUNT(*) AS days
+FROM islands
+GROUP BY island
+ORDER BY first_day
+----
+
+====
+
+Answered by `Payment_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_RENTAL_B_01]]
+==== SAKILA_RENTAL_B_01: how many rentals are not returned yet
+
+A rental not returned yet has no `return_date`.
+Count those rentals.
+
+.`rental/01_basic.sql`, SAKILA_RENTAL_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS rentals
+FROM rental
+WHERE return_date IS NULL
+----
+
+====
+
+
+[[SAKILA_RENTAL_B_02]]
+==== SAKILA_RENTAL_B_02: how many rentals were made in each month
+
+Group the rentals by the month of `rental_date`, written as `YYYY-MM`.
+Show each month with the number of rentals, ordered by the month.
+
+.`rental/01_basic.sql`, SAKILA_RENTAL_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DATE_FORMAT(rental_date, '%Y-%m') AS month, COUNT(*) AS rentals
+FROM rental
+GROUP BY month
+ORDER BY month
+----
+
+====
+
+
+[[SAKILA_RENTAL_B_03]]
+==== SAKILA_RENTAL_B_03: how many days a returned rental lasts, on average
+
+For the returned rentals, take the number of days between `rental_date` and
+`return_date`, and average them, rounded to two decimal places.
+The rentals not returned are left out.
+
+.`rental/01_basic.sql`, SAKILA_RENTAL_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT ROUND(AVG(DATEDIFF(return_date, rental_date)), 2) AS average_days
+FROM rental
+WHERE return_date IS NOT NULL
+----
+
+====
+
+
+[[SAKILA_RENTAL_B_04]]
+==== SAKILA_RENTAL_B_04: on which day of the week the most rentals were made
+
+Group the rentals by the name of the day of the week of `rental_date`
+(`Monday`, `Tuesday`, ...).
+Show the day on which the most rentals were made, with its count.
+
+.`rental/01_basic.sql`, SAKILA_RENTAL_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DAYNAME(rental_date) AS day, COUNT(*) AS rentals
+FROM rental
+GROUP BY day
+ORDER BY rentals DESC
+LIMIT 1
+----
+
+====
+
+
+[[SAKILA_RENTAL_B_05]]
+==== SAKILA_RENTAL_B_05: how many rentals were returned on the day they were made
+
+Count the rentals whose `return_date` falls on the same day as their `rental_date`.
+Both columns have a time, so compare their dates, taken with `DATE`; a rental not returned yet has a `NULL` `return_date`, which equals nothing, so the comparison leaves it out.
+
+.`rental/01_basic.sql`, SAKILA_RENTAL_B_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS rentals
+FROM rental
+WHERE DATE(return_date) = DATE(rental_date)
+----
+
+====
+
+Answered by `Rental_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_RENTAL_I_02]]
+==== SAKILA_RENTAL_I_02: on which days the rentals not returned yet were made
+
+Group the rentals not returned yet by the day of `rental_date`, with `DATE`.
+Show each day with the number of rentals, ordered by the day.
+Almost all of them were made on the last day of the data.
+
+.`rental/02_intermediate.sql`, SAKILA_RENTAL_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DATE(rental_date) AS day, COUNT(*) AS rentals
+FROM rental
+WHERE return_date IS NULL
+GROUP BY day
+ORDER BY day
+----
+
+====
+
+
+[[SAKILA_RENTAL_I_03]]
+==== SAKILA_RENTAL_I_03: the rentals overdue at the end of the data
+
+The last rental of the data was made on 2006-02-14, so take 2006-02-15 as today.
+Find the rentals not returned yet which have been out longer than the film's `rental_duration`, counting the days with `DATEDIFF`.
+Show the whole rows of the rentals, the film's `title` and `rental_duration`, and the days each is overdue, the most first; on a tie, by `rental_id`.
+
+.`rental/02_intermediate.sql`, SAKILA_RENTAL_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT r.*, f.title, f.rental_duration, DATEDIFF('2006-02-15', r.rental_date) - f.rental_duration AS days_overdue
+FROM rental r
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film f ON f.film_id = i.film_id
+WHERE r.return_date IS NULL
+  AND DATEDIFF('2006-02-15', r.rental_date) > f.rental_duration
+ORDER BY days_overdue DESC, r.rental_id
+----
+
+====
+
+Answered by `Rental_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_RENTAL_A_01]]
+==== SAKILA_RENTAL_A_01: how many rentals came back later than the film's rental duration allows
+
+Each film has a `rental_duration`, the number of days a rental may last.
+Count the rentals which were returned later than that: the `return_date` is after the `rental_date` plus the film's
+`rental_duration` days.
+The duration is on the film, so the query goes from the rental through the copy to the film, and does arithmetic on dates.
+
+.`rental/03_advanced.sql`, SAKILA_RENTAL_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS late
+FROM rental r
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film f ON f.film_id = i.film_id
+WHERE r.return_date > r.rental_date + INTERVAL f.rental_duration DAY
+----
+
+====
+
+
+[[SAKILA_RENTAL_A_02]]
+==== SAKILA_RENTAL_A_02: the five longest waits between a customer's two rentals in 2005
+
+For each rental made in 2005, find the same customer's rental just before it, and the number of days between the two.
+Show the five longest waits: the `customer_id`, the earlier and the later `rental_date`, and the days, the longest first; on a tie, by `customer_id`, then by the later `rental_date`.
+The rental just before is `LAG(...) OVER (PARTITION BY customer_id ORDER BY rental_date, rental_id)`.
+
+.`rental/03_advanced.sql`, SAKILA_RENTAL_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT customer_id, previous_rental, rental_date, DATEDIFF(rental_date, previous_rental) AS days
+FROM (SELECT customer_id, rental_date,
+             LAG(rental_date) OVER (PARTITION BY customer_id ORDER BY rental_date, rental_id) AS previous_rental
+      FROM rental
+      WHERE rental_date < '2006-01-01') g
+WHERE previous_rental IS NOT NULL
+ORDER BY days DESC, customer_id, rental_date
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_RENTAL_A_03]]
+==== SAKILA_RENTAL_A_03: whether a copy was ever rented out twice at the same time
+
+A copy should not be rented again before it comes back.
+Join the rentals with themselves on `inventory_id`, and count the pairs where the second starts at or after the first and before the first is returned; a rental not returned yet lasts to the end of time.
+Each pair is counted once; the answer is `0`.
+
+.`rental/03_advanced.sql`, SAKILA_RENTAL_A_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS overlapping
+FROM rental a
+         JOIN rental b ON b.inventory_id = a.inventory_id AND b.rental_id <> a.rental_id
+WHERE b.rental_date >= a.rental_date
+  AND b.rental_date < COALESCE(a.return_date, '9999-12-31')
+  AND (b.rental_date > a.rental_date OR b.rental_id > a.rental_id)
+----
+
+====
+
+Answered by `Rental_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_SALES_BY_STORE_B_01]]
+==== SAKILA_SALES_BY_STORE_B_01: every store's sales
+
+The `sales_by_store` view sums the payments of each store, and names the store by its city and country, and its manager.
+Show every row: the `store`, the `manager` and the
+`total_sales`.
+
+.`sales_by_store/01_basic.sql`, SAKILA_SALES_BY_STORE_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM sales_by_store
+----
+
+====
+
+
+[[SAKILA_SALES_BY_STORE_B_02]]
+==== SAKILA_SALES_BY_STORE_B_02: how far apart the two stores' sales are
+
+Show the difference between the largest and the smallest `total_sales` of the view, in one row.
+
+.`sales_by_store/01_basic.sql`, SAKILA_SALES_BY_STORE_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT MAX(total_sales) - MIN(total_sales) AS difference
+FROM sales_by_store
+----
+
+====
+
+Answered by `SalesByStore_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_SALES_BY_STORE_I_01]]
+==== SAKILA_SALES_BY_STORE_I_01: whether the stores' sales add up to every payment with a rental
+
+Check the view: sum its `total_sales` over the stores, sum the
+`amount` of the payments which have a rental, and show both in one row.
+The view reaches a store through the rental, so a payment without one cannot be in it.
+
+.`sales_by_store/02_intermediate.sql`, SAKILA_SALES_BY_STORE_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT SUM(total_sales) FROM sales_by_store) AS by_store,
+       (SELECT SUM(amount) FROM payment WHERE rental_id IS NOT NULL) AS with_a_rental
+----
+
+====
+
+
+[[SAKILA_SALES_BY_STORE_I_02]]
+==== SAKILA_SALES_BY_STORE_I_02: each store's sales, next to what its manager took
+
+The view counts a payment for the store whose copy was rented; `payment.staff_id` names the staff member who took it.
+Join each row to its manager in `staff`, by the full name in `manager`, and to the payments that manager took.
+Show the `store`, `manager`, `total_sales` and the sum the manager took, ordered by `store`; the two sums differ.
+
+.`sales_by_store/02_intermediate.sql`, SAKILA_SALES_BY_STORE_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT v.*, SUM(p.amount) AS taken_by_manager
+FROM sales_by_store v
+         JOIN staff s ON CONCAT(s.first_name, ' ', s.last_name) = v.manager
+         JOIN payment p ON p.staff_id = s.staff_id
+GROUP BY v.store, v.manager, v.total_sales
+ORDER BY v.store
+----
+
+====
+
+Answered by `SalesByStore_Exercises_02_Intermediate_PersistenceIT`.
+
+
+[[SAKILA_SCHEMA_B_01]]
+==== SAKILA_SCHEMA_B_01: the tables and the views of the schema
+
+List the tables and the views of the `sakila` schema, from
+`information_schema.tables`: each name with its type (`BASE TABLE` or `VIEW`), ordered by the type and the name.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name, table_type
+FROM information_schema.tables
+WHERE table_schema = 'sakila'
+ORDER BY table_type, table_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_02]]
+==== SAKILA_SCHEMA_B_02: how many rows each table has
+
+Count the rows of each of the sixteen tables, and show each table's name with its count, one row per table. `information_schema` gives only an estimate of the rows, so count them, one `SELECT`
+per table, joined with `UNION ALL`.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT 'actor' AS table_name, COUNT(*) AS row_count FROM actor
+UNION ALL SELECT 'address', COUNT(*) FROM address
+UNION ALL SELECT 'category', COUNT(*) FROM category
+UNION ALL SELECT 'city', COUNT(*) FROM city
+UNION ALL SELECT 'country', COUNT(*) FROM country
+UNION ALL SELECT 'customer', COUNT(*) FROM customer
+UNION ALL SELECT 'film', COUNT(*) FROM film
+UNION ALL SELECT 'film_actor', COUNT(*) FROM film_actor
+UNION ALL SELECT 'film_category', COUNT(*) FROM film_category
+UNION ALL SELECT 'film_text', COUNT(*) FROM film_text
+UNION ALL SELECT 'inventory', COUNT(*) FROM inventory
+UNION ALL SELECT 'language', COUNT(*) FROM language
+UNION ALL SELECT 'payment', COUNT(*) FROM payment
+UNION ALL SELECT 'rental', COUNT(*) FROM rental
+UNION ALL SELECT 'staff', COUNT(*) FROM staff
+UNION ALL SELECT 'store', COUNT(*) FROM store
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_03]]
+==== SAKILA_SCHEMA_B_03: every foreign key: the column, and the column it refers to
+
+List every foreign key column of the schema, from
+`information_schema.key_column_usage`: the table and the column, and the table and the column it refers to, ordered by the table and the column.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name, column_name, referenced_table_name, referenced_column_name
+FROM information_schema.key_column_usage
+WHERE table_schema = 'sakila'
+  AND referenced_table_name IS NOT NULL
+ORDER BY table_name, column_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_04]]
+==== SAKILA_SCHEMA_B_04: the tables which have a last_update column
+
+Find the tables, not the views, which have a `last_update` column, from
+`information_schema.columns`, ordered by name.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name
+FROM information_schema.columns
+WHERE table_schema = 'sakila'
+  AND column_name = 'last_update'
+  AND table_name IN (SELECT table_name
+                     FROM information_schema.tables
+                     WHERE table_schema = 'sakila' AND table_type = 'BASE TABLE')
+ORDER BY table_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_05]]
+==== SAKILA_SCHEMA_B_05: the triggers, and the table and the event each fires on
+
+List the triggers of the schema, from `information_schema.triggers`: each trigger's name, the table it fires on, whether it fires before or after, and on which event (`INSERT`, `UPDATE`,
+`DELETE`), ordered by the table and the trigger.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT trigger_name, event_object_table, action_timing, event_manipulation
+FROM information_schema.triggers
+WHERE trigger_schema = 'sakila'
+ORDER BY event_object_table, trigger_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_06]]
+==== SAKILA_SCHEMA_B_06: the stored procedures and functions
+
+List the stored procedures and functions of the schema, from
+`information_schema.routines`: each one's name and type, ordered by the type and the name.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT routine_name, routine_type
+FROM information_schema.routines
+WHERE routine_schema = 'sakila'
+ORDER BY routine_type, routine_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_07]]
+==== SAKILA_SCHEMA_B_07: the views, and whether each is updatable
+
+List the views of the schema, from `information_schema.views`: each view's name and whether it is updatable (`YES` or `NO`), ordered by name.
+A view is updatable when MySQL can map a row of it back to one row of a table.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_07
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name, is_updatable
+FROM information_schema.views
+WHERE table_schema = 'sakila'
+ORDER BY table_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_08]]
+==== SAKILA_SCHEMA_B_08: the tables whose primary key has more than one column
+
+Find the tables whose primary key is made of more than one column, from `information_schema.key_column_usage`: each table's name with the number of columns of its key, ordered by name.
+A primary key's constraint is always named `PRIMARY` in MySQL.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_08
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name, COUNT(*) AS columns
+FROM information_schema.key_column_usage
+WHERE table_schema = 'sakila'
+  AND constraint_name = 'PRIMARY'
+GROUP BY table_name
+HAVING COUNT(*) > 1
+ORDER BY table_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_09]]
+==== SAKILA_SCHEMA_B_09: the ENUM and SET columns
+
+List the columns of the schema whose type is an `ENUM` or a `SET`, from `information_schema.columns`: the table, the column and its full type with the allowed values, ordered by the table and the column.
+The views which show such a column are listed too.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_09
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name, column_name, column_type
+FROM information_schema.columns
+WHERE table_schema = 'sakila'
+  AND data_type IN ('enum', 'set')
+ORDER BY table_name, column_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_10]]
+==== SAKILA_SCHEMA_B_10: the foreign keys which do not restrict a delete
+
+Find the foreign keys whose rule on a delete of the referenced row is not `RESTRICT`, from `information_schema.referential_constraints`.
+Show the table, the constraint's name, the referenced table and the update and delete rules, ordered by the table and the constraint's name.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_10
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name, constraint_name, referenced_table_name, update_rule, delete_rule
+FROM information_schema.referential_constraints
+WHERE constraint_schema = 'sakila'
+  AND delete_rule <> 'RESTRICT'
+ORDER BY table_name, constraint_name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_11]]
+==== SAKILA_SCHEMA_B_11: the unique keys other than the primary keys, column by column
+
+List the unique indexes which are not primary keys, from `information_schema.statistics`, one row per column of each index.
+Show the table, the index's name, the column's position in the index and the column, ordered by the table, the index's name and the position.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_11
+[%collapsible]
+====
+[source,sql]
+----
+SELECT table_name, index_name, seq_in_index, column_name
+FROM information_schema.statistics
+WHERE table_schema = 'sakila'
+  AND non_unique = 0
+  AND index_name <> 'PRIMARY'
+ORDER BY table_name, index_name, seq_in_index
+----
+
+====
+
+
+[[SAKILA_SCHEMA_B_12]]
+==== SAKILA_SCHEMA_B_12: the columns of the tables which allow NULL
+
+List the columns of the tables, not the views, which allow `NULL`, from `information_schema.columns`, joined with `information_schema.tables` for the type of the table.
+Show the table, the column and its type, ordered by the table and the column's position.
+Each of them is a field which its mapping must let be `null`.
+
+.`__/01_basic.sql`, SAKILA_SCHEMA_B_12
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.table_name, c.column_name, c.column_type
+FROM information_schema.columns c
+         JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+WHERE c.table_schema = 'sakila'
+  AND t.table_type = 'BASE TABLE'
+  AND c.is_nullable = 'YES'
+ORDER BY c.table_name, c.ordinal_position
+----
+
+====
+
+Answered by `__Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_SCHEMA_I_01]]
+==== SAKILA_SCHEMA_I_01: how much each store took, through the copies it rented out
+
+Find how much each store took.
+A payment names no store; the store is that of the copy the payment's rental rented out.
+So go from `payment` through `rental` to `inventory`, and group by `inventory.store_id`.
+Show each store with the number of payments and their sum.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT st.*, COUNT(*) AS payments, SUM(p.amount) AS total
+FROM payment p
+         JOIN rental r ON r.rental_id = p.rental_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN store st ON st.store_id = i.store_id
+GROUP BY st.store_id
+ORDER BY st.store_id
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_02]]
+==== SAKILA_SCHEMA_I_02: how many rentals each category had, the most first
+
+Count the rentals of each category: from `rental` through the copy and
+`film_category` to `category`.
+Show each category's name with its count, the most first; ties are ordered by name.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, COUNT(*) AS rentals
+FROM rental r
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film_category fc ON fc.film_id = i.film_id
+         JOIN category c ON c.category_id = fc.category_id
+GROUP BY c.category_id
+ORDER BY rentals DESC, c.name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_03]]
+==== SAKILA_SCHEMA_I_03: the five countries whose customers paid the most
+
+Sum the payments by the country of the customer who paid them, through the customer, the address and the city.
+Show the five countries which paid the most, each with the number of its distinct customers who paid and the sum, the largest first.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT co.*, COUNT(DISTINCT cu.customer_id) AS customers, SUM(p.amount) AS total
+FROM payment p
+         JOIN customer cu ON cu.customer_id = p.customer_id
+         JOIN address a ON a.address_id = cu.address_id
+         JOIN city ci ON ci.city_id = a.city_id
+         JOIN country co ON co.country_id = ci.country_id
+GROUP BY co.country_id
+ORDER BY total DESC
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_04]]
+==== SAKILA_SCHEMA_I_04: the average payment of each rating
+
+Average the payments by the rating of the film rented: from `payment`
+through the rental and the copy to `film`.
+Show each rating with the average, rounded to two decimal places, ordered by the rating.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.rating, ROUND(AVG(p.amount), 2) AS average_payment
+FROM payment p
+         JOIN rental r ON r.rental_id = p.rental_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film f ON f.film_id = i.film_id
+GROUP BY f.rating
+ORDER BY f.rating
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_05]]
+==== SAKILA_SCHEMA_I_05: the five actors whose films took the most
+
+Sum, for each actor, the payments of the rentals of their films: from
+`actor` through `film_actor`, the copies and the rentals to `payment`.
+Show the five actors whose films took the most: their `actor_id`, `first_name`, `last_name` and the sum, the largest first; ties are ordered by `actor_id`.
+A payment is counted once for each actor of the film.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*, SUM(p.amount) AS total
+FROM actor a
+         JOIN film_actor fa ON fa.actor_id = a.actor_id
+         JOIN inventory i ON i.film_id = fa.film_id
+         JOIN rental r ON r.inventory_id = i.inventory_id
+         JOIN payment p ON p.rental_id = r.rental_id
+GROUP BY a.actor_id
+ORDER BY total DESC, a.actor_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_06]]
+==== SAKILA_SCHEMA_I_06: the customers who have returned everything they rented, how many
+
+Count the customers none of whose rentals is still out, that is, who have no rental without a `return_date`.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS customers
+FROM customer c
+WHERE NOT EXISTS (SELECT 1 FROM rental r WHERE r.customer_id = c.customer_id AND r.return_date IS NULL)
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_07]]
+==== SAKILA_SCHEMA_I_07: how many rentals, and how much was paid, in each month
+
+Group the rentals by the month of `rental_date`, written as `YYYY-MM`, and show each month with the number of rentals and the sum of their payments.
+A rental may have no payment, so the payments are joined with an outer join.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_07
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DATE_FORMAT(r.rental_date, '%Y-%m') AS month, COUNT(*) AS rentals, SUM(p.amount) AS total
+FROM rental r
+         LEFT JOIN payment p ON p.rental_id = r.rental_id
+GROUP BY month
+ORDER BY month
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_08]]
+==== SAKILA_SCHEMA_I_08: the customers who rented from a store other than their own, how many
+
+A customer belongs to a store, but may rent a copy from any store.
+Count the distinct customers who rented at least one copy from a store other than their own.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_08
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(DISTINCT c.customer_id) AS customers
+FROM customer c
+         JOIN rental r ON r.customer_id = c.customer_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+WHERE i.store_id <> c.store_id
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_09]]
+==== SAKILA_SCHEMA_I_09: how many rentals, and how much was paid, for short, medium and long films
+
+Sort the films into three groups by `length`: `short` under 60 minutes, `medium` from 60 to 120, and `long` over 120.
+Count the rentals of each group's films, through the copy, and sum their payments; a rental may have no payment, so the payments are joined with an outer join.
+Show each group with its count and sum, from the group of the shortest films to the group of the longest.
+The group is a `CASE` expression, and the statement groups by it.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_09
+[%collapsible]
+====
+[source,sql]
+----
+SELECT CASE
+           WHEN f.length < 60 THEN 'short'
+           WHEN f.length <= 120 THEN 'medium'
+           ELSE 'long'
+           END AS length_group,
+       COUNT(*) AS rentals,
+       SUM(p.amount) AS total
+FROM rental r
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film f ON f.film_id = i.film_id
+         LEFT JOIN payment p ON p.rental_id = r.rental_id
+GROUP BY length_group
+ORDER BY MIN(f.length)
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_10]]
+==== SAKILA_SCHEMA_I_10: how many films of each category were never rented
+
+Count, for each category, its films which were never rented: those with no copy, and those none of whose copies has a rental.
+Show each category's name with its count, the most first; ties are ordered by name.
+A category with no such film is not shown.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_10
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, COUNT(*) AS films
+FROM category c
+         JOIN film_category fc ON fc.category_id = c.category_id
+WHERE NOT EXISTS (SELECT 1
+                  FROM inventory i
+                           JOIN rental r ON r.inventory_id = i.inventory_id
+                  WHERE i.film_id = fc.film_id)
+GROUP BY c.category_id
+ORDER BY films DESC, c.name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_11]]
+==== SAKILA_SCHEMA_I_11: the actors who appear in both a Comedy and a Horror film, how many
+
+Count the actors who appear in at least one `Comedy` film and in at least one `Horror` film.
+Use one `EXISTS` for each category, each going from `film_actor` through `film_category` to `category`.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_11
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS actors
+FROM actor a
+WHERE EXISTS (SELECT 1
+              FROM film_actor fa
+                       JOIN film_category fc ON fc.film_id = fa.film_id
+                       JOIN category c ON c.category_id = fc.category_id
+              WHERE fa.actor_id = a.actor_id
+                AND c.name = 'Comedy')
+  AND EXISTS (SELECT 1
+              FROM film_actor fa
+                       JOIN film_category fc ON fc.film_id = fa.film_id
+                       JOIN category c ON c.category_id = fc.category_id
+              WHERE fa.actor_id = a.actor_id
+                AND c.name = 'Horror')
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_12]]
+==== SAKILA_SCHEMA_I_12: the categories whose payments are, on average, larger than all payments
+
+Average the payments by the category of the film rented, from `payment` through the rental, the copy and `film_category` to `category`.
+Keep the categories whose average is larger than the average of all payments, comparing them in `HAVING` with a subquery.
+Show each category's name with its average, rounded to two decimal places, the largest first; ties are ordered by name.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_12
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.*, ROUND(AVG(p.amount), 2) AS average_payment
+FROM payment p
+         JOIN rental r ON r.rental_id = p.rental_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film_category fc ON fc.film_id = i.film_id
+         JOIN category c ON c.category_id = fc.category_id
+GROUP BY c.category_id
+HAVING AVG(p.amount) > (SELECT AVG(amount) FROM payment)
+ORDER BY average_payment DESC, c.name
+----
+
+====
+
+
+[[SAKILA_SCHEMA_I_13]]
+==== SAKILA_SCHEMA_I_13: the five customer and film pairs rented the most often
+
+A customer may rent the same film again.
+Count the rentals of each pair of a customer and a film, through the copy, and keep the pairs rented more than once.
+Show the five pairs rented the most: the customer's `customer_id`, `first_name` and `last_name`, the film's `film_id` and `title`, and the count, the most first; ties are ordered by `customer_id` and then by `film_id`.
+The groups are pairs, so the query groups by two keys.
+
+.`__/02_intermediate.sql`, SAKILA_SCHEMA_I_13
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.customer_id, c.first_name, c.last_name, f.film_id, f.title, COUNT(*) AS rentals
+FROM rental r
+         JOIN customer c ON c.customer_id = r.customer_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film f ON f.film_id = i.film_id
+GROUP BY c.customer_id, f.film_id
+HAVING COUNT(*) > 1
+ORDER BY rentals DESC, c.customer_id, f.film_id
+LIMIT 5
+----
+
+====
+
+Answered by `__Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_SCHEMA_A_01]]
+==== SAKILA_SCHEMA_A_01: the customer who paid the most in each of the five countries which paid the most
+
+Sum each customer's payments, and their country's.
+For each country, find the customer who paid the most, ranking the customers within the country with a window function (`RANK() OVER (PARTITION BY ...)`), and take the country's total with another (`SUM() OVER (PARTITION BY ...)`).
+Show, for the five countries which paid the most, the country, its top customer's `customer_id`, `first_name`,
+`last_name` and total, and the country's total, the largest country first.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_01
+[%collapsible]
+====
+[source,sql]
+----
+WITH paid AS (SELECT co.country, cu.customer_id, cu.first_name, cu.last_name, SUM(p.amount) AS total
+              FROM payment p
+                       JOIN customer cu ON cu.customer_id = p.customer_id
+                       JOIN address a ON a.address_id = cu.address_id
+                       JOIN city ci ON ci.city_id = a.city_id
+                       JOIN country co ON co.country_id = ci.country_id
+              GROUP BY co.country, cu.customer_id, cu.first_name, cu.last_name),
+     ranked AS (SELECT paid.*,
+                       RANK() OVER (PARTITION BY country ORDER BY total DESC) AS rank_in_country,
+                       SUM(total) OVER (PARTITION BY country) AS country_total
+                FROM paid)
+SELECT country, customer_id, first_name, last_name, total, country_total
+FROM ranked
+WHERE rank_in_country = 1
+ORDER BY country_total DESC
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_02]]
+==== SAKILA_SCHEMA_A_02: the customers who rented a film of every category
+
+Find the customers who have rented at least one film of each category: for each customer, count the distinct categories of the films they rented, and compare it with the number of categories.
+A relational division across five tables.
+Show the first five such customers by
+`customer_id`.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT c.customer_id, c.first_name, c.last_name
+FROM customer c
+         JOIN rental r ON r.customer_id = c.customer_id
+         JOIN inventory i ON i.inventory_id = r.inventory_id
+         JOIN film_category fc ON fc.film_id = i.film_id
+GROUP BY c.customer_id, c.first_name, c.last_name
+HAVING COUNT(DISTINCT fc.category_id) = (SELECT COUNT(*) FROM category)
+ORDER BY c.customer_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_03]]
+==== SAKILA_SCHEMA_A_03: the running total of the payments, on the first five days
+
+Sum the payments of each day, and, for each day, the running total: the sum of that day and all the days before.
+A window function with an `ORDER BY` and no partition.
+Show the first five days: the day, its total and the running total.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT day, total, SUM(total) OVER (ORDER BY day) AS running_total
+FROM (SELECT DATE(payment_date) AS day, SUM(amount) AS total FROM payment GROUP BY day) t
+ORDER BY day
+    LIMIT 5
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_04]]
+==== SAKILA_SCHEMA_A_04: each month's payments, and the change from the month before
+
+Sum the payments of each month, written as `YYYY-MM`, and, for each month, the difference from the month before it, taken with `LAG`.
+The first month has none, so its difference is `NULL`.
+Show each month with its total and the difference.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT month, total, total - LAG(total) OVER (ORDER BY month) AS change_from_previous
+FROM (SELECT DATE_FORMAT(payment_date, '%Y-%m') AS month, SUM(amount) AS total FROM payment GROUP BY month) t
+ORDER BY month
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_05]]
+==== SAKILA_SCHEMA_A_05: the three films rented the most at each store
+
+Count the rentals of each film at each store, the store being that of the copy rented.
+Number the films within each store, the most rented first and ties by `film_id`, with `ROW_NUMBER() OVER (PARTITION BY ...)`, and keep the first three of each store.
+Show the `store_id`, the
+`film_id`, the `title` and the count.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT store_id, film_id, title, rentals
+FROM (SELECT i.store_id, f.film_id, f.title, COUNT(*) AS rentals,
+             ROW_NUMBER() OVER (PARTITION BY i.store_id ORDER BY COUNT(*) DESC, f.film_id) AS n
+      FROM rental r
+               JOIN inventory i ON i.inventory_id = r.inventory_id
+               JOIN film f ON f.film_id = i.film_id
+      GROUP BY i.store_id, f.film_id, f.title) t
+WHERE n <= 3
+ORDER BY store_id, n
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_06]]
+==== SAKILA_SCHEMA_A_06: how many actors are one film, and how many two films, away from KEVIN BLOOM; a Bacon number, Sakila having no KEVIN BACON
+
+Two actors are one film apart when they appear in the same film; two films apart when they are one film apart from someone who is one film apart from the first.
+Starting from `KEVIN BLOOM`, walk `film_actor` with a recursive common table expression, up to two steps, keep each actor's smallest number of steps, and count the actors at one and at two.
+Sakila has no `KEVIN BACON`, so this is the Bacon number of KEVIN BLOOM.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_06
+[%collapsible]
+====
+[source,sql]
+----
+WITH RECURSIVE bacon (actor_id, number) AS (
+    SELECT actor_id, 0 FROM actor WHERE first_name = 'KEVIN' AND last_name = 'BLOOM'
+    UNION DISTINCT
+    SELECT fa2.actor_id, b.number + 1
+    FROM bacon b
+             JOIN film_actor fa1 ON fa1.actor_id = b.actor_id
+             JOIN film_actor fa2 ON fa2.film_id = fa1.film_id
+    WHERE b.number < 2)
+SELECT number, COUNT(*) AS actors
+FROM (SELECT actor_id, MIN(number) AS number FROM bacon GROUP BY actor_id) t
+WHERE number > 0
+GROUP BY number
+ORDER BY number
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_07]]
+==== SAKILA_SCHEMA_A_07: the films none of whose copies is in, right now
+
+A copy is out when it has a rental without a `return_date`.
+Find the films which have copies, and all of whose copies are out right now: their `film_id`, `title` and number of copies.
+The count of the copies out must equal the count of all copies, for each film.
+The installed data has none.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_07
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.*, COUNT(*) AS copies
+FROM film f
+         JOIN inventory i ON i.film_id = f.film_id
+GROUP BY f.film_id
+HAVING SUM(EXISTS (SELECT 1
+                   FROM rental r
+                   WHERE r.inventory_id = i.inventory_id AND r.return_date IS NULL)) = COUNT(*)
+ORDER BY f.film_id
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_08]]
+==== SAKILA_SCHEMA_A_08: the five longest runs of days on which a customer rented every day
+
+A run is a series of consecutive days on each of which the customer rented at least once.
+Take each customer's distinct rental days, and subtract from each day its number among the customer's days, with `ROW_NUMBER()`; the days of one run all give the same date, so group by it.
+Show the five longest runs: the customer's `customer_id`, `first_name` and `last_name`, the run's first and last day and its number of days, the longest first; ties are ordered by `customer_id` and then by the first day.
+This is the gaps-and-islands technique.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_08
+[%collapsible]
+====
+[source,sql]
+----
+WITH days AS (SELECT DISTINCT customer_id, DATE(rental_date) AS day
+              FROM rental),
+     islands AS (SELECT customer_id, day,
+                        DATE_SUB(day, INTERVAL ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY day) DAY) AS island
+                 FROM days)
+SELECT c.*, MIN(i.day) AS first_day, MAX(i.day) AS last_day, COUNT(*) AS days
+FROM islands i
+         JOIN customer c ON c.customer_id = i.customer_id
+GROUP BY c.customer_id, i.island
+ORDER BY days DESC, c.customer_id, first_day
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_SCHEMA_A_09]]
+==== SAKILA_SCHEMA_A_09: the countries none of whose customers rented a Music film
+
+Find the countries which have customers, none of whom has rented a film of the category `Music`.
+A `NOT EXISTS` whose subquery goes from the country's customers through their rentals, the copies and `film_category` to `category`, correlated by the country.
+Show each country with its number of customers, ordered by the country's name.
+
+.`__/03_advanced.sql`, SAKILA_SCHEMA_A_09
+[%collapsible]
+====
+[source,sql]
+----
+SELECT co.*, COUNT(*) AS customers
+FROM country co
+         JOIN city ci ON ci.country_id = co.country_id
+         JOIN address a ON a.city_id = ci.city_id
+         JOIN customer cu ON cu.address_id = a.address_id
+WHERE NOT EXISTS (SELECT 1
+                  FROM customer cu2
+                           JOIN address a2 ON a2.address_id = cu2.address_id
+                           JOIN city ci2 ON ci2.city_id = a2.city_id
+                           JOIN rental r ON r.customer_id = cu2.customer_id
+                           JOIN inventory i ON i.inventory_id = r.inventory_id
+                           JOIN film_category fc ON fc.film_id = i.film_id
+                           JOIN category c ON c.category_id = fc.category_id
+                  WHERE ci2.country_id = co.country_id
+                    AND c.name = 'Music')
+GROUP BY co.country_id
+ORDER BY co.country
+----
+
+====
+
+Answered by `__Exercises_03_Advanced_PersistenceIT`.
+

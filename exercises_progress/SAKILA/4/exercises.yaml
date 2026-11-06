@@ -1,0 +1,392 @@
+# Registry of the exercises in EXERCISES.asciidoc and the <section>/<NN>_<level>.sql files beside it.
+#
+# An id is SAKILA_<SECTION>_<TIER>_<NN>: the table or view the exercise reads alone, or SCHEMA for one that reads more
+# than one, the tier (B for Basic, I for Intermediate, A for Advanced), and a number within that section and tier.
+#
+# Ids are permanent. A new exercise takes the next unused number of its section and tier; an exercise that moves or
+# changes tier keeps its id; an id of a removed exercise is marked `retired: true` and never reused. EXERCISES.asciidoc
+# carries each id as the anchor and the prefix of the exercise's heading, and the .sql file repeats it in the marker
+# above the statement.
+#
+# `sql` is the file that answers the exercise in SQL; `test` is the integration test, and its nested class, that
+# answers it in JPQL and with the Criteria API. The nested class is numbered by the exercise's place in its file, which
+# may change; the id does not.
+
+# ---- actor
+
+- id: SAKILA_PAYMENT_B_01
+  section: "PAYMENT"
+  tier: Basic
+  title: "how much each staff member took"
+  sql: src/test/sql-exercises/payment/01_basic.sql
+  test: Payment_Exercises_01_Basic_PersistenceIT.SAKILA_PAYMENT_B_01_Test
+- id: SAKILA_PAYMENT_B_02
+  section: "PAYMENT"
+  tier: Basic
+  title: "how much was paid in each month"
+  sql: src/test/sql-exercises/payment/01_basic.sql
+  test: Payment_Exercises_01_Basic_PersistenceIT.SAKILA_PAYMENT_B_02_Test
+- id: SAKILA_PAYMENT_B_03
+  section: "PAYMENT"
+  tier: Basic
+  title: "how many payments have no rental"
+  sql: src/test/sql-exercises/payment/01_basic.sql
+  test: Payment_Exercises_01_Basic_PersistenceIT.SAKILA_PAYMENT_B_03_Test
+- id: SAKILA_PAYMENT_B_04
+  section: "PAYMENT"
+  tier: Basic
+  title: "the five amounts paid most often"
+  sql: src/test/sql-exercises/payment/01_basic.sql
+  test: Payment_Exercises_01_Basic_PersistenceIT.SAKILA_PAYMENT_B_04_Test
+- id: SAKILA_PAYMENT_B_05
+  section: "PAYMENT"
+  tier: Basic
+  title: "the payments of the customer 1 in July 2005"
+  sql: src/test/sql-exercises/payment/01_basic.sql
+  test: Payment_Exercises_01_Basic_PersistenceIT.SAKILA_PAYMENT_B_05_Test
+- id: SAKILA_PAYMENT_I_01
+  section: "PAYMENT"
+  tier: Intermediate
+  title: "the largest payment, and how many payments are that large"
+  sql: src/test/sql-exercises/payment/02_intermediate.sql
+  test: Payment_Exercises_02_Intermediate_PersistenceIT.SAKILA_PAYMENT_I_01_Test
+- id: SAKILA_PAYMENT_I_02
+  section: "PAYMENT"
+  tier: Intermediate
+  title: "the customers who paid more than 180 in all"
+  sql: src/test/sql-exercises/payment/02_intermediate.sql
+  test: Payment_Exercises_02_Intermediate_PersistenceIT.SAKILA_PAYMENT_I_02_Test
+- id: SAKILA_PAYMENT_I_03
+  section: "PAYMENT"
+  tier: Intermediate
+  title: "how many payments were less than, equal to, or more than the film's rental rate"
+  sql: src/test/sql-exercises/payment/02_intermediate.sql
+  test: Payment_Exercises_02_Intermediate_PersistenceIT.SAKILA_PAYMENT_I_03_Test
+- id: SAKILA_PAYMENT_A_01
+  section: "PAYMENT"
+  tier: Advanced
+  title: "the running total of the customer 1's payments, the first ten"
+  sql: src/test/sql-exercises/payment/03_advanced.sql
+  test: Payment_Exercises_03_Advanced_PersistenceIT.SAKILA_PAYMENT_A_01_Test
+- id: SAKILA_PAYMENT_A_02
+  section: "PAYMENT"
+  tier: Advanced
+  title: "the runs of consecutive days on which payments were made"
+  sql: src/test/sql-exercises/payment/03_advanced.sql
+  test: Payment_Exercises_03_Advanced_PersistenceIT.SAKILA_PAYMENT_A_02_Test
+  native-only: true
+
+# ---- rental
+
+- id: SAKILA_RENTAL_B_01
+  section: "RENTAL"
+  tier: Basic
+  title: "how many rentals are not returned yet"
+  sql: src/test/sql-exercises/rental/01_basic.sql
+  test: Rental_Exercises_01_Basic_PersistenceIT.SAKILA_RENTAL_B_01_Test
+- id: SAKILA_RENTAL_B_02
+  section: "RENTAL"
+  tier: Basic
+  title: "how many rentals were made in each month"
+  sql: src/test/sql-exercises/rental/01_basic.sql
+  test: Rental_Exercises_01_Basic_PersistenceIT.SAKILA_RENTAL_B_02_Test
+- id: SAKILA_RENTAL_B_03
+  section: "RENTAL"
+  tier: Basic
+  title: "how many days a returned rental lasts, on average"
+  sql: src/test/sql-exercises/rental/01_basic.sql
+  test: Rental_Exercises_01_Basic_PersistenceIT.SAKILA_RENTAL_B_03_Test
+- id: SAKILA_RENTAL_B_04
+  section: "RENTAL"
+  tier: Basic
+  title: "on which day of the week the most rentals were made"
+  sql: src/test/sql-exercises/rental/01_basic.sql
+  test: Rental_Exercises_01_Basic_PersistenceIT.SAKILA_RENTAL_B_04_Test
+- id: SAKILA_RENTAL_B_05
+  section: "RENTAL"
+  tier: Basic
+  title: "how many rentals were returned on the day they were made"
+  sql: src/test/sql-exercises/rental/01_basic.sql
+  test: Rental_Exercises_01_Basic_PersistenceIT.SAKILA_RENTAL_B_05_Test
+- id: SAKILA_RENTAL_I_01
+  section: "RENTAL"
+  tier: Intermediate
+  title: "how many rentals are not returned yet, at each store"
+  retired: true
+- id: SAKILA_RENTAL_I_02
+  section: "RENTAL"
+  tier: Intermediate
+  title: "on which days the rentals not returned yet were made"
+  sql: src/test/sql-exercises/rental/02_intermediate.sql
+  test: Rental_Exercises_02_Intermediate_PersistenceIT.SAKILA_RENTAL_I_02_Test
+- id: SAKILA_RENTAL_I_03
+  section: "RENTAL"
+  tier: Intermediate
+  title: "the rentals overdue at the end of the data"
+  sql: src/test/sql-exercises/rental/02_intermediate.sql
+  test: Rental_Exercises_02_Intermediate_PersistenceIT.SAKILA_RENTAL_I_03_Test
+  native-only: true
+- id: SAKILA_RENTAL_A_01
+  section: "RENTAL"
+  tier: Advanced
+  title: "how many rentals came back later than the film's rental duration allows"
+  sql: src/test/sql-exercises/rental/03_advanced.sql
+  test: Rental_Exercises_03_Advanced_PersistenceIT.SAKILA_RENTAL_A_01_Test
+- id: SAKILA_RENTAL_A_02
+  section: "RENTAL"
+  tier: Advanced
+  title: "the five longest waits between a customer's two rentals in 2005"
+  sql: src/test/sql-exercises/rental/03_advanced.sql
+  test: Rental_Exercises_03_Advanced_PersistenceIT.SAKILA_RENTAL_A_02_Test
+  native-only: true
+- id: SAKILA_RENTAL_A_03
+  section: "RENTAL"
+  tier: Advanced
+  title: "whether a copy was ever rented out twice at the same time"
+  sql: src/test/sql-exercises/rental/03_advanced.sql
+  test: Rental_Exercises_03_Advanced_PersistenceIT.SAKILA_RENTAL_A_03_Test
+
+# ---- sales_by_film_category
+
+- id: SAKILA_SALES_BY_STORE_B_01
+  section: "SALES_BY_STORE"
+  tier: Basic
+  title: "every store's sales"
+  sql: src/test/sql-exercises/sales_by_store/01_basic.sql
+  test: SalesByStore_Exercises_01_Basic_PersistenceIT.SAKILA_SALES_BY_STORE_B_01_Test
+  native-only: true
+- id: SAKILA_SALES_BY_STORE_B_02
+  section: "SALES_BY_STORE"
+  tier: Basic
+  title: "how far apart the two stores' sales are"
+  sql: src/test/sql-exercises/sales_by_store/01_basic.sql
+  test: SalesByStore_Exercises_01_Basic_PersistenceIT.SAKILA_SALES_BY_STORE_B_02_Test
+  native-only: true
+- id: SAKILA_SALES_BY_STORE_I_01
+  section: "SALES_BY_STORE"
+  tier: Intermediate
+  title: "whether the stores' sales add up to every payment with a rental"
+  sql: src/test/sql-exercises/sales_by_store/02_intermediate.sql
+  test: SalesByStore_Exercises_02_Intermediate_PersistenceIT.SAKILA_SALES_BY_STORE_I_01_Test
+  native-only: true
+- id: SAKILA_SALES_BY_STORE_I_02
+  section: "SALES_BY_STORE"
+  tier: Intermediate
+  title: "each store's sales, next to what its manager took"
+  sql: src/test/sql-exercises/sales_by_store/02_intermediate.sql
+  test: SalesByStore_Exercises_02_Intermediate_PersistenceIT.SAKILA_SALES_BY_STORE_I_02_Test
+  native-only: true
+
+# ---- staff
+
+- id: SAKILA_SCHEMA_B_01
+  section: "SCHEMA"
+  tier: Basic
+  title: "the tables and the views of the schema"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_01_Test
+- id: SAKILA_SCHEMA_B_02
+  section: "SCHEMA"
+  tier: Basic
+  title: "how many rows each table has"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_02_Test
+- id: SAKILA_SCHEMA_B_03
+  section: "SCHEMA"
+  tier: Basic
+  title: "every foreign key: the column, and the column it refers to"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_03_Test
+- id: SAKILA_SCHEMA_B_04
+  section: "SCHEMA"
+  tier: Basic
+  title: "the tables which have a last_update column"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_04_Test
+- id: SAKILA_SCHEMA_B_05
+  section: "SCHEMA"
+  tier: Basic
+  title: "the triggers, and the table and the event each fires on"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_05_Test
+- id: SAKILA_SCHEMA_B_06
+  section: "SCHEMA"
+  tier: Basic
+  title: "the stored procedures and functions"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_06_Test
+- id: SAKILA_SCHEMA_B_07
+  section: "SCHEMA"
+  tier: Basic
+  title: "the views, and whether each is updatable"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_07_Test
+  native-only: true
+- id: SAKILA_SCHEMA_B_08
+  section: "SCHEMA"
+  tier: Basic
+  title: "the tables whose primary key has more than one column"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_08_Test
+  native-only: true
+- id: SAKILA_SCHEMA_B_09
+  section: "SCHEMA"
+  tier: Basic
+  title: "the ENUM and SET columns"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_09_Test
+  native-only: true
+- id: SAKILA_SCHEMA_B_10
+  section: "SCHEMA"
+  tier: Basic
+  title: "the foreign keys which do not restrict a delete"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_10_Test
+  native-only: true
+- id: SAKILA_SCHEMA_B_11
+  section: "SCHEMA"
+  tier: Basic
+  title: "the unique keys other than the primary keys, column by column"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_11_Test
+  native-only: true
+- id: SAKILA_SCHEMA_B_12
+  section: "SCHEMA"
+  tier: Basic
+  title: "the columns of the tables which allow NULL"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceIT.SAKILA_SCHEMA_B_12_Test
+  native-only: true
+- id: SAKILA_SCHEMA_I_01
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "how much each store took, through the copies it rented out"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_01_Test
+- id: SAKILA_SCHEMA_I_02
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "how many rentals each category had, the most first"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_02_Test
+- id: SAKILA_SCHEMA_I_03
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the five countries whose customers paid the most"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_03_Test
+- id: SAKILA_SCHEMA_I_04
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the average payment of each rating"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_04_Test
+- id: SAKILA_SCHEMA_I_05
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the five actors whose films took the most"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_05_Test
+- id: SAKILA_SCHEMA_I_06
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the customers who have returned everything they rented, how many"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_06_Test
+- id: SAKILA_SCHEMA_I_07
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "how many rentals, and how much was paid, in each month"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_07_Test
+- id: SAKILA_SCHEMA_I_08
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the customers who rented from a store other than their own, how many"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_08_Test
+- id: SAKILA_SCHEMA_I_09
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "how many rentals, and how much was paid, for short, medium and long films"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_09_Test
+- id: SAKILA_SCHEMA_I_10
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "how many films of each category were never rented"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_10_Test
+- id: SAKILA_SCHEMA_I_11
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the actors who appear in both a Comedy and a Horror film, how many"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_11_Test
+- id: SAKILA_SCHEMA_I_12
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the categories whose payments are, on average, larger than all payments"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_12_Test
+- id: SAKILA_SCHEMA_I_13
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "the five customer and film pairs rented the most often"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceIT.SAKILA_SCHEMA_I_13_Test
+- id: SAKILA_SCHEMA_A_01
+  section: "SCHEMA"
+  tier: Advanced
+  title: "the customer who paid the most in each of the five countries which paid the most"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_01_Test
+- id: SAKILA_SCHEMA_A_02
+  section: "SCHEMA"
+  tier: Advanced
+  title: "the customers who rented a film of every category"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_02_Test
+- id: SAKILA_SCHEMA_A_03
+  section: "SCHEMA"
+  tier: Advanced
+  title: "the running total of the payments, on the first five days"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_03_Test
+- id: SAKILA_SCHEMA_A_04
+  section: "SCHEMA"
+  tier: Advanced
+  title: "each month's payments, and the change from the month before"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_04_Test
+- id: SAKILA_SCHEMA_A_05
+  section: "SCHEMA"
+  tier: Advanced
+  title: "the three films rented the most at each store"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_05_Test
+- id: SAKILA_SCHEMA_A_06
+  section: "SCHEMA"
+  tier: Advanced
+  title: "how many actors are one film, and how many two films, away from KEVIN BLOOM; a Bacon number, Sakila having no KEVIN BACON"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_06_Test
+- id: SAKILA_SCHEMA_A_07
+  section: "SCHEMA"
+  tier: Advanced
+  title: "the films none of whose copies is in, right now"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_07_Test
+- id: SAKILA_SCHEMA_A_08
+  section: "SCHEMA"
+  tier: Advanced
+  title: "the five longest runs of days on which a customer rented every day"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_08_Test
+  native-only: true
+- id: SAKILA_SCHEMA_A_09
+  section: "SCHEMA"
+  tier: Advanced
+  title: "the countries none of whose customers rented a Music film"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceIT.SAKILA_SCHEMA_A_09_Test

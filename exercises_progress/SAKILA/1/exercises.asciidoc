@@ -1,0 +1,1306 @@
+= Exercises
+:toc: left
+:toclevels: 3
+
+The exercises on the installed `sakila` database: a section for each table and view, with a section for each level, and, at the end, a section for the schema as a whole.
+Each exercise poses a problem; its answer, and what the installed data gives back, are in the `.sql` file, and are checked by an integration test.
+
+Run a file as a whole:
+
+[source,sh]
+----
+docker exec -i mysql-sakila mysql -uroot -p'Passw0rd!' -t sakila < src/test/sql-exercises/<section>/<NN>_<level>.sql
+----
+
+[[SAKILA_ACTOR_B_01]]
+==== SAKILA_ACTOR_B_01: the actors of a given last name, ordered by actor_id
+
+Find every actor whose `last_name` is exactly a given name; here the name is `GUINESS`.
+Show the whole rows, ordered by
+`actor_id`.
+A single table and an equality filter; no join.
+
+.`actor/01_basic.sql`, SAKILA_ACTOR_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM actor
+WHERE last_name = 'GUINESS'
+ORDER BY actor_id
+----
+
+====
+
+
+[[SAKILA_ACTOR_B_02]]
+==== SAKILA_ACTOR_B_02: the actors whose first name starts with JU, ordered by first name
+
+Find every actor whose `first_name` starts with `JU`.
+Show the whole rows, ordered by `first_name`; actors with the same first name are ordered by `actor_id`, so the order is always the same.
+A single table, a `LIKE` filter and a sort on two columns; no join.
+
+.`actor/01_basic.sql`, SAKILA_ACTOR_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM actor
+WHERE first_name LIKE 'JU%'
+ORDER BY first_name, actor_id
+----
+
+====
+
+
+[[SAKILA_ACTOR_B_04]]
+==== SAKILA_ACTOR_B_04: the actors whose first and last names start with the same letter
+
+Find the actors whose `first_name` and `last_name` begin with the same letter, such as `SISSY SOBIESKI`.
+Show the whole rows, ordered by `actor_id`.
+The filter compares two columns of the same row, each through `LEFT`, instead of comparing a column with a constant.
+
+.`actor/01_basic.sql`, SAKILA_ACTOR_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM actor
+WHERE LEFT(first_name, 1) = LEFT(last_name, 1)
+ORDER BY actor_id
+----
+
+====
+
+
+[[SAKILA_ACTOR_B_05]]
+==== SAKILA_ACTOR_B_05: how many different first names and last names there are
+
+Count the different first names and the different last names of the actors, and show both counts in one row.
+`COUNT(DISTINCT ...)` counts each value once, so the two counts are smaller than the number of actors.
+
+.`actor/01_basic.sql`, SAKILA_ACTOR_B_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(DISTINCT first_name) AS first_names, COUNT(DISTINCT last_name) AS last_names
+FROM actor
+----
+
+====
+
+Answered by `Actor_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_ACTOR_I_01]]
+==== SAKILA_ACTOR_I_01: the last names shared by more than three actors, the most shared first
+
+Some last names are shared by several actors.
+Group the actors by
+`last_name`, count them, and keep only the groups with more than three actors.
+Show each last name with its count, the most shared name first; names with the same count are ordered by the name.
+The filter is on the groups, not on the rows, so it belongs in `HAVING`, not in `WHERE`.
+
+.`actor/02_intermediate.sql`, SAKILA_ACTOR_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT last_name, COUNT(*) AS actors
+FROM actor
+GROUP BY last_name
+HAVING COUNT(*) > 3
+ORDER BY actors DESC, last_name
+----
+
+====
+
+
+[[SAKILA_ACTOR_I_02]]
+==== SAKILA_ACTOR_I_02: the top n actors by their number of films
+
+Count, for each actor, the films they appear in, through the `film_actor`
+link table.
+Show the top n actors by that number, the most first, each with its number of films; here n is five.
+Break ties by `actor_id`, so the n are always the same n.
+
+.`actor/02_intermediate.sql`, SAKILA_ACTOR_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*, COUNT(*) AS films
+FROM actor a
+         JOIN film_actor fa ON fa.actor_id = a.actor_id
+GROUP BY a.actor_id
+ORDER BY films DESC, a.actor_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_ACTOR_I_03]]
+==== SAKILA_ACTOR_I_03: the actors who appear in no film
+
+Find the actors who have no row in `film_actor` at all, that is, who appear in no film.
+Show the whole rows.
+Use a `NOT EXISTS` (or an anti-join); the installed data has none, so the answer is empty, and the exercise is about writing the query that proves it.
+
+.`actor/02_intermediate.sql`, SAKILA_ACTOR_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*
+FROM actor a
+WHERE NOT EXISTS (SELECT 1 FROM film_actor fa WHERE fa.actor_id = a.actor_id)
+----
+
+====
+
+
+[[SAKILA_ACTOR_I_04]]
+==== SAKILA_ACTOR_I_04: the five most common first names
+
+Count the actors who share each first name.
+Show the five first names that occur most often, with their counts, the most first.
+Many names occur three times, so break ties by the name, and the five are always the same five.
+
+.`actor/02_intermediate.sql`, SAKILA_ACTOR_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT first_name, COUNT(*) AS actors
+FROM actor
+GROUP BY first_name
+ORDER BY actors DESC, first_name
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_ACTOR_I_06]]
+==== SAKILA_ACTOR_I_06: the five actors whose films are, on average, the longest
+
+For each actor, take the average `length` of the films they appear in, through `film_actor`.
+Show the five actors with the largest average: their `actor_id`, `first_name`, `last_name` and the average rounded to two decimal places, the largest first.
+Break ties by `actor_id`.
+
+.`actor/02_intermediate.sql`, SAKILA_ACTOR_I_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*, ROUND(AVG(f.length), 2) AS average_length
+FROM actor a
+         JOIN film_actor fa ON fa.actor_id = a.actor_id
+         JOIN film f ON f.film_id = fa.film_id
+GROUP BY a.actor_id
+ORDER BY average_length DESC, a.actor_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_ACTOR_I_07]]
+==== SAKILA_ACTOR_I_07: the films of the first five actors, counted by rating
+
+For each of the actors `1` to `5`, count their films of each rating, one column per rating.
+Show the `actor_id`, the `first_name`, the `last_name` and the five counts, ordered by `actor_id`.
+Each column is a `SUM` of a `CASE` that gives `1` for a film of that rating and `0` otherwise, so one pass over the rows fills all five columns.
+
+.`actor/02_intermediate.sql`, SAKILA_ACTOR_I_07
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*,
+       SUM(CASE WHEN f.rating = 'G' THEN 1 ELSE 0 END)     AS g,
+       SUM(CASE WHEN f.rating = 'PG' THEN 1 ELSE 0 END)    AS pg,
+       SUM(CASE WHEN f.rating = 'PG-13' THEN 1 ELSE 0 END) AS pg_13,
+       SUM(CASE WHEN f.rating = 'R' THEN 1 ELSE 0 END)     AS r,
+       SUM(CASE WHEN f.rating = 'NC-17' THEN 1 ELSE 0 END) AS nc_17
+FROM actor a
+         JOIN film_actor fa ON fa.actor_id = a.actor_id
+         JOIN film f ON f.film_id = fa.film_id
+WHERE a.actor_id BETWEEN 1 AND 5
+GROUP BY a.actor_id
+ORDER BY a.actor_id
+----
+
+====
+
+
+[[SAKILA_ACTOR_I_08]]
+==== SAKILA_ACTOR_I_08: the actors who never appeared in a G-rated film
+
+A family promotion shows only actors of `G`-rated films; find the actors it cannot use.
+Find the actors none of whose films is rated `G`, the whole rows, ordered by `actor_id`.
+A `NOT EXISTS` whose subquery joins `film_actor` to `film`, so that the condition on the rating is inside the subquery, not on the outer row.
+
+.`actor/02_intermediate.sql`, SAKILA_ACTOR_I_08
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*
+FROM actor a
+WHERE NOT EXISTS (SELECT 1
+                  FROM film_actor fa
+                           JOIN film f ON f.film_id = fa.film_id
+                  WHERE fa.actor_id = a.actor_id
+                    AND f.rating = 'G')
+ORDER BY a.actor_id
+----
+
+====
+
+Answered by `Actor_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_ACTOR_A_01]]
+==== SAKILA_ACTOR_A_01: the actors who appear in a film of every rating
+
+Find the actors who have appeared in at least one film of each rating (`G`, `PG`, `PG-13`, `R`, `NC-17`).
+This is a relational division: for each actor, count the distinct ratings of their films, and compare that count with the number of distinct ratings over all films, taken by a subquery, so the query does not hard-code the five ratings.
+Show the whole rows of the first five such actors by `actor_id`.
+
+.`actor/03_advanced.sql`, SAKILA_ACTOR_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*
+FROM actor a
+         JOIN film_actor fa ON fa.actor_id = a.actor_id
+         JOIN film f ON f.film_id = fa.film_id
+GROUP BY a.actor_id, a.first_name, a.last_name
+HAVING COUNT(DISTINCT f.rating) = (SELECT COUNT(DISTINCT rating) FROM film)
+ORDER BY a.actor_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_ACTOR_A_02]]
+==== SAKILA_ACTOR_A_02: the actors in the top seven film counts, ties included
+
+Rank the actors by the number of films they appear in, so that actors with the same number share a rank and the next number takes the next rank.
+Show the actors of the first seven ranks: `actor_id`, `first_name`, `last_name`, the number of films and the rank, ordered by the rank and then by `actor_id`.
+Unlike the `LIMIT` of SAKILA_ACTOR_I_02, `DENSE_RANK()` keeps every actor tied at the last rank.
+
+.`actor/03_advanced.sql`, SAKILA_ACTOR_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT actor_id, first_name, last_name, films, film_rank
+FROM (SELECT a.actor_id,
+             a.first_name,
+             a.last_name,
+             COUNT(*)                                   AS films,
+             DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS film_rank
+      FROM actor a
+               JOIN film_actor fa ON fa.actor_id = a.actor_id
+      GROUP BY a.actor_id, a.first_name, a.last_name) ranked
+WHERE film_rank <= 7
+ORDER BY film_rank, actor_id
+----
+
+====
+
+
+[[SAKILA_ACTOR_A_03]]
+==== SAKILA_ACTOR_A_03: the longest film of each of the first five actors
+
+For each of the actors `1` to `5`, find the longest film they appear in.
+Show the `actor_id`, the `first_name`, the `last_name`, the film's `title` and its `length`, ordered by `actor_id`; if two films of an actor share the longest length, both are shown, ordered by `title`.
+A correlated subquery takes the longest length of the actor of the outer row.
+
+.`actor/03_advanced.sql`, SAKILA_ACTOR_A_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*, f.*
+FROM actor a
+         JOIN film_actor fa ON fa.actor_id = a.actor_id
+         JOIN film f ON f.film_id = fa.film_id
+WHERE a.actor_id BETWEEN 1 AND 5
+  AND f.length = (SELECT MAX(f2.length)
+                  FROM film_actor fa2
+                           JOIN film f2 ON f2.film_id = fa2.film_id
+                  WHERE fa2.actor_id = a.actor_id)
+ORDER BY a.actor_id, f.title
+----
+
+====
+
+Answered by `Actor_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_ACTOR_INFO_B_01]]
+==== SAKILA_ACTOR_INFO_B_01: the film_info of the actor 1
+
+The `actor_info` view puts, for each actor, all of their films into one
+`film_info` string, grouped by category (`Animation: ...; Comedy: ...`).
+Show the row of the actor `1`: the
+`actor_id`, the `first_name`, the `last_name` and the first 80 characters of `film_info`, which is long.
+
+.`actor_info/01_basic.sql`, SAKILA_ACTOR_INFO_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *, LEFT (film_info, 80) AS film_info
+FROM actor_info
+WHERE actor_id = 1
+----
+
+====
+
+
+[[SAKILA_ACTOR_INFO_B_02]]
+==== SAKILA_ACTOR_INFO_B_02: how many actors appear in a Horror film, as film_info says
+
+Count the actors who appear in at least one Horror film, reading only the
+`film_info` string of the view.
+Each category in that string is written as its name followed by a colon, so a pattern on `Horror:` finds the actors, without joining any table.
+
+.`actor_info/01_basic.sql`, SAKILA_ACTOR_INFO_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS actors
+FROM actor_info
+WHERE film_info LIKE '%Horror:%'
+----
+
+====
+
+
+[[SAKILA_ACTOR_INFO_B_03]]
+==== SAKILA_ACTOR_INFO_B_03: the actors of ACADEMY DINOSAUR, as film_info says
+
+Find the actors whose `film_info` names the film `ACADEMY DINOSAUR`.
+Show the `actor_id`, the `first_name` and the `last_name`, ordered by `actor_id`.
+A `LIKE` with a wildcard on both sides searches the whole string, without joining `film_actor`.
+
+.`actor_info/01_basic.sql`, SAKILA_ACTOR_INFO_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM actor_info
+WHERE film_info LIKE '%ACADEMY DINOSAUR%'
+ORDER BY actor_id
+----
+
+====
+
+
+[[SAKILA_ACTOR_INFO_B_04]]
+==== SAKILA_ACTOR_INFO_B_04: the five actors with the longest film_info
+
+Measure the `film_info` of each actor in characters.
+Show the five actors with the longest one: the `actor_id`, the `first_name`, the `last_name` and the length, the longest first; break ties by `actor_id`.
+
+.`actor_info/01_basic.sql`, SAKILA_ACTOR_INFO_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *, CHAR_LENGTH(film_info) AS film_info_length
+FROM actor_info
+ORDER BY film_info_length DESC, actor_id
+LIMIT 5
+----
+
+====
+
+Answered by `ActorInfo_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_ACTOR_INFO_I_01]]
+==== SAKILA_ACTOR_INFO_I_01: whether the view has a row for every actor
+
+Check that the view is complete: count the rows of `actor_info` and the rows of `actor`, and show both counts side by side in one row.
+The two should be equal; an actor without a film would still have a row, since the view groups the actors, not the films.
+
+.`actor_info/02_intermediate.sql`, SAKILA_ACTOR_INFO_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT COUNT(*) FROM actor_info) AS actor_info, (SELECT COUNT(*) FROM actor) AS actor
+----
+
+====
+
+
+[[SAKILA_ACTOR_INFO_I_02]]
+==== SAKILA_ACTOR_INFO_I_02: the actors whose film_info covers every category
+
+Each category in `film_info` ends with a colon, so the number of colons is the number of categories the actor's films belong to.
+Find the actors whose number of categories equals the number of rows in `category`, taken by a subquery.
+Show the `actor_id`, the `first_name` and the `last_name`, ordered by `actor_id`.
+The colons are counted as the length of the string minus the length of the string with the colons removed by `REPLACE`.
+
+.`actor_info/02_intermediate.sql`, SAKILA_ACTOR_INFO_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM actor_info
+WHERE CHAR_LENGTH(film_info) - CHAR_LENGTH(REPLACE(film_info, ':', '')) = (SELECT COUNT(*) FROM category)
+ORDER BY actor_id
+----
+
+====
+
+
+[[SAKILA_ACTOR_INFO_I_03]]
+==== SAKILA_ACTOR_INFO_I_03: how many actors cover how many categories
+
+Count the categories of each actor's `film_info` as in SAKILA_ACTOR_INFO_I_02, then group the actors by that number.
+Show each number of categories with the number of actors, the most categories first.
+The groups are formed on a computed value, not on a column.
+
+.`actor_info/02_intermediate.sql`, SAKILA_ACTOR_INFO_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT CHAR_LENGTH(film_info) - CHAR_LENGTH(REPLACE(film_info, ':', '')) AS categories, COUNT(*) AS actors
+FROM actor_info
+GROUP BY categories
+ORDER BY categories DESC
+----
+
+====
+
+Answered by `ActorInfo_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_ACTOR_INFO_A_01]]
+==== SAKILA_ACTOR_INFO_A_01: the actors whose film_info disagrees with the tables on the number of categories
+
+Check the view against the tables it is built on.
+For each actor, compare the number of categories in `film_info`, counted as in SAKILA_ACTOR_INFO_I_02, with the number of distinct categories of the actor's films, counted from `film_actor` and `film_category` by a correlated subquery.
+Show the `actor_id`, the `first_name` and the `last_name` of the actors where the two differ, ordered by `actor_id`.
+The installed data has none.
+
+.`actor_info/03_advanced.sql`, SAKILA_ACTOR_INFO_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT ai.*
+FROM actor_info ai
+WHERE CHAR_LENGTH(ai.film_info) - CHAR_LENGTH(REPLACE(ai.film_info, ':', ''))
+          <> (SELECT COUNT(DISTINCT fc.category_id)
+              FROM film_actor fa
+                       JOIN film_category fc ON fc.film_id = fa.film_id
+              WHERE fa.actor_id = ai.actor_id)
+ORDER BY ai.actor_id
+----
+
+====
+
+Answered by `ActorInfo_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_FILM_B_01]]
+==== SAKILA_FILM_B_01: how many films each rating has
+
+Count the films of each `rating`.
+Show each rating with its count, ordered by the rating.
+The rating is an `ENUM`, so its order is the order of the enum's values, not the alphabetical one.
+
+.`film/01_basic.sql`, SAKILA_FILM_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT rating, COUNT(*) AS films
+FROM film
+GROUP BY rating
+ORDER BY rating
+----
+
+====
+
+
+[[SAKILA_FILM_B_02]]
+==== SAKILA_FILM_B_02: the films longer than three hours, the longest first
+
+Find the films whose `length` is more than three hours, that is, more than 180 minutes.
+Show the whole rows, the longest first, ties ordered by title, and keep the first five.
+
+.`film/01_basic.sql`, SAKILA_FILM_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM film
+WHERE length > 180
+ORDER BY length DESC, title
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_FILM_B_03]]
+==== SAKILA_FILM_B_03: the average rental rate of each rating
+
+Take the average `rental_rate` of the films of each rating.
+Show each rating with the average, rounded to two decimal places, ordered by the rating.
+
+.`film/01_basic.sql`, SAKILA_FILM_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT rating, ROUND(AVG(rental_rate), 2) AS average_rental_rate
+FROM film
+GROUP BY rating
+ORDER BY rating
+----
+
+====
+
+
+[[SAKILA_FILM_B_04]]
+==== SAKILA_FILM_B_04: how many films have Behind the Scenes among their special features
+
+`special_features` is a `SET`: one value which holds any of `Trailers`,
+`Commentaries`, `Deleted Scenes` and `Behind the Scenes`.
+Count the films whose set holds `Behind the Scenes`.
+
+.`film/01_basic.sql`, SAKILA_FILM_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film
+WHERE FIND_IN_SET('Behind the Scenes', special_features) > 0
+----
+
+====
+
+
+[[SAKILA_FILM_B_06]]
+==== SAKILA_FILM_B_06: the films cheapest to rent and dearest to replace
+
+Find the films whose `rental_rate` is `0.99`, the lowest, and whose `replacement_cost` is `29.99`, the highest.
+Show their `film_id`, `title`, `rental_rate` and `replacement_cost`, ordered by title, and keep the first ten.
+
+.`film/01_basic.sql`, SAKILA_FILM_B_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM film
+WHERE rental_rate = 0.99
+  AND replacement_cost = 29.99
+ORDER BY title
+LIMIT 10
+----
+
+====
+
+Answered by `Film_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_FILM_I_01]]
+==== SAKILA_FILM_I_01: how many films have no copy in the inventory
+
+Count the films which have no copy in `inventory`.
+They cannot be rented.
+An anti-join on `inventory.film_id`.
+
+.`film/02_intermediate.sql`, SAKILA_FILM_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film f
+WHERE NOT EXISTS (SELECT 1 FROM inventory i WHERE i.film_id = f.film_id)
+----
+
+====
+
+
+[[SAKILA_FILM_I_02]]
+==== SAKILA_FILM_I_02: the five films rented the most
+
+Count how many times each film was rented.
+A rental refers to a copy (`inventory_id`), and a copy to a film, so the count goes through `inventory`.
+Show the five films rented the most:
+their `film_id`, `title` and number of rentals, the most first; ties are ordered by `film_id`.
+
+.`film/02_intermediate.sql`, SAKILA_FILM_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.*, COUNT(*) AS rentals
+FROM film f
+         JOIN inventory i ON i.film_id = f.film_id
+         JOIN rental r ON r.inventory_id = i.inventory_id
+GROUP BY f.film_id
+ORDER BY rentals DESC, f.film_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_FILM_I_03]]
+==== SAKILA_FILM_I_03: how many films are short, medium and long
+
+Put each film in one of three groups by its `length`: `short` under 60 minutes, `medium` from 60 to 120 minutes, and `long` over 120 minutes.
+Show each group with its number of films, from the shortest group to the longest.
+A `CASE` expression makes the group, and the query groups by it.
+
+.`film/02_intermediate.sql`, SAKILA_FILM_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT CASE WHEN length < 60 THEN 'short' WHEN length <= 120 THEN 'medium' ELSE 'long' END AS size,
+       COUNT(*) AS films
+FROM film
+GROUP BY size
+ORDER BY MIN(length)
+----
+
+====
+
+
+[[SAKILA_FILM_I_04]]
+==== SAKILA_FILM_I_04: the ratings whose films are longer than the average film
+
+Take the average `length` of the films of each rating, and keep the ratings whose average is above the average of all the films.
+Show each such rating with its average, rounded to two decimal places, ordered by the rating.
+A subquery in `HAVING` gives the overall average.
+
+.`film/02_intermediate.sql`, SAKILA_FILM_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT rating, ROUND(AVG(length), 2) AS average_length
+FROM film
+GROUP BY rating
+HAVING AVG(length) > (SELECT AVG(length) FROM film)
+ORDER BY rating
+----
+
+====
+
+Answered by `Film_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_FILM_A_01]]
+==== SAKILA_FILM_A_01: how many films of each rating are longer than their rating's average
+
+Compare each film's `length` with the average length of the films of the same rating.
+Count, for each rating, the films longer than that average, and show each rating with its count, ordered by the rating.
+A correlated subquery: the average is taken again for the rating of each film.
+
+.`film/03_advanced.sql`, SAKILA_FILM_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f1.rating, COUNT(*) AS films
+FROM film f1
+WHERE f1.length > (SELECT AVG(f2.length) FROM film f2 WHERE f2.rating = f1.rating)
+GROUP BY f1.rating
+ORDER BY f1.rating
+----
+
+====
+
+Answered by `Film_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_FILM_ACTOR_B_01]]
+==== SAKILA_FILM_ACTOR_B_01: how many films the actor 1 appears in
+
+Count the rows of `film_actor` whose `actor_id` is `1`.
+Each row is one film the actor appears in.
+
+.`film_actor/01_basic.sql`, SAKILA_FILM_ACTOR_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film_actor
+WHERE actor_id = 1
+----
+
+====
+
+
+[[SAKILA_FILM_ACTOR_B_02]]
+==== SAKILA_FILM_ACTOR_B_02: how many castings, actors and films the table has
+
+Count, in one row, the rows of `film_actor`, the distinct `actor_id` values and the distinct `film_id` values.
+The distinct films are fewer than the films of `film`: some films have no actor.
+
+.`film_actor/01_basic.sql`, SAKILA_FILM_ACTOR_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS castings, COUNT(DISTINCT actor_id) AS actors, COUNT(DISTINCT film_id) AS films
+FROM film_actor
+----
+
+====
+
+Answered by `FilmActor_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_FILM_ACTOR_I_01]]
+==== SAKILA_FILM_ACTOR_I_01: the five films with the most actors
+
+Count the actors of each film through `film_actor`.
+Show the five films with the most actors: their `film_id`, `title` and number of actors, the most first; ties are ordered by
+`film_id`.
+
+.`film_actor/02_intermediate.sql`, SAKILA_FILM_ACTOR_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.*, COUNT(*) AS actors
+FROM film f
+         JOIN film_actor fa ON fa.film_id = f.film_id
+GROUP BY f.film_id
+ORDER BY actors DESC, f.film_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_FILM_ACTOR_I_02]]
+==== SAKILA_FILM_ACTOR_I_02: how many actors a film has, on average
+
+Find how many actors a film has, on average, over the films which have at least one.
+Count the actors of each film, then average the counts, rounded to two decimal places.
+
+.`film_actor/02_intermediate.sql`, SAKILA_FILM_ACTOR_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT ROUND(AVG(actors), 2) AS average_actors
+FROM (SELECT COUNT(*) AS actors FROM film_actor GROUP BY film_id) t
+----
+
+====
+
+
+[[SAKILA_FILM_ACTOR_I_03]]
+==== SAKILA_FILM_ACTOR_I_03: the five actors who appear most often with the actor 1
+
+Join `film_actor` with itself on the film, keeping the rows of the actor 1 on one side and the other actors of the same films on the other.
+Count the films each other actor shares with the actor 1, and show the five with the most: their `actor_id`, `first_name`, `last_name` and count, the most first; ties are ordered by `actor_id`.
+
+.`film_actor/02_intermediate.sql`, SAKILA_FILM_ACTOR_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*, COUNT(*) AS films
+FROM film_actor fa1
+         JOIN film_actor fa2 ON fa2.film_id = fa1.film_id AND fa2.actor_id <> fa1.actor_id
+         JOIN actor a ON a.actor_id = fa2.actor_id
+WHERE fa1.actor_id = 1
+GROUP BY a.actor_id
+ORDER BY films DESC, a.actor_id
+LIMIT 5
+----
+
+====
+
+
+[[SAKILA_FILM_ACTOR_I_04]]
+==== SAKILA_FILM_ACTOR_I_04: how many films have one actor, two actors, and so on
+
+Count the actors of each film, then count the films of each such number.
+Show each number of actors with its number of films, ordered by the number of actors.
+A grouping over a grouping: the inner query groups by film, the outer by its count.
+
+.`film_actor/02_intermediate.sql`, SAKILA_FILM_ACTOR_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT actors, COUNT(*) AS films
+FROM (SELECT film_id, COUNT(*) AS actors FROM film_actor GROUP BY film_id) t
+GROUP BY actors
+ORDER BY actors
+----
+
+====
+
+Answered by `FilmActor_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_FILM_ACTOR_A_01]]
+==== SAKILA_FILM_ACTOR_A_01: the three pairs of actors who appear together the most
+
+Two actors appear together when both are in the same film.
+Pair every
+`film_actor` row with every other row of the same film, keeping each pair once (the first actor's id smaller than the second's), and count the films of each pair.
+Show the three pairs who appear together the most: both actors' ids and the count, the most first; ties are ordered by the ids.
+A self-join.
+
+.`film_actor/03_advanced.sql`, SAKILA_FILM_ACTOR_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a1.*, a2.*, COUNT(*) AS films
+FROM film_actor fa1
+         JOIN film_actor fa2 ON fa2.film_id = fa1.film_id AND fa2.actor_id > fa1.actor_id
+         JOIN actor a1 ON a1.actor_id = fa1.actor_id
+         JOIN actor a2 ON a2.actor_id = fa2.actor_id
+GROUP BY a1.actor_id, a2.actor_id
+ORDER BY films DESC, a1.actor_id, a2.actor_id
+LIMIT 3
+----
+
+====
+
+
+[[SAKILA_FILM_ACTOR_A_02]]
+==== SAKILA_FILM_ACTOR_A_02: the actor who appears in the most films of each category
+
+Count the films of each actor in each category, through `film_category`.
+Number the actors within each category, the most films first and ties by `actor_id`, with `ROW_NUMBER() OVER (PARTITION BY ...)`, and keep the first of each category.
+Show the category's `name`, the actor's `actor_id`, `first_name` and `last_name`, and the count, ordered by the category's name.
+
+.`film_actor/03_advanced.sql`, SAKILA_FILM_ACTOR_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT name, actor_id, first_name, last_name, films
+FROM (SELECT c.name, a.actor_id, a.first_name, a.last_name, COUNT(*) AS films,
+             ROW_NUMBER() OVER (PARTITION BY c.category_id ORDER BY COUNT(*) DESC, a.actor_id) AS n
+      FROM film_actor fa
+               JOIN film_category fc ON fc.film_id = fa.film_id
+               JOIN category c ON c.category_id = fc.category_id
+               JOIN actor a ON a.actor_id = fa.actor_id
+      GROUP BY c.category_id, c.name, a.actor_id, a.first_name, a.last_name) t
+WHERE n = 1
+ORDER BY name
+----
+
+====
+
+
+[[SAKILA_FILM_ACTOR_A_03]]
+==== SAKILA_FILM_ACTOR_A_03: the pairs of films which have exactly the same actors
+
+Two films have the same cast when every actor of each is also an actor of the other.
+Join `film_actor` with itself on the actor, keeping each pair of films once (the first film's id smaller than the second's), and keep the pairs whose number of shared actors equals the number of actors of both films.
+Show both films' ids and the number of actors, ordered by the ids.
+A relational division by counting.
+
+.`film_actor/03_advanced.sql`, SAKILA_FILM_ACTOR_A_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f1.*, f2.*, COUNT(*) AS actors
+FROM film_actor fa1
+         JOIN film_actor fa2 ON fa2.actor_id = fa1.actor_id AND fa2.film_id > fa1.film_id
+         JOIN film f1 ON f1.film_id = fa1.film_id
+         JOIN film f2 ON f2.film_id = fa2.film_id
+GROUP BY f1.film_id, f2.film_id
+HAVING COUNT(*) = (SELECT COUNT(*) FROM film_actor x WHERE x.film_id = f1.film_id)
+   AND COUNT(*) = (SELECT COUNT(*) FROM film_actor y WHERE y.film_id = f2.film_id)
+ORDER BY f1.film_id, f2.film_id
+----
+
+====
+
+Answered by `FilmActor_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_FILM_TEXT_B_01]]
+==== SAKILA_FILM_TEXT_B_01: the films whose description has both a Crocodile and a Shark
+
+Find the films whose `description` mentions both `Crocodile` and `Shark`, with two `LIKE` conditions.
+Show their `film_id` and `title`, ordered by `film_id`.
+
+.`film_text/01_basic.sql`, SAKILA_FILM_TEXT_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM film_text
+WHERE description LIKE '%Crocodile%'
+  AND description LIKE '%Shark%'
+ORDER BY film_id
+----
+
+====
+
+
+[[SAKILA_FILM_TEXT_B_02]]
+==== SAKILA_FILM_TEXT_B_02: the five longest descriptions
+
+Find the five films whose `description` is the longest, by its number of characters.
+Show their `film_id`, `title` and the length, the longest first; ties are ordered by `film_id`.
+
+.`film_text/01_basic.sql`, SAKILA_FILM_TEXT_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *, LENGTH(description) AS characters
+FROM film_text
+ORDER BY characters DESC, film_id
+LIMIT 5
+----
+
+====
+
+Answered by `FilmText_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_FILM_TEXT_I_01]]
+==== SAKILA_FILM_TEXT_I_01: whether film_text has a row for every film
+
+`film_text` keeps a copy of each film's title and description, for the full-text index; triggers on `film` keep it up to date.
+Count the rows of `film_text` and of `film`, and show both in one row.
+
+.`film_text/02_intermediate.sql`, SAKILA_FILM_TEXT_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT COUNT(*) FROM film_text) AS film_text, (SELECT COUNT(*) FROM film) AS film
+----
+
+====
+
+
+[[SAKILA_FILM_TEXT_I_02]]
+==== SAKILA_FILM_TEXT_I_02: how many films mention a Drama, by the full-text index
+
+`film_text` has a full-text index on `title` and `description`.
+Count the films which mention the word `drama`, searching with that index (`MATCH ... AGAINST`), not with a
+`LIKE`.
+
+.`film_text/02_intermediate.sql`, SAKILA_FILM_TEXT_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film_text
+WHERE MATCH(title, description) AGAINST ('drama')
+----
+
+====
+
+
+[[SAKILA_FILM_TEXT_I_03]]
+==== SAKILA_FILM_TEXT_I_03: the films whose film_text title differs from their title
+
+Join `film_text` to `film` by the film id, and find the films whose two titles are not the same: the `film_id`, the film's `title` and the `film_text` title.
+The triggers keep them the same, so the installed data has none.
+
+.`film_text/02_intermediate.sql`, SAKILA_FILM_TEXT_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT f.*, ft.*
+FROM film f
+         JOIN film_text ft ON ft.film_id = f.film_id
+WHERE ft.title <> f.title
+----
+
+====
+
+
+[[SAKILA_FILM_TEXT_I_04]]
+==== SAKILA_FILM_TEXT_I_04: how many films mention a Boat but not a Shark, by the full-text index
+
+Count the films which mention the word `boat` but not the word `shark`, searching with the full-text index in boolean mode.
+In boolean mode, `+` marks a word which must be present and `-` a word which must be absent.
+
+.`film_text/02_intermediate.sql`, SAKILA_FILM_TEXT_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film_text
+WHERE MATCH(title, description) AGAINST ('+boat -shark' IN BOOLEAN MODE)
+----
+
+====
+
+
+[[SAKILA_FILM_TEXT_I_05]]
+==== SAKILA_FILM_TEXT_I_05: how many films mention a Crocodile or a Shark, and how many mention both
+
+Search the full-text index for `crocodile` and `shark` twice, and show both counts in one row.
+First in natural language mode, which finds the films mentioning either word; then in boolean mode with both words marked `+`, which finds the films mentioning both.
+
+.`film_text/02_intermediate.sql`, SAKILA_FILM_TEXT_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT (SELECT COUNT(*) FROM film_text WHERE MATCH(title, description) AGAINST ('crocodile shark')) AS either_word,
+       (SELECT COUNT(*)
+        FROM film_text
+        WHERE MATCH(title, description) AGAINST ('+crocodile +shark' IN BOOLEAN MODE)) AS both_words
+----
+
+====
+
+Answered by `FilmText_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+
+[[SAKILA_FILM_TEXT_A_01]]
+==== SAKILA_FILM_TEXT_A_01: the most common kind of story in each category
+
+Every `description` starts the same way, like `A Epic Drama of ...`: its third word is the kind of story, such as `Drama`, `Documentary` or `Saga`.
+For each category, find the kind of story its films tell the most, and show the category, the kind and its number of films, ordered by the category.
+Ties are broken by the kind, the first in alphabetical order.
+Take the third word with `SUBSTRING_INDEX`, count the films per category and kind in one CTE, and rank them with `ROW_NUMBER()` in another.
+
+.`film_text/03_advanced.sql`, SAKILA_FILM_TEXT_A_01
+[%collapsible]
+====
+[source,sql]
+----
+WITH kinds AS (SELECT c.name AS category,
+                      SUBSTRING_INDEX(SUBSTRING_INDEX(ft.description, ' ', 3), ' ', -1) AS kind,
+                      COUNT(*) AS films
+               FROM film_text ft
+                        JOIN film_category fc ON fc.film_id = ft.film_id
+                        JOIN category c ON c.category_id = fc.category_id
+               GROUP BY c.name, kind),
+     ranked AS (SELECT category, kind, films,
+                       ROW_NUMBER() OVER (PARTITION BY category ORDER BY films DESC, kind) AS rn
+                FROM kinds)
+SELECT category, kind, films
+FROM ranked
+WHERE rn = 1
+ORDER BY category
+----
+
+====
+
+
+[[SAKILA_FILM_TEXT_A_02]]
+==== SAKILA_FILM_TEXT_A_02: the chain of titles from ACADEMY DINOSAUR
+
+Every title has two words, and the last word of a title is, for all but one film, the first word of another film's title; no two titles share a first word.
+Starting from the film `1`, `ACADEMY DINOSAUR`, follow that chain for ten films: the next film is the one whose title starts with the last word of the current one.
+Show the step, the `film_id` and the `title`, ordered by the step.
+Follow the chain with a recursive CTE which stops at the tenth step.
+
+.`film_text/03_advanced.sql`, SAKILA_FILM_TEXT_A_02
+[%collapsible]
+====
+[source,sql]
+----
+WITH RECURSIVE chain AS (SELECT 1 AS step, film_id, title
+                         FROM film_text
+                         WHERE film_id = 1
+                         UNION ALL
+                         SELECT c.step + 1, ft.film_id, ft.title
+                         FROM chain c
+                                  JOIN film_text ft ON SUBSTRING_INDEX(ft.title, ' ', 1) = SUBSTRING_INDEX(c.title, ' ', -1)
+                         WHERE c.step < 10)
+SELECT step, film_id, title
+FROM chain
+ORDER BY step
+----
+
+====
+
+Answered by `FilmText_Exercises_03_Advanced_PersistenceIT`.
+
+
+[[SAKILA_LANGUAGE_B_01]]
+==== SAKILA_LANGUAGE_B_01: every language
+
+Show every language, the whole rows, ordered by the id.
+
+.`language/01_basic.sql`, SAKILA_LANGUAGE_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM language
+ORDER BY language_id
+----
+
+====
+
+
+[[SAKILA_LANGUAGE_B_02]]
+==== SAKILA_LANGUAGE_B_02: how many films have an original language
+
+A film has a `language_id` and may have an `original_language_id`.
+Count the films whose `original_language_id` is not `NULL`.
+
+.`language/01_basic.sql`, SAKILA_LANGUAGE_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT COUNT(*) AS films
+FROM film
+WHERE original_language_id IS NOT NULL
+----
+
+====
+
+
+[[SAKILA_LANGUAGE_B_03]]
+==== SAKILA_LANGUAGE_B_03: which of four languages the table has
+
+Find which of `English`, `French`, `German` and `Spanish` are in the table, with one `IN` condition.
+Show their names, ordered by the name.
+
+.`language/01_basic.sql`, SAKILA_LANGUAGE_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM language
+WHERE name IN ('English', 'French', 'German', 'Spanish')
+ORDER BY name
+----
+
+====
+
+
+[[SAKILA_LANGUAGE_B_04]]
+==== SAKILA_LANGUAGE_B_04: the languages whose name ends with an or ese
+
+Find the languages whose `name` ends with `an` or with `ese`.
+Show their `language_id` and `name`, ordered by the name.
+
+.`language/01_basic.sql`, SAKILA_LANGUAGE_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM language
+WHERE name LIKE '%an'
+   OR name LIKE '%ese'
+ORDER BY name
+----
+
+====
+
+Answered by `Language_Exercises_01_Basic_PersistenceIT`.
+
+=== Intermediate
+
+
+[[SAKILA_LANGUAGE_I_01]]
+==== SAKILA_LANGUAGE_I_01: how many films each language has
+
+Count the films of each language, by `film.language_id`, and show every language, even one without a film, with its count, ordered by the language's id.
+The languages without a film must show `0`, so the join is an outer one, and the count is of the films, not of the rows.
+
+.`language/02_intermediate.sql`, SAKILA_LANGUAGE_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT l.*, COUNT(f.film_id) AS films
+FROM language l
+         LEFT JOIN film f ON f.language_id = l.language_id
+GROUP BY l.language_id
+ORDER BY l.language_id
+----
+
+====
+
+
+[[SAKILA_LANGUAGE_I_02]]
+==== SAKILA_LANGUAGE_I_02: the languages no film uses, either as its language or as its original language
+
+Find the languages which no film refers to, neither by `language_id` nor by `original_language_id`.
+Show their `language_id` and `name`, ordered by `language_id`.
+
+.`language/02_intermediate.sql`, SAKILA_LANGUAGE_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT l.*
+FROM language l
+WHERE NOT EXISTS (SELECT 1
+                  FROM film f
+                  WHERE f.language_id = l.language_id
+                     OR f.original_language_id = l.language_id)
+ORDER BY l.language_id
+----
+
+====
+
+Answered by `Language_Exercises_02_Intermediate_PersistenceIT`.
+

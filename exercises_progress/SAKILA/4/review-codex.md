@@ -1,0 +1,288 @@
+### fix SAKILA_SCHEMA_I_07
+
+- section: SCHEMA   tier: Intermediate
+- title: rentals and payments by rental month
+- why: The DDL permits several payments for one rental, so `COUNT(*)` can overcount rentals. A month without payments should show a total of zero.
+- request: For each rental month, written as `YYYY-MM`, show the number of rentals and the sum of their payments, including rentals without payments. Order by month.
+- sql:
+
+    ```sql
+    SELECT DATE_FORMAT(r.rental_date, '%Y-%m') AS month,
+           COUNT(DISTINCT r.rental_id) AS rentals,
+           COALESCE(SUM(p.amount), 0) AS total
+    FROM rental r
+             LEFT JOIN payment p ON p.rental_id = r.rental_id
+    GROUP BY month
+    ORDER BY month
+    ```
+
+### fix SAKILA_SCHEMA_I_09
+
+- section: SCHEMA   tier: Intermediate
+- title: rentals and payments by film length
+- why: Several payments can inflate the rental count. Also, the current `ELSE` wrongly classifies a NULL length as long.
+- request: For films with a known length, show the rental count and payment total for short films under 60 minutes, medium films from 60 through 120 minutes, and long films over 120 minutes. Order from short to long, including rentals without payments.
+- sql:
+
+    ```sql
+    SELECT CASE
+               WHEN f.length < 60 THEN 'short'
+               WHEN f.length <= 120 THEN 'medium'
+               ELSE 'long'
+               END AS length_group,
+           COUNT(DISTINCT r.rental_id) AS rentals,
+           COALESCE(SUM(p.amount), 0) AS total
+    FROM rental r
+             JOIN inventory i ON i.inventory_id = r.inventory_id
+             JOIN film f ON f.film_id = i.film_id
+             LEFT JOIN payment p ON p.rental_id = r.rental_id
+    WHERE f.length IS NOT NULL
+    GROUP BY length_group
+    ORDER BY MIN(f.length)
+    ```
+
+### fix SAKILA_SCHEMA_A_01
+
+- section: SCHEMA   tier: Advanced
+- title: the top customer in each of the top five countries
+- why: Applying `LIMIT 5` after selecting tied customer ranks can return fewer than five countries. Select the countries separately and define both tie breakers.
+- request: Show the five countries whose customers paid the most, with each country's total and its highest-paying customer's id, name and total. Break country-total ties by country id, and customer-total ties by customer id.
+- sql:
+
+    ```sql
+    WITH paid AS (SELECT co.country_id, co.country,
+                         cu.customer_id, cu.first_name, cu.last_name,
+                         SUM(p.amount) AS total
+                  FROM payment p
+                           JOIN customer cu ON cu.customer_id = p.customer_id
+                           JOIN address a ON a.address_id = cu.address_id
+                           JOIN city ci ON ci.city_id = a.city_id
+                           JOIN country co ON co.country_id = ci.country_id
+                  GROUP BY co.country_id, cu.customer_id),
+         countries AS (SELECT country_id, SUM(total) AS country_total
+                       FROM paid
+                       GROUP BY country_id
+                       ORDER BY country_total DESC, country_id
+                       LIMIT 5),
+         ranked AS (SELECT paid.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY country_id
+                               ORDER BY total DESC, customer_id) AS n
+                    FROM paid)
+    SELECT r.country, r.customer_id, r.first_name, r.last_name,
+           r.total, c.country_total
+    FROM countries c
+             JOIN ranked r ON r.country_id = c.country_id AND r.n = 1
+    ORDER BY c.country_total DESC, c.country_id
+    ```
+
+### fix SAKILA_SCHEMA_A_04
+
+- section: SCHEMA   tier: Advanced
+- title: payments and change from the preceding calendar month
+- why: `LAG` over payment months skips months without payments, so its comparison need not be with the preceding calendar month.
+- request: From the first payment month through the last, show every calendar month, its payment total, and the change from the preceding calendar month. Use zero for months without payments and NULL for the first month's change.
+- sql:
+
+    ```sql
+    WITH RECURSIVE monthly AS (
+        SELECT CAST(DATE_FORMAT(payment_date, '%Y-%m-01') AS DATE) AS month,
+               SUM(amount) AS total
+        FROM payment
+        GROUP BY month),
+         months AS (
+             SELECT MIN(month) AS month
+             FROM monthly
+             HAVING MIN(month) IS NOT NULL
+             UNION ALL
+             SELECT month + INTERVAL 1 MONTH
+             FROM months
+             WHERE month < (SELECT MAX(month) FROM monthly)),
+         totals AS (
+             SELECT m.month, COALESCE(p.total, 0) AS total
+             FROM months m
+                      LEFT JOIN monthly p ON p.month = m.month)
+    SELECT DATE_FORMAT(month, '%Y-%m') AS month, total,
+           total - LAG(total) OVER (ORDER BY month) AS change_from_previous
+    FROM totals
+    ORDER BY totals.month
+    ```
+
+### fix SAKILA_RENTAL_A_02
+
+- section: RENTAL   tier: Advanced
+- title: the five longest waits ending in 2005
+- why: The current filter includes years before 2005, and the final ordering can tie when a customer rents several copies simultaneously. Compute predecessors before filtering the later rental.
+- request: For each rental made in 2005, find that customer's preceding rental, ordered by rental date and rental id. Show the five longest waits in calendar days, with customer id and both dates; break ties by customer id, later rental date and later rental id.
+- sql:
+
+    ```sql
+    SELECT customer_id, previous_rental, rental_date,
+           DATEDIFF(rental_date, previous_rental) AS days
+    FROM (SELECT rental_id, customer_id, rental_date,
+                 LAG(rental_date) OVER (
+                     PARTITION BY customer_id
+                     ORDER BY rental_date, rental_id) AS previous_rental
+          FROM rental) g
+    WHERE rental_date >= '2005-01-01'
+      AND rental_date < '2006-01-01'
+      AND previous_rental IS NOT NULL
+    ORDER BY days DESC, customer_id, rental_date, rental_id
+    LIMIT 5
+    ```
+
+### fix SAKILA_RENTAL_B_04
+
+- section: RENTAL   tier: Basic
+- title: the busiest weekday
+- why: `LIMIT 1` currently chooses unpredictably when weekday counts tie.
+- request: Show the weekday name with the most rentals and its count. If counts tie, choose the alphabetically first weekday name.
+- sql:
+
+    ```sql
+    SELECT DAYNAME(rental_date) AS day, COUNT(*) AS rentals
+    FROM rental
+    GROUP BY day
+    ORDER BY rentals DESC, day
+    LIMIT 1
+    ```
+
+### fix SAKILA_SCHEMA_I_03
+
+- section: SCHEMA   tier: Intermediate
+- title: the five highest-paying countries
+- why: Equal payment totals leave the order and the fifth country's selection unstable.
+- request: Show the five countries whose customers paid the most, with each country's id, name, number of distinct paying customers and payment total. Order by total descending, breaking ties by country id.
+- sql:
+
+    ```sql
+    SELECT co.country_id, co.country,
+           COUNT(DISTINCT cu.customer_id) AS customers,
+           SUM(p.amount) AS total
+    FROM payment p
+             JOIN customer cu ON cu.customer_id = p.customer_id
+             JOIN address a ON a.address_id = cu.address_id
+             JOIN city ci ON ci.city_id = a.city_id
+             JOIN country co ON co.country_id = ci.country_id
+    GROUP BY co.country_id
+    ORDER BY total DESC, co.country_id
+    LIMIT 5
+    ```
+
+### fix SAKILA_PAYMENT_B_01
+
+- section: PAYMENT   tier: Basic
+- title: payments taken by each staff member
+- why: The request needs only staff ids and aggregates already available in `payment`. Removing the unnecessary join also makes this a single-table Basic exercise in its existing section.
+- request: Group payments by the staff member who took them. Show each staff id, payment count and payment total, ordered by staff id.
+- sql:
+
+    ```sql
+    SELECT staff_id, COUNT(*) AS payments, SUM(amount) AS total
+    FROM payment
+    GROUP BY staff_id
+    ORDER BY staff_id
+    ```
+
+### add SAKILA_SCHEMA_I_14
+
+- section: SCHEMA   tier: Intermediate
+- title: available copies of each film at each store
+- why: The existing all-copies-out exercise does not answer the practical stock question for individual stores. This combines inventory counts with a NULL-aware availability test.
+- request: For every film and store combination with inventory, show the store id, film id, title, total copies and available copies. A copy is available when it has no unreturned rental; order by store id and film id.
+- sql:
+
+    ```sql
+    SELECT i.store_id, f.film_id, f.title,
+           COUNT(*) AS copies,
+           SUM(NOT EXISTS (SELECT 1
+                           FROM rental r
+                           WHERE r.inventory_id = i.inventory_id
+                             AND r.return_date IS NULL)) AS available
+    FROM inventory i
+             JOIN film f ON f.film_id = i.film_id
+    GROUP BY i.store_id, f.film_id
+    ORDER BY i.store_id, f.film_id
+    ```
+
+### add SAKILA_SCHEMA_I_15
+
+- section: SCHEMA   tier: Intermediate
+- title: films and their two language roles
+- why: Neither foreign key from `film` to `language` is exercised. The nullable original language makes the second join meaningfully different.
+- request: List each film's id, title, language and original language. Keep films without a recorded original language, showing NULL for it, and order by film id.
+- sql:
+
+    ```sql
+    SELECT f.film_id, f.title,
+           l.name AS language,
+           ol.name AS original_language
+    FROM film f
+             JOIN language l ON l.language_id = f.language_id
+             LEFT JOIN language ol ON ol.language_id = f.original_language_id
+    ORDER BY f.film_id
+    ```
+
+### add SAKILA_SCHEMA_I_16
+
+- section: SCHEMA   tier: Intermediate
+- title: search text that differs from the film catalogue
+- why: `film_text` has no foreign key, and its update trigger uses comparisons that can miss changes involving NULL descriptions. A reconciliation exercise covers both the trigger-maintained table and MySQL's NULL-safe equality.
+- request: Find films whose search-text row is missing or has a different title or description, and search-text rows with no film. Show the film id and issue, ordered by film id.
+- sql:
+
+    ```sql
+    SELECT f.film_id,
+           CASE
+               WHEN t.film_id IS NULL THEN 'missing search text'
+               ELSE 'different search text'
+               END AS issue
+    FROM film f
+             LEFT JOIN film_text t ON t.film_id = f.film_id
+    WHERE t.film_id IS NULL
+       OR NOT (t.title <=> f.title)
+       OR NOT (t.description <=> f.description)
+    UNION ALL
+    SELECT t.film_id, 'search text without film'
+    FROM film_text t
+             LEFT JOIN film f ON f.film_id = t.film_id
+    WHERE f.film_id IS NULL
+    ORDER BY film_id
+    ```
+
+### add SAKILA_SALES_BY_STORE_A_01
+
+- section: SALES_BY_STORE   tier: Advanced
+- title: each store's share of sales
+- why: This section currently lacks an Advanced exercise. Window aggregates provide a useful comparison while reading the view alone.
+- request: Show each store and manager, its sales, its percentage of all stores' sales rounded to two decimal places, and the average store sales. Order by sales descending, then store and manager; show NULL for the percentage when total sales are zero.
+- sql:
+
+    ```sql
+    SELECT store, manager, total_sales,
+           ROUND(100 * total_sales
+                     / NULLIF(SUM(total_sales) OVER (), 0), 2) AS percentage,
+           ROUND(AVG(total_sales) OVER (), 2) AS average_store_sales
+    FROM sales_by_store
+    ORDER BY total_sales DESC, store, manager
+    ```
+
+### add SAKILA_SCHEMA_I_17
+
+- section: SCHEMA   tier: Intermediate
+- title: ambiguous staff names in the sales view
+- why: The manager-name join in `SAKILA_SALES_BY_STORE_I_02` relies on a data fact that no unique constraint enforces. Guard that assumption with a check rather than replacing the exercise's name-based join.
+- request: Find manager names used by `sales_by_store` that match more than one staff member. Show each ambiguous name and its number of matching staff members, ordered by name; no rows means the name-based join is unambiguous.
+- sql:
+
+    ```sql
+    SELECT CONCAT(s.first_name, ' ', s.last_name) AS manager,
+           COUNT(*) AS staff_members
+    FROM staff s
+    WHERE EXISTS (SELECT 1
+                  FROM sales_by_store v
+                  WHERE v.manager = CONCAT(s.first_name, ' ', s.last_name))
+    GROUP BY CONCAT(s.first_name, ' ', s.last_name)
+    HAVING COUNT(*) > 1
+    ORDER BY manager
+    ```

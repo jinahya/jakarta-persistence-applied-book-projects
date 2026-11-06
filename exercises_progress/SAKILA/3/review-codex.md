@@ -1,0 +1,258 @@
+### fix SAKILA_CUSTOMER_A_02
+
+- section: CUSTOMER   tier: Advanced
+- title: Customers above their store's average
+- why: Filtering before counting omits stores with no customers above average. Customers without payments should contribute zero to the average.
+- request: For each store with customers, show how many customers paid more than that store's average customer, and the average rounded to two decimal places. Include customers with no payments as zero; order by store id.
+- sql:
+
+    ```sql
+    WITH paid AS (SELECT c.customer_id, c.store_id,
+                         COALESCE(SUM(p.amount), 0) AS paid
+                  FROM customer c
+                           LEFT JOIN payment p ON p.customer_id = c.customer_id
+                  GROUP BY c.customer_id, c.store_id)
+    SELECT p1.store_id,
+           SUM(CASE
+                   WHEN p1.paid > (SELECT AVG(p2.paid)
+                                   FROM paid p2
+                                   WHERE p2.store_id = p1.store_id)
+                       THEN 1 ELSE 0
+               END) AS customers,
+           ROUND(AVG(p1.paid), 2) AS average_paid
+    FROM paid p1
+    GROUP BY p1.store_id
+    ORDER BY p1.store_id
+    ```
+
+### fix SAKILA_STAFF_I_01
+
+- section: STAFF   tier: Intermediate
+- title: Rentals handled by every staff member
+- why: The inner join drops staff members who handled no rentals. The projection also exceeds the requested columns.
+- request: Show every staff member's staff id and first name with the number of rentals they handled, including zero, ordered by staff id.
+- sql:
+
+    ```sql
+    SELECT s.staff_id, s.first_name, COUNT(r.rental_id) AS rentals
+    FROM staff s
+             LEFT JOIN rental r ON r.staff_id = s.staff_id
+    GROUP BY s.staff_id
+    ORDER BY s.staff_id
+    ```
+
+### fix SAKILA_STAFF_I_03
+
+- section: STAFF   tier: Intermediate
+- title: Rentals of own-store and other-store copies
+- why: The inner joins omit staff members with no rentals, although the request says “for each staff member.”
+- request: For every staff member, show their staff id, first name, store id, and the counts of rentals they handled for copies at their own store and elsewhere. Include zero counts and order by staff id.
+- sql:
+
+    ```sql
+    SELECT s.staff_id, s.first_name, s.store_id,
+           SUM(CASE WHEN i.store_id = s.store_id THEN 1 ELSE 0 END) AS own_store,
+           SUM(CASE WHEN i.store_id <> s.store_id THEN 1 ELSE 0 END) AS other_store
+    FROM staff s
+             LEFT JOIN rental r ON r.staff_id = s.staff_id
+             LEFT JOIN inventory i ON i.inventory_id = r.inventory_id
+    GROUP BY s.staff_id
+    ORDER BY s.staff_id
+    ```
+
+### fix SAKILA_STORE_A_01
+
+- section: STORE   tier: Advanced
+- title: Films stocked and films exclusive to each store
+- why: The inner join excludes stores with no inventory, contradicting “for each store.” A left join preserves them with both counts zero.
+- request: For every store, show its store id, the number of distinct films it stocks, and how many of those films no other store stocks, ordered by store id.
+- sql:
+
+    ```sql
+    SELECT st.store_id,
+           COUNT(DISTINCT i.film_id) AS films,
+           COUNT(DISTINCT CASE
+                              WHEN NOT EXISTS (SELECT 1
+                                               FROM inventory o
+                                               WHERE o.film_id = i.film_id
+                                                 AND o.store_id <> st.store_id)
+                                  THEN i.film_id
+                          END) AS films_only_here
+    FROM store st
+             LEFT JOIN inventory i ON i.store_id = st.store_id
+    GROUP BY st.store_id
+    ORDER BY st.store_id
+    ```
+
+### fix SAKILA_CUSTOMER_B_02
+
+- section: CUSTOMER   tier: Basic
+- title: Customer counts by registered store
+- why: The request asks for counts grouped by the customer's own `store_id`; joining and returning whole store rows adds unnecessary work and obscures this Basic exercise.
+- request: Group customers by their own store id and show each store id with its customer count, ordered by store id.
+- sql:
+
+    ```sql
+    SELECT store_id, COUNT(*) AS customers
+    FROM customer
+    GROUP BY store_id
+    ORDER BY store_id
+    ```
+
+### fix SAKILA_CUSTOMER_LIST_B_02
+
+- section: CUSTOMER_LIST   tier: Basic
+- title: Customer counts by the view's SID
+- why: The SQL returns store rows instead of the requested `SID` and count. The view already supplies everything needed.
+- request: Show each SID in customer_list with its number of customers, ordered by SID.
+- sql:
+
+    ```sql
+    SELECT SID, COUNT(*) AS customers
+    FROM customer_list
+    GROUP BY SID
+    ORDER BY SID
+    ```
+
+### fix SAKILA_CITY_B_01
+
+- section: CITY   tier: Basic
+- title: Cities beginning with Q
+- why: City names can repeat across countries, so ordering only by name does not determine the order of whole rows.
+- request: Show the whole rows of cities whose name starts with Q, ordered by city name and then city id.
+- sql:
+
+    ```sql
+    SELECT *
+    FROM city
+    WHERE city LIKE 'Q%'
+    ORDER BY city, city_id
+    ```
+
+### fix SAKILA_CITY_I_04
+
+- section: CITY   tier: Intermediate
+- title: Cities with multiple addresses
+- why: Different cities can share both their name and address count. Add the city id as the final tie-breaker and return the requested columns.
+- request: Show each city with more than one address: its city id, name and address count. Order by count descending, then city name and city id.
+- sql:
+
+    ```sql
+    SELECT ci.city_id, ci.city, COUNT(*) AS addresses
+    FROM city ci
+             JOIN address a ON a.city_id = ci.city_id
+    GROUP BY ci.city_id
+    HAVING COUNT(*) > 1
+    ORDER BY addresses DESC, ci.city, ci.city_id
+    ```
+
+### add SAKILA_STAFF_LIST_A_01
+
+- section: STAFF_LIST   tier: Advanced
+- title: Staff serving customers outside their home country
+- why: STAFF_LIST currently has no Advanced exercise. This question uses the view's home country and the rental-to-customer address path.
+- request: Show staff members who handled at least one rental for a customer living outside their home country. Show their ID, name and home country, ordered by ID.
+- sql:
+
+    ```sql
+    SELECT l.ID, l.name, l.country
+    FROM staff_list l
+    WHERE EXISTS (SELECT 1
+                  FROM rental r
+                           JOIN customer cu ON cu.customer_id = r.customer_id
+                           JOIN address a ON a.address_id = cu.address_id
+                           JOIN city ci ON ci.city_id = a.city_id
+                           JOIN country co ON co.country_id = ci.country_id
+                  WHERE r.staff_id = l.ID
+                    AND co.country <> l.country)
+    ORDER BY l.ID
+    ```
+
+### add SAKILA_CUSTOMER_B_06
+
+- section: CUSTOMER   tier: Basic
+- title: Customer emails needing attention
+- why: `email` is nullable, whereas B_03 assumes every customer has an address from which a domain can be extracted. Use this as an empty-result guard for that assumption.
+- request: Show customers whose email is NULL, contains whitespace, or does not have exactly one @ with nonempty parts on both sides, ordered by customer id.
+- sql:
+
+    ```sql
+    SELECT customer_id, first_name, last_name, email
+    FROM customer
+    WHERE email IS NULL
+       OR email NOT LIKE '_%@_%'
+       OR CHAR_LENGTH(email) - CHAR_LENGTH(REPLACE(email, '@', '')) <> 1
+       OR email REGEXP '[[:space:]]'
+    ORDER BY customer_id
+    ```
+
+### add SAKILA_CUSTOMER_I_06
+
+- section: CUSTOMER   tier: Intermediate
+- title: Customers without recorded payments
+- why: Several spending exercises use inner joins and therefore assume every customer has payments; A_03 explicitly describes all 599 customers. This check guards that assumption without rewriting every spending exercise.
+- request: Show customers with no recorded payment, ordered by customer id.
+- sql:
+
+    ```sql
+    SELECT c.customer_id, c.first_name, c.last_name
+    FROM customer c
+    WHERE NOT EXISTS (SELECT 1
+                      FROM payment p
+                      WHERE p.customer_id = c.customer_id)
+    ORDER BY c.customer_id
+    ```
+
+### add SAKILA_COUNTRY_B_04
+
+- section: COUNTRY   tier: Basic
+- title: Duplicate country names
+- why: The DDL does not make country names unique, although B_02 explicitly relies on uniqueness and other exercises use names to break ties. Require this guard to return no rows.
+- request: Show country names assigned to more than one country row, with their counts, ordered by name.
+- sql:
+
+    ```sql
+    SELECT country, COUNT(*) AS countries
+    FROM country
+    GROUP BY country
+    HAVING COUNT(*) > 1
+    ORDER BY country
+    ```
+
+### add SAKILA_CITY_B_04
+
+- section: CITY   tier: Basic
+- title: Duplicate city names within a country
+- why: CITY_I_01 orders by name within Canada, and CUSTOMER_LIST_I_02 identifies cities by country and city names. Neither the DDL nor its indexes enforce uniqueness within a country; this guard should return no rows.
+- request: Show city names occurring more than once within the same country id, with their counts, ordered by country id and city name.
+- sql:
+
+    ```sql
+    SELECT country_id, city, COUNT(*) AS cities
+    FROM city
+    GROUP BY country_id, city
+    HAVING COUNT(*) > 1
+    ORDER BY country_id, city
+    ```
+
+### add SAKILA_CUSTOMER_B_07
+
+- section: CUSTOMER   tier: Basic
+- title: Customers registered during a month
+- why: No current exercise covers `create_date`. A half-open range introduces correct filtering of a DATETIME by calendar month without applying a function to the column.
+- request: Show customers registered during February 2006, with their customer id, names and registration timestamp, ordered by registration timestamp and customer id.
+- sql:
+
+    ```sql
+    SELECT customer_id, first_name, last_name, create_date
+    FROM customer
+    WHERE create_date >= '2006-02-01 00:00:00'
+      AND create_date < '2006-03-01 00:00:00'
+    ORDER BY create_date, customer_id
+    ```
+
+### remove SAKILA_CUSTOMER_LIST_I_03
+
+- section: CUSTOMER_LIST   tier: Intermediate
+- title: Rows whose name differs from the customer's name
+- why: The published view defines `name` using precisely the concatenation this exercise compares against, and both source names are NOT NULL. The query merely checks the view's own definition; two other Intermediate exercises remain in this section.
