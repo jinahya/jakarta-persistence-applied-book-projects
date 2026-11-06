@@ -1,0 +1,446 @@
+Reading additional input from stdin...
+OpenAI Codex v0.166.0
+--------
+workdir: /Users/onacit/gitcl/github.com/jinahya/jakarta-persistence-applied-book/projects/exercises_progress/HOG
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1b056-2b07-79b2-bd1b-d071705a2211
+--------
+user
+You reviewed the exercises in this directory blind (review-codex.md). Claude reviewed them too (review-claude.md).
+Here is where we disagree. For each point, answer in one or two sentences: `agree` (you accept Claude's position) or
+`hold` (you keep yours, and why). Do not run anything; read only this directory. Markdown, nothing else.
+
+1. Tier and section moves (HEAD_I_11 and HEAD_I_08 to Advanced, SCHEMA_A_05 and OFFICE_A_01 to Intermediate,
+   OFFICE_I_03 to SCHEMA). Claude: rejected. The module puts window functions in Intermediate already (HEAD_I_08,
+   I_09, I_10, I_11), and an id names its section and tier, so an exercise cannot move without breaking the id; an
+   exercise that reads a second table in a subquery stays under the table it is about (HEAD_I_03, I_12 join office).
+2. Id as a tie-break after term_start (HEAD_B_10, HEAD_I_08, HEAD_A_05). Claude: rejected; keep the exercises relying
+   on term_start being distinct within a country, and guard that with your add, "Repeated term starts" (accepted, as
+   HOG_HEAD_I_18). Your text fix of HEAD_I_08 (the sets overlap only below 2 * :n terms) is accepted.
+3. Calendar centuries (SCHEMA_I_05, SCHEMA_A_06). Claude: rejected; the module counts a century the way people say
+   "the 1800s", as SCHEMA_A_06 states, and I_05 should say so too, not change.
+4. Remove HEAD_I_09. Claude: keep it; it is the plain top-n per group that HEAD_I_08 builds on.
+5. HEAD_B_04 to INSTR(LOWER(...)). Claude: rejected; the exercise is about LIKE, its ASCII-only case folding and the
+   index a leading wildcard cannot use, and no name holds % or _.
+6. SCHEMA_A_05 to LEFT JOIN, and OFFICE_A_02 (rank titles by length). Claude: rejected; a president with no prime
+   minister cannot reach the top ten, and five offices ranked by title length is not a question a reader asks.
+exec
+/bin/zsh -lc 'cat review-codex.md review-claude.md' in /Users/onacit/gitcl/github.com/jinahya/jakarta-persistence-applied-book/projects/exercises_progress/HOG
+ succeeded in 0ms:
+### fix HOG_HEAD_B_10
+
+- section: HEAD   tier: Basic
+- title: A country's list, ten terms a page
+- why: The DDL does not enforce uniqueness of term_start within a country. Add id to make page boundaries deterministic.
+- request: Show the second page of a country's terms, ten per page, earliest first; order terms starting together by id.
+- sql:
+
+    ```sql
+    SELECT *
+    FROM head
+    WHERE country = :country
+    ORDER BY term_start ASC, id ASC
+    LIMIT 10 OFFSET 10
+    ```
+
+### fix HOG_HEAD_I_11
+
+- section: HEAD   tier: Advanced
+- title: Party share of completed terms, the top three per country
+- why: Window functions belong in Advanced, and tied totals currently make the top three unstable. Guard against a zero total, which the DDL permits.
+- request: For each country, show up to three parties with the most days in completed terms and their percentage of all completed-term days; break ties by party. Treat each stored party value separately and report an undefined percentage as NULL.
+- sql:
+
+    ```sql
+    WITH totals AS (SELECT country,
+                           party,
+                           SUM(julianday(term_end) - julianday(term_start)) AS days
+                    FROM head
+                    WHERE term_end IS NOT NULL
+                    GROUP BY country, party),
+         placed AS (SELECT *,
+                           ROUND(100.0 * days
+                                     / NULLIF(SUM(days) OVER (PARTITION BY country), 0),
+                                 1) AS tenure_share,
+                           ROW_NUMBER() OVER (PARTITION BY country
+                               ORDER BY days DESC, party ASC) AS place
+                    FROM totals)
+    SELECT country, party, tenure_share
+    FROM placed
+    WHERE place <= 3
+    ORDER BY country ASC, place ASC
+    ```
+
+### fix HOG_SCHEMA_I_04
+
+- section: SCHEMA   tier: Intermediate
+- title: Living heads per office
+- why: The inner join omits offices with no living heads. The request asks for every office.
+- request: Show every office with its title and number of living heads, including zero; count a name once within a country.
+- sql:
+
+    ```sql
+    SELECT g.*, COUNT(DISTINCT h.name) AS living
+    FROM office g
+             LEFT JOIN head h ON h.country = g.country
+        AND h.died IS NULL
+    GROUP BY g.country
+    ORDER BY g.country ASC
+    ```
+
+### fix HOG_SCHEMA_I_05
+
+- section: SCHEMA   tier: Intermediate
+- title: Terms per century, side by side
+- why: Calendar centuries begin in years ending in 01. The current ranges also incorrectly include every earlier year in the 18th century and every later year in the 21st.
+- request: For every office, show its title and counts of terms beginning in the 18th through 21st calendar centuries, with zero where none began.
+- sql:
+
+    ```sql
+    SELECT g.*,
+           SUM(CASE WHEN h.term_start >= '1701-01-01'
+                         AND h.term_start < '1801-01-01' THEN 1 ELSE 0 END) AS c18,
+           SUM(CASE WHEN h.term_start >= '1801-01-01'
+                         AND h.term_start < '1901-01-01' THEN 1 ELSE 0 END) AS c19,
+           SUM(CASE WHEN h.term_start >= '1901-01-01'
+                         AND h.term_start < '2001-01-01' THEN 1 ELSE 0 END) AS c20,
+           SUM(CASE WHEN h.term_start >= '2001-01-01'
+                         AND h.term_start < '2101-01-01' THEN 1 ELSE 0 END) AS c21
+    FROM office g
+             LEFT JOIN head h ON h.country = g.country
+    GROUP BY g.country
+    ORDER BY g.country ASC
+    ```
+
+### fix HOG_SCHEMA_A_06
+
+- section: SCHEMA   tier: Advanced
+- title: New heads per century, with a running total
+- why: The current century formula assigns boundary years incorrectly. Correct the explanation as well: 1800 belongs to the 18th century.
+- request: For each office, show how many people first took office in each represented calendar century and the running total through that century; treat a name as one person within a country.
+- sql:
+
+    ```sql
+    WITH firsts AS (SELECT country, name, MIN(term_start) AS first_start
+                    FROM head
+                    GROUP BY country, name),
+         per_century AS (SELECT g.country,
+                                g.head_title,
+                                (CAST(SUBSTR(f.first_start, 1, 4) AS INTEGER) - 1)
+                                    / 100 + 1 AS century,
+                                COUNT(*) AS new_persons
+                         FROM office g
+                                  JOIN firsts f ON f.country = g.country
+                         GROUP BY g.country, g.head_title, century)
+    SELECT country,
+           head_title,
+           century,
+           new_persons,
+           SUM(new_persons) OVER (PARTITION BY country
+               ORDER BY century ROWS UNBOUNDED PRECEDING) AS persons_so_far
+    FROM per_century
+    ORDER BY country ASC, century ASC
+    ```
+
+### fix HOG_HEAD_B_04
+
+- section: HEAD   tier: Basic
+- title: Terms by name
+- why: LIKE interprets percent and underscore in the input as wildcards, although the request describes a literal name fragment. Preserve ASCII case folding while treating the fragment literally.
+- request: Find every term whose name contains my literal text, ignoring case for ASCII letters; list by country, start date and id.
+- sql:
+
+    ```sql
+    SELECT *
+    FROM head
+    WHERE INSTR(LOWER(name), LOWER(:name)) > 0
+    ORDER BY country ASC, term_start ASC, id ASC
+    ```
+
+### fix HOG_HEAD_I_08
+
+- section: HEAD   tier: Advanced
+- title: The first and the latest terms of each country
+- why: Window functions belong in Advanced, and the numbering needs an id tie-breaker. The explanation is also wrong at exactly 2 * :n terms, when the sets do not overlap.
+- request: For each country, show its first :n and latest :n terms, taking :n as a positive integer. Order simultaneous starts by id; label a term 'first' if it belongs to both sets.
+- sql:
+
+    ```sql
+    SELECT *,
+           CASE WHEN first_rn <= :n THEN 'first' ELSE 'latest' END AS which
+    FROM (SELECT h.*,
+                 ROW_NUMBER() OVER (PARTITION BY country
+                     ORDER BY term_start ASC, id ASC) AS first_rn,
+                 ROW_NUMBER() OVER (PARTITION BY country
+                     ORDER BY term_start DESC, id DESC) AS latest_rn
+          FROM head h)
+    WHERE first_rn <= :n
+       OR latest_rn <= :n
+    ORDER BY country ASC, term_start ASC, id ASC
+    ```
+
+### fix HOG_HEAD_A_05
+
+- section: HEAD   tier: Advanced
+- title: Predecessor and successor
+- why: Ordering windows solely by term_start can assign different neighbors to simultaneous starts. The DDL supplies no chronological ordering between such terms, so state an explicit tie convention.
+- request: For an exact name, show every term and the names in the immediately preceding and following recorded terms of that country; order simultaneous starts by id.
+- sql:
+
+    ```sql
+    SELECT *
+    FROM (SELECT h.*,
+                 LAG(name) OVER (PARTITION BY country
+                     ORDER BY term_start ASC, id ASC) AS predecessor,
+                 LEAD(name) OVER (PARTITION BY country
+                     ORDER BY term_start ASC, id ASC) AS successor
+          FROM head h)
+    WHERE name = :name
+    ORDER BY country ASC, term_start ASC, id ASC
+    ```
+
+### fix HOG_SCHEMA_A_05
+
+- section: SCHEMA   tier: Intermediate
+- title: Presidents and the prime ministers of their time
+- why: Inner joins omit presidential terms with no overlapping prime minister. Joins and grouped subqueries place this exercise in Intermediate.
+- request: Show the ten presidential terms overlapping the most distinct prime ministers, counting a name once per country and including zero matches. Count shared boundary days as overlap, treat open ends as '9999-12-31', and break ties by start date, country and id.
+- sql:
+
+    ```sql
+    WITH matches AS (SELECT DISTINCT p.id, m.country, m.name
+                     FROM head p
+                              JOIN office pg ON pg.country = p.country
+                         AND pg.head_kind = 'PRESIDENT'
+                              JOIN head m
+                                   ON m.term_start <= COALESCE(p.term_end, '9999-12-31')
+                         AND COALESCE(m.term_end, '9999-12-31') >= p.term_start
+                              JOIN office mg ON mg.country = m.country
+                         AND mg.head_kind = 'PRIME_MINISTER')
+    SELECT p.*, COUNT(m.name) AS prime_ministers
+    FROM head p
+             JOIN office pg ON pg.country = p.country
+        AND pg.head_kind = 'PRESIDENT'
+             LEFT JOIN matches m ON m.id = p.id
+    GROUP BY p.id
+    ORDER BY prime_ministers DESC, p.term_start ASC, p.country ASC, p.id ASC
+    LIMIT 10
+    ```
+
+### fix HOG_OFFICE_I_03
+
+- section: SCHEMA   tier: Intermediate
+- title: Offices without an incumbent
+- why: This exercise reads both tables, so the conventions place it in SCHEMA. Describe the recorded open terms without assuming the snapshot establishes who holds office today.
+- request: List offices with no recorded term whose end is NULL, by country code.
+- sql:
+
+    ```sql
+    SELECT g.*
+    FROM office g
+    WHERE NOT EXISTS (SELECT 1
+                      FROM head h
+                      WHERE h.country = g.country
+                        AND h.term_end IS NULL)
+    ORDER BY g.country ASC
+    ```
+
+### fix HOG_OFFICE_A_01
+
+- section: OFFICE   tier: Intermediate
+- title: What number counts, in a phrase
+- why: This uses a derived-table subquery, not an Advanced feature. Keep its id when moving it to Intermediate, and describe the extraction without assuming particular stored sentences.
+- request: Show each office with the part of its numbering description before the first comma or semicolon, or the whole description if neither occurs.
+- sql:
+
+    ```sql
+    SELECT *,
+           CASE
+               WHEN comma > 0 AND (semicolon = 0 OR comma < semicolon)
+                   THEN SUBSTR(numbering, 1, comma - 1)
+               WHEN semicolon > 0 THEN SUBSTR(numbering, 1, semicolon - 1)
+               ELSE numbering
+               END AS counts
+    FROM (SELECT *,
+                 INSTR(numbering, ',') AS comma,
+                 INSTR(numbering, ';') AS semicolon
+          FROM office)
+    ORDER BY country ASC
+    ```
+
+### add HOG_HEAD_I_18
+
+- section: HEAD   tier: Intermediate
+- title: Repeated term starts
+- why: The DDL explicitly leaves the intended `(country, term_start)` identity unconstrained. This audit exposes records that undermine chronological exercises.
+- request: Find country and start-date combinations recorded more than once, with their row counts, by country and date.
+- sql:
+
+    ```sql
+    SELECT country, term_start, COUNT(*) AS terms
+    FROM head
+    GROUP BY country, term_start
+    HAVING COUNT(*) > 1
+    ORDER BY country ASC, term_start ASC
+    ```
+
+### add HOG_HEAD_B_12
+
+- section: HEAD   tier: Basic
+- title: Look up an official number
+- why: No existing exercise retrieves terms by number. Returning every match teaches why the indexed `(country, number)` pair is not a unique key.
+- request: Show every term carrying a given number in a given country, earliest first.
+- sql:
+
+    ```sql
+    SELECT *
+    FROM head
+    WHERE country = :country
+      AND number = :number
+    ORDER BY term_start ASC, id ASC
+    ```
+
+### add HOG_OFFICE_A_02
+
+- section: OFFICE   tier: Advanced
+- title: Rank titles by character count
+- why: This supplies a genuine window-function exercise for OFFICE after moving its current Advanced exercise. Character counts are useful when reviewing localized labels.
+- request: Rank office titles from most characters to fewest, giving equal lengths the same rank; list tied offices by country.
+- sql:
+
+    ```sql
+    SELECT country,
+           head_title,
+           LENGTH(head_title) AS characters,
+           DENSE_RANK() OVER (ORDER BY LENGTH(head_title) DESC) AS place
+    FROM office
+    ORDER BY place ASC, country ASC
+    ```
+
+### remove HOG_HEAD_I_09
+
+- section: HEAD   tier: Intermediate
+- title: The first two terms of each country
+- why: This repeats the first-term selection already covered by HOG_HEAD_I_08 with :n = 2. Retire the id and retain the more general exercise.# HOG — Claude's review (written before reading codex.md)
+
+Inputs: 60 live exercises (HEAD 33, OFFICE 8, SCHEMA 19), 6 retired (HEAD_B_07, HEAD_I_02, HEAD_I_07, SCHEMA_B_02,
+SCHEMA_B_04, SCHEMA_A_01), `ddl/schema.sql`. sqlite-jdbc 3.53, so `GROUP_CONCAT(... ORDER BY ...)` (HEAD_A_07,
+OFFICE_I_01) is fine.
+
+### fix HOG_HEAD_B_01
+- section: HEAD   tier: Basic
+- title: Who held office on a day
+- why: `term_start <= :date AND term_end >= :date` matches both heads on a handover day (one term's end is the next
+  one's start, which the data does; HEAD_I_16 and SCHEMA_A_05 say so), so "each country's head" can give two rows. Same
+  question; the request should say what a handover day gives.
+- request: A reader gives a date and wants each country's head on that day. A country whose office was vacant is absent;
+  on a handover day, the day one term ends and the next begins, both heads show.
+- sql: unchanged.
+
+### fix HOG_SCHEMA_A_02
+- section: SCHEMA   tier: Advanced
+- title: Every office on a day, vacant or not
+- why: `g.*, COALESCE(h.name, '(vacant)') AS name, h.*` gives two columns called `name` (and two `country`), the first
+  of which the request calls 'vacant' while the SQL writes '(vacant)'. Name the columns; the handover day as in B_01.
+- request: A reader gives a date and wants every office with its head on that day, or '(vacant)' where the office was
+  empty or the list had not yet begun; on a handover day both heads show.
+- sql:
+    SELECT g.country, g.head_title, COALESCE(h.name, '(vacant)') AS name, h.number, h.term_start, h.term_end
+    FROM office g
+             LEFT JOIN head h ON h.country = g.country
+        AND h.term_start <= :date
+        AND (h.term_end IS NULL OR h.term_end >= :date)
+    ORDER BY g.country ASC, h.term_start ASC NULLS FIRST
+
+### fix HOG_SCHEMA_A_03
+- section: SCHEMA   tier: Advanced
+- title: The incumbents' contemporaries
+- why: `i.*, o.*, g.*` repeats every column of head twice (country, name, ...), so the pair cannot be read without
+  knowing the column order; name the incumbent's and the other's columns.
+- sql:
+    SELECT i.country    AS country,
+           i.name       AS incumbent,
+           i.term_start AS took_office,
+           o.country    AS other_country,
+           g.head_title AS other_title,
+           o.name       AS other_head
+    FROM head i
+             JOIN head o ON o.country <> i.country
+        AND o.term_start <= i.term_start
+        AND (o.term_end IS NULL OR o.term_end >= i.term_start)
+             JOIN office g ON g.country = o.country
+    WHERE i.term_end IS NULL
+    ORDER BY i.country ASC, o.country ASC, o.term_start ASC
+
+### fix HOG_HEAD_I_11
+- section: HEAD   tier: Intermediate
+- title: Party share of completed terms, the top three per country
+- why: ROW_NUMBER over the summed days has no tie-break, and neither has the outer ORDER BY; two parties with the same
+  days would come in any order, and the third place could change between runs. Add `party ASC` to both.
+
+### fix (format) HOG_HEAD_I_01, HOG_HEAD_I_08, HOG_HEAD_A_01, HOG_HEAD_A_02, HOG_HEAD_A_03, HOG_HEAD_A_05
+- why: a formatter left `date ('now')` with a space, and two window columns on one line (`... AS first_rn, ROW_NUMBER()
+  ...`), unlike every other exercise. One column per line, `date('now')`. The statements do not change.
+
+### add HOG_HEAD_B_12
+- section: HEAD   tier: Basic
+- title: Terms that end after the head died
+- why: a data check the DDL invites: died is a year and term_end a date, and a term cannot end in a year after its
+  head's death. Basic: one table, a filter.
+- request: A term cannot outlast its head. List the terms whose end falls in a year after the head's death, by country,
+  then in date order; the check passes when nothing comes back.
+- sql:
+    SELECT *
+    FROM head
+    WHERE died IS NOT NULL
+      AND CAST(SUBSTR(term_end, 1, 4) AS INTEGER) > died
+    ORDER BY country ASC, term_start ASC
+
+### add HOG_HEAD_I_18
+- section: HEAD   tier: Intermediate
+- title: More than one incumbent
+- why: OFFICE_I_03 checks an office with no open term; nothing checks the other side, two open terms in one country,
+  which would break every "incumbent" exercise. GROUP BY with HAVING.
+- request: A country has one head in office now, at most. List the countries with more than one term that has not
+  ended, and how many; the check passes when nothing comes back.
+- sql:
+    SELECT country, COUNT(*) AS open_terms
+    FROM head
+    WHERE term_end IS NULL
+    GROUP BY country
+    HAVING COUNT(*) > 1
+    ORDER BY country ASC
+
+No removes: HEAD_I_09 (the first two terms) is HEAD_I_08 with :n = 2 and the first half only, but it is the plain
+top-n-per-group that I_08 builds on.
+
+codex
+1. **agree** — The module’s existing progression supports window functions at Intermediate, and the identifiers encode placement. Reading another table in a subquery does not by itself justify moving OFFICE_I_03 to SCHEMA.
+
+2. **hold** — “Repeated term starts” detects duplicate dates but does not enforce uniqueness or make pagination and window ordering deterministic when duplicates exist. An explicit `id` tie-break remains useful unless distinct starts are stated as a prerequisite.
+
+3. **agree** — Keep the module’s stated “1800s” convention and make SCHEMA_I_05 explicit about it. Its first and last date buckets should still have both bounds so they count only the requested centuries.
+
+4. **agree** — HEAD_I_09 provides a simpler top-n-per-group exercise that supports learning HEAD_I_08; overlap alone does not justify removal.
+
+5. **agree** — Retain `LIKE` because its matching behavior and leading-wildcard indexing limitation are the teaching goals. My literal-substring replacement changed that focus unnecessarily.
+
+6. **agree** — For the supplied data, zero-match presidents do not affect the top ten, so the LEFT JOIN adds no useful result. Ranking five office titles by length is also too contrived to justify OFFICE_A_02.
+tokens used
+11,885
+1. **agree** — The module’s existing progression supports window functions at Intermediate, and the identifiers encode placement. Reading another table in a subquery does not by itself justify moving OFFICE_I_03 to SCHEMA.
+
+2. **hold** — “Repeated term starts” detects duplicate dates but does not enforce uniqueness or make pagination and window ordering deterministic when duplicates exist. An explicit `id` tie-break remains useful unless distinct starts are stated as a prerequisite.
+
+3. **agree** — Keep the module’s stated “1800s” convention and make SCHEMA_I_05 explicit about it. Its first and last date buckets should still have both bounds so they count only the requested centuries.
+
+4. **agree** — HEAD_I_09 provides a simpler top-n-per-group exercise that supports learning HEAD_I_08; overlap alone does not justify removal.
+
+5. **agree** — Retain `LIKE` because its matching behavior and leading-wildcard indexing limitation are the teaching goals. My literal-substring replacement changed that focus unnecessarily.
+
+6. **agree** — For the supplied data, zero-match presidents do not affect the top ten, so the LEFT JOIN adds no useful result. Ranking five office titles by length is also too contrived to justify OFFICE_A_02.

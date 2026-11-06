@@ -1,0 +1,1427 @@
+= Exercises
+:toc: left
+:toclevels: 3
+
+The exercises on `src/main/resources/heads_of_governments.sqlite3`: a section for each table, with a section for each level, and, at the end, a section for the schema as a whole.
+Each exercise states the request it answers; the SQL that answers it is in the `.sql` file, under the same id.
+The ids are registered in `EXERCISES.yaml`.
+
+Parameters are bind variables (`:name`); the `sqlite3` shell binds one with `.parameter set :name 'value'`, and an IDE prompts for them when a statement runs.
+An exercise with a parameter, or one that measures to `date('now')`, shows no output, since what it gives back depends on the value or the day.
+
+Run a file as a whole:
+
+[source,sh]
+----
+sqlite3 -readonly src/main/resources/heads_of_governments.sqlite3 < src/test/sql-exercises/<section>/<NN>_<level>.sql
+----
+
+== head
+
+The `head` table: a row per term of a head of government.
+
+=== Basic
+
+[[HOG_HEAD_B_01]]
+==== HOG_HEAD_B_01: Who held office on a day
+
+A reader gives a date and wants each country's head on that day.
+A country whose office was vacant is absent.
+
+.`head/01_basic.sql`, HOG_HEAD_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM head
+WHERE term_start <= :date
+  AND (term_end IS NULL OR term_end >= :date)
+ORDER BY country ASC
+----
+
+====
+
+[[HOG_HEAD_B_02]]
+==== HOG_HEAD_B_02: One country's list
+
+A reader wants a country's heads, first to latest, as the source lists them.
+
+.`head/01_basic.sql`, HOG_HEAD_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM head
+WHERE country = :country
+ORDER BY term_start ASC
+----
+
+====
+
+[[HOG_HEAD_B_03]]
+==== HOG_HEAD_B_03: The incumbents
+
+The dashboard shows who is in office now, per country, and since when.
+
+.`head/01_basic.sql`, HOG_HEAD_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM head
+WHERE term_end IS NULL
+ORDER BY country ASC
+----
+
+
+====
+
+[[HOG_HEAD_B_04]]
+==== HOG_HEAD_B_04: Terms by name
+
+A reader types part of a name and wants every term of anyone matching it.
+LIKE folds case for ASCII letters only, so 'churchill' finds Churchill and '吉田' finds 吉田茂; the index on name does not help a leading wildcard.
+
+.`head/01_basic.sql`, HOG_HEAD_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM head
+WHERE name LIKE '%' || :name || '%'
+ORDER BY country ASC, term_start ASC
+----
+
+====
+
+[[HOG_HEAD_B_05]]
+==== HOG_HEAD_B_05: Terms that began in a year
+
+A timeline wants every term that began in a given year, in any country, in date order.
+
+.`head/01_basic.sql`, HOG_HEAD_B_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM head
+WHERE term_start BETWEEN :year || '-01-01' AND :year || '-12-31'
+ORDER BY term_start ASC, country ASC
+----
+
+====
+
+[[HOG_HEAD_B_06]]
+==== HOG_HEAD_B_06: The oldest living heads
+
+The ten earliest-born heads still living, in any country, oldest first.
+A person with several terms appears once; at the same year of birth, by country, then by name.
+
+.`head/01_basic.sql`, HOG_HEAD_B_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DISTINCT country, name, born
+FROM head
+WHERE died IS NULL
+ORDER BY born ASC, country ASC, name ASC
+LIMIT 10
+----
+
+
+====
+
+[[HOG_HEAD_B_08]]
+==== HOG_HEAD_B_08: Heads who lived past ninety-two
+
+The heads whose year of death less their year of birth is 93 or more, once per person, the greatest first and, at a tie, by country, then by name. born and died are years, so the age is as fine as the data allows and may be a year too high.
+
+.`head/01_basic.sql`, HOG_HEAD_B_08
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DISTINCT country, name, born, died, died - born AS age
+FROM head
+WHERE died - born >= 93
+ORDER BY age DESC, country ASC, name ASC
+----
+
+
+====
+
+[[HOG_HEAD_B_09]]
+==== HOG_HEAD_B_09: The ten latest terms
+
+A news page lists the ten terms that began most recently, in any country, the latest first; on the same day, by country.
+
+.`head/01_basic.sql`, HOG_HEAD_B_09
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM head
+ORDER BY term_start DESC, country ASC
+LIMIT 10
+----
+
+
+====
+
+[[HOG_HEAD_B_10]]
+==== HOG_HEAD_B_10: A country's list, ten terms a page
+
+A reader pages through a country's list ten terms at a time, first to latest, and asks for the second page.
+term_start is distinct within a country, so the order, and with it each page, is fixed.
+
+.`head/01_basic.sql`, HOG_HEAD_B_10
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM head
+WHERE country = :country
+ORDER BY term_start ASC
+LIMIT 10 OFFSET 10
+----
+
+====
+
+[[HOG_HEAD_B_11]]
+==== HOG_HEAD_B_11: Heads born in the 1940s, the living first
+
+The heads born from 1940 to 1949, once per person: the living first, then the dead, the latest death first; then by year of birth, by country and by name.
+died is NULL for the living, and DESC alone would put them last.
+
+.`head/01_basic.sql`, HOG_HEAD_B_11
+[%collapsible]
+====
+[source,sql]
+----
+SELECT DISTINCT country, name, born, died
+FROM head
+WHERE born BETWEEN 1940 AND 1949
+ORDER BY died DESC NULLS FIRST, born ASC, country ASC, name ASC
+----
+
+
+====
+
+=== Intermediate
+
+[[HOG_HEAD_I_01]]
+==== HOG_HEAD_I_01: The longest terms of a country
+
+For one country, each term with its length in days, longest first; the incumbent's term runs to today.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *,
+       CAST(julianday(COALESCE(term_end, date ('now'))) - julianday(term_start) AS INTEGER) AS days
+FROM head
+WHERE country = :country
+ORDER BY days DESC, term_start ASC
+----
+
+====
+
+[[HOG_HEAD_I_03]]
+==== HOG_HEAD_I_03: Age on taking office
+
+Per country, the youngest, the oldest and the average age at which a term began, in whole years of the calendar (the year of term_start less the year of birth; born is a year, so that is as fine as the data allows).
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*,
+       MIN(CAST(SUBSTR(h.term_start, 1, 4) AS INTEGER) - h.born)           AS youngest,
+       MAX(CAST(SUBSTR(h.term_start, 1, 4) AS INTEGER) - h.born)           AS oldest,
+       ROUND(AVG(CAST(SUBSTR(h.term_start, 1, 4) AS INTEGER) - h.born), 1) AS average
+FROM head h
+         JOIN office g ON g.country = h.country
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_HEAD_I_04]]
+==== HOG_HEAD_I_04: Terms per party
+
+For one country, each party with how many terms it held and how many different persons, most terms first.
+A party written as a succession ('RPR/UMP') counts as its own value.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT party, COUNT(*) AS terms, COUNT(DISTINCT name) AS persons
+FROM head
+WHERE country = :country
+GROUP BY party
+ORDER BY terms DESC, party ASC
+----
+
+====
+
+[[HOG_HEAD_I_05]]
+==== HOG_HEAD_I_05: Living former heads
+
+Per country, the former heads still living, with the day their last term ended, most recent first.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, name, born, MAX(term_end) AS last_term_end
+FROM head
+WHERE died IS NULL
+GROUP BY country, name
+HAVING MAX(term_end IS NULL) = 0
+ORDER BY country ASC, last_term_end DESC NULLS LAST
+----
+
+
+30 rows; the first 10.
+
+====
+
+[[HOG_HEAD_I_06]]
+==== HOG_HEAD_I_06: Terms begun per decade
+
+Across all countries, how many terms began in each decade, with the countries that had one.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT SUBSTR(term_start, 1, 3) || '0s' AS decade,
+       COUNT(*)                         AS terms,
+       GROUP_CONCAT(DISTINCT country)   AS countries
+FROM head
+GROUP BY decade
+ORDER BY decade ASC
+----
+
+
+30 rows; the first 10.
+
+====
+
+[[HOG_HEAD_I_08]]
+==== HOG_HEAD_I_08: The first and the latest terms of each country
+
+Per country, its first :n terms and its most recent :n, each row saying which it is.
+A row is 'first' when it is among the first :n, so with a country of 2 * :n terms or fewer the two sets overlap and 'first' wins.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_08
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *,
+       CASE WHEN first_rn <= :n THEN 'first' ELSE 'latest' END AS which
+FROM (SELECT h.*,
+             ROW_NUMBER() OVER (PARTITION BY country ORDER BY term_start ASC)  AS first_rn, ROW_NUMBER() OVER (PARTITION BY country ORDER BY term_start DESC) AS latest_rn
+      FROM head AS h)
+WHERE first_rn <= :n
+   OR latest_rn <= :n
+ORDER BY country ASC, term_start ASC
+----
+
+====
+
+[[HOG_HEAD_I_09]]
+==== HOG_HEAD_I_09: The first two terms of each country
+
+Per country, its first two terms, the earlier first.
+Terms, not persons: a head whose first two terms were consecutive appears twice. term_start is NOT NULL and distinct within a country, so the numbering has no ties.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_09
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM (SELECT h.*, ROW_NUMBER() OVER (PARTITION BY country ORDER BY term_start ASC) AS first_rn
+      FROM head AS h)
+WHERE first_rn <= 2
+ORDER BY country ASC, term_start ASC
+----
+
+
+====
+
+[[HOG_HEAD_I_10]]
+==== HOG_HEAD_I_10: Two or more terms, the top three per country
+
+Per country, up to three heads with two or more terms, most terms first and, at a tie, the earlier first term first; a name is taken as one person.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_10
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, name, terms
+FROM (SELECT country,
+             name,
+             COUNT(*) AS  terms,
+             ROW_NUMBER() OVER (PARTITION BY country ORDER BY COUNT(*) DESC, MIN(term_start) ASC) AS place
+      FROM head
+      GROUP BY country, name
+      HAVING COUNT(*) >= 2)
+WHERE place <= 3
+ORDER BY country ASC, place ASC
+----
+
+
+====
+
+[[HOG_HEAD_I_11]]
+==== HOG_HEAD_I_11: Party share of completed terms, the top three per country
+
+Per country, over the terms that have ended, each party's share of the days in office as a percentage of that country's total (its tenure share), the top three parties; a succession ('A/B') counts as a party of its own.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_11
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, party, tenure_share
+FROM (SELECT country,
+             party,
+             ROUND(100.0 * SUM(julianday(term_end) - julianday(term_start))
+                       / SUM(SUM(julianday(term_end) - julianday(term_start))) OVER (PARTITION BY country),
+                   1) AS  tenure_share,
+             ROW_NUMBER() OVER (PARTITION BY country
+                 ORDER BY SUM(julianday(term_end) - julianday(term_start)) DESC)             AS place
+      FROM head
+      WHERE term_end IS NOT NULL
+      GROUP BY country, party)
+WHERE place <= 3
+ORDER BY country ASC, tenure_share DESC
+----
+
+
+====
+
+[[HOG_HEAD_I_12]]
+==== HOG_HEAD_I_12: Terms that ended in the year the head died
+
+Per country, how many terms ended in the same year their head died, by country code.
+It catches the heads who died in office, but also those who left office and died later that year; died is a year, so the data cannot tell the two apart.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_12
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, COUNT(*) AS terms
+FROM head h
+         JOIN office g ON g.country = h.country
+WHERE h.died = CAST(SUBSTR(h.term_end, 1, 4) AS INTEGER)
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_HEAD_I_13]]
+==== HOG_HEAD_I_13: Terms begun per day of the week
+
+Across all countries, how many terms began on each day of the week, Sunday first. strftime('%w', ...) gives the day as a digit, Sunday as 0; a CASE turns it into a name.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_13
+[%collapsible]
+====
+[source,sql]
+----
+SELECT CASE strftime('%w', term_start)
+           WHEN '0' THEN 'Sunday'
+           WHEN '1' THEN 'Monday'
+           WHEN '2' THEN 'Tuesday'
+           WHEN '3' THEN 'Wednesday'
+           WHEN '4' THEN 'Thursday'
+           WHEN '5' THEN 'Friday'
+           ELSE 'Saturday'
+           END  AS weekday,
+       COUNT(*) AS terms
+FROM head
+GROUP BY strftime('%w', term_start)
+ORDER BY strftime('%w', term_start) ASC
+----
+
+
+====
+
+[[HOG_HEAD_I_14]]
+==== HOG_HEAD_I_14: Years lived after leaving office
+
+For the heads who have died, the years between the end of their last term and their death, the ten longest first.
+A name is taken as one person within a country; at a tie, by country, then by name.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_14
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country,
+       name,
+       MAX(term_end)                                       AS last_term_end,
+       died,
+       died - CAST(SUBSTR(MAX(term_end), 1, 4) AS INTEGER) AS years_after
+FROM head
+WHERE died IS NOT NULL
+GROUP BY country, name, died
+ORDER BY years_after DESC NULLS LAST, country ASC, name ASC
+LIMIT 10
+----
+
+
+====
+
+[[HOG_HEAD_I_15]]
+==== HOG_HEAD_I_15: Years with a new term in four or more countries
+
+The years in which a term began in four or more of the countries, with how many terms began and in how many countries, oldest first.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_15
+[%collapsible]
+====
+[source,sql]
+----
+SELECT SUBSTR(term_start, 1, 4) AS year, COUNT(*) AS terms, COUNT(DISTINCT country) AS countries
+FROM head
+GROUP BY SUBSTR(term_start, 1, 4)
+HAVING COUNT(DISTINCT country) >= 4
+ORDER BY year ASC
+----
+
+
+====
+
+[[HOG_HEAD_I_16]]
+==== HOG_HEAD_I_16: Overlapping terms in a country
+
+Within a country, a term should not begin before the one before it has ended.
+List each pair of terms of a country where the later begins before the earlier ends, an open term running to '9999-12-31', by country, then by the earlier term; the check passes when nothing comes back.
+A handover day, the end of one term and the start of the next, is not an overlap.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_16
+[%collapsible]
+====
+[source,sql]
+----
+SELECT a.*, b.id AS later_id, b.name AS later_name, b.term_start AS later_term_start
+FROM head a
+         JOIN head b ON b.country = a.country
+    AND b.term_start > a.term_start
+    AND b.term_start < COALESCE(a.term_end, '9999-12-31')
+ORDER BY a.country ASC, a.term_start ASC, b.term_start ASC
+----
+
+
+====
+
+[[HOG_HEAD_I_17]]
+==== HOG_HEAD_I_17: Terms begun fifteen years younger than the country's average
+
+The terms whose head, in years of the calendar, was fifteen or more years younger than the average age at which that country's terms began, by country, then in date order.
+A correlated subquery gives each term its own country's average.
+
+.`head/02_intermediate.sql`, HOG_HEAD_I_17
+[%collapsible]
+====
+[source,sql]
+----
+SELECT h.*, CAST(SUBSTR(h.term_start, 1, 4) AS INTEGER) - h.born AS age
+FROM head h
+WHERE CAST(SUBSTR(h.term_start, 1, 4) AS INTEGER) - h.born
+          <= (SELECT AVG(CAST(SUBSTR(s.term_start, 1, 4) AS INTEGER) - s.born)
+              FROM head s
+              WHERE s.country = h.country) - 15
+ORDER BY h.country ASC, h.term_start ASC
+----
+
+
+====
+
+=== Advanced
+
+[[HOG_HEAD_A_01]]
+==== HOG_HEAD_A_01: Vacancies
+
+Per country, each gap of more than a day between a term's end and the next term's start, with its length; a day between is only how some sources write a succession, so it does not count.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *,
+       CAST(julianday(term_start) - julianday(previous_term_end) AS INTEGER) - 1 AS days_vacant
+FROM (SELECT h.*,
+             LAG(name) OVER (PARTITION BY country ORDER BY term_start)     AS previous_name, LAG(term_end) OVER (PARTITION BY country ORDER BY term_start) AS previous_term_end
+      FROM head AS h)
+WHERE julianday(term_start) - julianday(previous_term_end) > 1
+ORDER BY country ASC, term_start ASC
+----
+
+
+61 rows; the first 10.
+
+====
+
+[[HOG_HEAD_A_02]]
+==== HOG_HEAD_A_02: Longest in office
+
+Per country, the person with the most days in office over all their terms, counting an open term to today; ties share the place.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, name, terms, days
+FROM (SELECT country,
+             name,
+             COUNT(*)                                                                                  AS terms,
+             CAST(SUM(julianday(COALESCE(term_end, date ('now'))) - julianday(term_start)) AS INTEGER) AS days,
+             RANK()                                                                                       OVER (PARTITION BY country
+                 ORDER BY SUM(julianday(COALESCE(term_end, date('now'))) - julianday(term_start)) DESC) AS place
+      FROM head
+      GROUP BY country, name)
+WHERE place = 1
+ORDER BY country ASC
+----
+
+====
+
+[[HOG_HEAD_A_03]]
+==== HOG_HEAD_A_03: The longest run of one party
+
+Per country, the longest unbroken run of consecutive terms held by the same party, with when it began and ended; a run is counted in terms, not days, and a succession ('UNR/UDR') is a party of its own.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_03
+[%collapsible]
+====
+[source,sql]
+----
+WITH ordered AS (SELECT country,
+                        party,
+                        term_start,
+                        term_end,
+                        ROW_NUMBER() OVER (PARTITION BY country ORDER BY term_start)        AS seq, ROW_NUMBER() OVER (PARTITION BY country, party ORDER BY term_start) AS seq_in_party
+                 FROM head),
+     runs AS (SELECT country,
+                     party,
+                     COUNT(*)                              AS terms,
+                     MIN(term_start)                       AS since,
+                     MAX(COALESCE(term_end, date ('now'))) AS until
+              FROM ordered
+              GROUP BY country, party, seq - seq_in_party),
+     placed AS (SELECT *, RANK() OVER (PARTITION BY country ORDER BY terms DESC, since ASC) AS place
+                FROM runs)
+SELECT country, party, terms, since, until
+FROM placed
+WHERE place = 1
+ORDER BY country ASC
+----
+
+
+====
+
+[[HOG_HEAD_A_04]]
+==== HOG_HEAD_A_04: Every party of a head, one per row
+
+party may be a succession, 'A/B', when the party was renamed or changed under the head.
+Give the heads whose party is one, with each party on its own row and its position in the succession.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_04
+[%collapsible]
+====
+[source,sql]
+----
+WITH RECURSIVE parts(id, country, name, term_start, position, party, rest) AS
+                   (SELECT id, country, name, term_start, 0, NULL, party || '/'
+                    FROM head
+                    WHERE party LIKE '%/%'
+                    UNION ALL
+                    SELECT id,
+                           country,
+                           name,
+                           term_start,
+                           position + 1,
+                           SUBSTR(rest, 1, INSTR(rest, '/') - 1),
+                           SUBSTR(rest, INSTR(rest, '/') + 1)
+                    FROM parts
+                    WHERE rest <> '')
+SELECT country, name, term_start, position, party
+FROM parts
+WHERE position > 0
+ORDER BY country ASC, term_start ASC, position ASC
+----
+
+
+43 rows; the first 10.
+
+====
+
+[[HOG_HEAD_A_05]]
+==== HOG_HEAD_A_05: Predecessor and successor
+
+For a person named exactly, each of their terms with who held the office immediately before and after it in that country; the incumbent has no successor.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM (SELECT h.*,
+             LAG(name) OVER (PARTITION BY country ORDER BY term_start)  AS predecessor, LEAD(name) OVER (PARTITION BY country ORDER BY term_start) AS successor
+      FROM head AS h)
+WHERE name = :name
+ORDER BY country ASC, term_start ASC
+----
+
+====
+
+[[HOG_HEAD_A_06]]
+==== HOG_HEAD_A_06: How often a new head brings a new party
+
+Per country, over the successions where the head changed (not a head following themselves), how many also changed the party, and that as a percentage, by country code.
+LAG gives the previous term's name and party; a succession ('A/B') counts as a party of its own.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*,
+       COUNT(*)                                                      AS successions,
+       SUM(h.party <> h.previous_party)                              AS party_changes,
+       ROUND(100.0 * SUM(h.party <> h.previous_party) / COUNT(*), 1) AS change_share
+FROM (SELECT country,
+             name,
+             party,
+             LAG(name) OVER (PARTITION BY country ORDER BY term_start)  AS previous_name,
+             LAG(party) OVER (PARTITION BY country ORDER BY term_start) AS previous_party
+      FROM head) h
+         JOIN office g ON g.country = h.country
+WHERE h.previous_name IS NOT NULL
+  AND h.name <> h.previous_name
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_HEAD_A_07]]
+==== HOG_HEAD_A_07: Comebacks
+
+A stint is an unbroken run of terms by one person; a head who left and came back has more than one.
+Give the heads with three stints or more, with the year each stint began, most stints first and, at a tie, by country, then by the first term.
+A term starts a stint when the term before it in that country was someone else's.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_07
+[%collapsible]
+====
+[source,sql]
+----
+WITH marked AS (SELECT country,
+                       name,
+                       term_start,
+                       LAG(name) OVER (PARTITION BY country ORDER BY term_start) AS previous_name
+                FROM head)
+SELECT country,
+       name,
+       COUNT(*)                                                         AS stints,
+       GROUP_CONCAT(SUBSTR(term_start, 1, 4), ', ' ORDER BY term_start) AS stint_years
+FROM marked
+WHERE previous_name IS NULL
+   OR previous_name <> name
+GROUP BY country, name
+HAVING COUNT(*) >= 3
+ORDER BY stints DESC, country ASC, MIN(term_start) ASC
+----
+
+
+====
+
+[[HOG_HEAD_A_08]]
+==== HOG_HEAD_A_08: Living heads who outlived their successor
+
+The terms of heads still living whose immediate successor, someone else, has died, with the successor and the year of their death, by country, then by the term.
+died is NULL for the living, so the test is IS NULL on the head and IS NOT NULL on the successor; comparing the two years would give NULL, and no row, for exactly these heads.
+
+.`head/03_advanced.sql`, HOG_HEAD_A_08
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, number, name, term_start, term_end, successor, successor_died
+FROM (SELECT h.*,
+             LEAD(name) OVER (PARTITION BY country ORDER BY term_start) AS successor,
+             LEAD(died) OVER (PARTITION BY country ORDER BY term_start) AS successor_died
+      FROM head AS h)
+WHERE died IS NULL
+  AND successor <> name
+  AND successor_died IS NOT NULL
+ORDER BY country ASC, term_start ASC
+----
+
+
+====
+
+== office
+
+The `office` table: a row per country's office.
+
+=== Basic
+
+[[HOG_OFFICE_B_01]]
+==== HOG_OFFICE_B_01: An office by country
+
+A reader has a country code, typed in whatever case, and wants that office.
+
+.`office/01_basic.sql`, HOG_OFFICE_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM office
+WHERE country = UPPER(:country)
+----
+
+====
+
+[[HOG_OFFICE_B_02]]
+==== HOG_OFFICE_B_02: The offices
+
+The front page lists every office with the title of its head, by country code.
+
+.`office/01_basic.sql`, HOG_OFFICE_B_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM office
+ORDER BY country ASC
+----
+
+
+====
+
+[[HOG_OFFICE_B_03]]
+==== HOG_OFFICE_B_03: Offices where a number can repeat
+
+The offices whose numbering says a person keeps the same number on each term, by country code.
+There, number does not identify a term, which is why head carries an id.
+
+.`office/01_basic.sql`, HOG_OFFICE_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM office
+WHERE numbering LIKE '%keeps the same number%'
+ORDER BY country ASC
+----
+
+
+====
+
+[[HOG_OFFICE_B_04]]
+==== HOG_OFFICE_B_04: The offices headed by a prime minister
+
+The offices whose head is a prime minister (head_kind 'PRIME_MINISTER'), by country code.
+
+.`office/01_basic.sql`, HOG_OFFICE_B_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *
+FROM office
+WHERE head_kind = 'PRIME_MINISTER'
+ORDER BY country ASC
+----
+
+
+====
+
+=== Intermediate
+
+[[HOG_OFFICE_I_01]]
+==== HOG_OFFICE_I_01: Offices by the kind of head
+
+How many offices have a president and how many a prime minister, naming the countries of each.
+
+.`office/02_intermediate.sql`, HOG_OFFICE_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT head_kind, COUNT(*) AS offices, GROUP_CONCAT(country, ', ' ORDER BY country) AS countries
+FROM office
+GROUP BY head_kind
+ORDER BY head_kind ASC
+----
+
+
+====
+
+[[HOG_OFFICE_I_02]]
+==== HOG_OFFICE_I_02: Titles outside ASCII
+
+head_title is in the country's own language.
+Which titles use a character outside ASCII, and which do not?
+
+.`office/02_intermediate.sql`, HOG_OFFICE_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *,
+       CASE WHEN head_title GLOB '*[^ -~]*' THEN 'non-ASCII' ELSE 'ASCII' END AS script
+FROM office
+ORDER BY script ASC, country ASC
+----
+
+
+====
+
+[[HOG_OFFICE_I_03]]
+==== HOG_OFFICE_I_03: Offices without an incumbent
+
+Every office should have a head in office now, a term with no end.
+List the offices that have none, by country code; the check passes when nothing comes back.
+
+.`office/02_intermediate.sql`, HOG_OFFICE_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*
+FROM office g
+WHERE NOT EXISTS (SELECT 1
+                  FROM head h
+                  WHERE h.country = g.country
+                    AND h.term_end IS NULL)
+ORDER BY g.country ASC
+----
+
+
+====
+
+=== Advanced
+
+[[HOG_OFFICE_A_01]]
+==== HOG_OFFICE_A_01: What number counts, in a phrase
+
+numbering is a sentence, but each opens by naming what is counted -- 'ordinal of the person by first election', '代', '대', 'presidency number' -- before its first comma or semicolon.
+Show each office with that phrase alone.
+
+.`office/03_advanced.sql`, HOG_OFFICE_A_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT *,
+       CASE
+           WHEN comma > 0 AND (semicolon = 0 OR comma < semicolon) THEN SUBSTR(numbering, 1, comma - 1)
+           WHEN semicolon > 0 THEN SUBSTR(numbering, 1, semicolon - 1)
+           ELSE numbering
+           END AS counts
+FROM (SELECT *, INSTR(numbering, ',') AS comma, INSTR(numbering, ';') AS semicolon
+      FROM office)
+ORDER BY country ASC
+----
+
+
+====
+
+== The schema
+
+Exercises that read both tables.
+
+=== Basic
+
+[[HOG_SCHEMA_B_01]]
+==== HOG_SCHEMA_B_01: The incumbents, with their titles
+
+The front page names each country's head of government today, with the title the country gives the office.
+
+.`__/01_basic.sql`, HOG_SCHEMA_B_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, h.*
+FROM office g
+         JOIN head h ON h.country = g.country AND h.term_end IS NULL
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_B_03]]
+==== HOG_SCHEMA_B_03: Terms per office
+
+Each office with the kind of head it has and how many terms the list holds.
+
+.`__/01_basic.sql`, HOG_SCHEMA_B_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, COUNT(h.id) AS terms
+FROM office g
+         LEFT JOIN head h ON h.country = g.country
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_B_05]]
+==== HOG_SCHEMA_B_05: Presidents since 2000
+
+Every term of a president (head_kind 'PRESIDENT') that began in 2000 or later, with the title, in date order and, on the same day, by country.
+
+.`__/01_basic.sql`, HOG_SCHEMA_B_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, h.*
+FROM office g
+         JOIN head h ON h.country = g.country
+WHERE g.head_kind = 'PRESIDENT'
+  AND h.term_start >= '2000-01-01'
+ORDER BY h.term_start ASC, g.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_B_06]]
+==== HOG_SCHEMA_B_06: Presidents without a party
+
+The presidents' terms whose party is one of 'Indépendant', 'Unaffiliated' or '무소속', by country, then in date order.
+A succession that includes one of them ('무소속/민주정의당') is a different value and does not match.
+
+.`__/01_basic.sql`, HOG_SCHEMA_B_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, h.*
+FROM office g
+         JOIN head h ON h.country = g.country
+WHERE g.head_kind = 'PRESIDENT'
+  AND h.party IN ('Indépendant', 'Unaffiliated', '무소속')
+ORDER BY g.country ASC, h.term_start ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_B_07]]
+==== HOG_SCHEMA_B_07: Terms since 2000 per office
+
+Each office with the number of terms that began in 2000 or later, most first and, at a tie, by country code.
+The date goes into the join condition, not WHERE, so an office with no such term would still show, with 0.
+
+.`__/01_basic.sql`, HOG_SCHEMA_B_07
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, COUNT(h.id) AS terms
+FROM office g
+         LEFT JOIN head h ON h.country = g.country AND h.term_start >= '2000-01-01'
+GROUP BY g.country
+ORDER BY terms DESC, g.country ASC
+----
+
+
+====
+
+=== Intermediate
+
+[[HOG_SCHEMA_I_01]]
+==== HOG_SCHEMA_I_01: Presidents against prime ministers
+
+By the kind of head: how many terms, how many different persons, and the average length of a term in days, an open term counted to today.
+
+.`__/02_intermediate.sql`, HOG_SCHEMA_I_01
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.head_kind,
+       COUNT(*)                                                                                       AS terms,
+       COUNT(DISTINCT g.country || ' ' || h.name)                                                     AS persons,
+       CAST(AVG(julianday(COALESCE(h.term_end, date('now'))) - julianday(h.term_start)) AS INTEGER)   AS average_days
+FROM office g
+         JOIN head h ON h.country = g.country
+GROUP BY g.head_kind
+ORDER BY g.head_kind ASC
+----
+
+====
+
+[[HOG_SCHEMA_I_02]]
+==== HOG_SCHEMA_I_02: Numbering in practice
+
+Per office: how many terms, how many distinct numbers, the highest number, and the rule; where terms exceed numbers, number is the person's and repeats.
+
+.`__/02_intermediate.sql`, HOG_SCHEMA_I_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*,
+       COUNT(*)                 AS terms,
+       COUNT(DISTINCT h.number) AS numbers,
+       MAX(h.number)            AS highest
+FROM office g
+         JOIN head h ON h.country = g.country
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_I_03]]
+==== HOG_SCHEMA_I_03: The span of each list
+
+Per office, the first term's start, the latest term's start and the years between them, with the head's title.
+
+.`__/02_intermediate.sql`, HOG_SCHEMA_I_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*,
+       MIN(h.term_start)                                         AS first_term_start,
+       MAX(h.term_start)                                         AS latest_term_start,
+       CAST(SUBSTR(MAX(h.term_start), 1, 4) AS INTEGER)
+           - CAST(SUBSTR(MIN(h.term_start), 1, 4) AS INTEGER)    AS years
+FROM office g
+         JOIN head h ON h.country = g.country
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_I_04]]
+==== HOG_SCHEMA_I_04: Living heads per office
+
+Per office, with its title, how many of its heads are still living, the incumbent included, by country code.
+A name is taken as one person within a country.
+
+.`__/02_intermediate.sql`, HOG_SCHEMA_I_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, COUNT(DISTINCT h.name) AS living
+FROM office g
+         JOIN head h ON h.country = g.country
+WHERE h.died IS NULL
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_I_05]]
+==== HOG_SCHEMA_I_05: Terms per century, side by side
+
+Per office, with its title, the terms begun in each century from the 18th to the 21st, one column per century, by country code.
+A SUM of CASE per column turns the rows of a GROUP BY into columns.
+
+.`__/02_intermediate.sql`, HOG_SCHEMA_I_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*,
+       SUM(CASE WHEN h.term_start < '1800' THEN 1 ELSE 0 END)                            AS c18,
+       SUM(CASE WHEN h.term_start >= '1800' AND h.term_start < '1900' THEN 1 ELSE 0 END) AS c19,
+       SUM(CASE WHEN h.term_start >= '1900' AND h.term_start < '2000' THEN 1 ELSE 0 END) AS c20,
+       SUM(CASE WHEN h.term_start >= '2000' THEN 1 ELSE 0 END)                           AS c21
+FROM office g
+         JOIN head h ON h.country = g.country
+GROUP BY g.country
+ORDER BY g.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_I_06]]
+==== HOG_SCHEMA_I_06: Age at first taking office, by the kind of head
+
+By the kind of head: how many persons, and the youngest, the oldest and the average age at which each first took office, in years of the calendar.
+Each person counts once, at their first term, unlike HOG_HEAD_I_03, which counts every term; a name is taken as one person within a country.
+
+.`__/02_intermediate.sql`, HOG_SCHEMA_I_06
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.head_kind,
+       COUNT(*)                                                             AS persons,
+       MIN(CAST(SUBSTR(f.first_start, 1, 4) AS INTEGER) - f.born)           AS youngest,
+       MAX(CAST(SUBSTR(f.first_start, 1, 4) AS INTEGER) - f.born)           AS oldest,
+       ROUND(AVG(CAST(SUBSTR(f.first_start, 1, 4) AS INTEGER) - f.born), 1) AS average
+FROM office g
+         JOIN (SELECT country, name, born, MIN(term_start) AS first_start
+               FROM head
+               GROUP BY country, name, born) f ON f.country = g.country
+GROUP BY g.head_kind
+ORDER BY g.head_kind ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_I_07]]
+==== HOG_SCHEMA_I_07: The shortest completed term of each office
+
+Per office, with its title, the completed term with the fewest days and who held it, by country code; at a tie, every such term, the earlier first.
+An open term has no term_end, so julianday gives NULL and the term drops out.
+
+.`__/02_intermediate.sql`, HOG_SCHEMA_I_07
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*,
+       h.*,
+       CAST(julianday(h.term_end) - julianday(h.term_start) AS INTEGER) AS days
+FROM office g
+         JOIN head h ON h.country = g.country
+WHERE julianday(h.term_end) - julianday(h.term_start)
+          = (SELECT MIN(julianday(s.term_end) - julianday(s.term_start))
+             FROM head s
+             WHERE s.country = g.country)
+ORDER BY g.country ASC, h.term_start ASC
+----
+
+
+====
+
+=== Advanced
+
+[[HOG_SCHEMA_A_02]]
+==== HOG_SCHEMA_A_02: Every office on a day, vacant or not
+
+A reader gives a date and wants every office with its head on that day, or 'vacant' where the office was empty or the list had not yet begun.
+
+.`__/03_advanced.sql`, HOG_SCHEMA_A_02
+[%collapsible]
+====
+[source,sql]
+----
+SELECT g.*, COALESCE(h.name, '(vacant)') AS name, h.*
+FROM office g
+         LEFT JOIN head h ON h.country = g.country
+    AND h.term_start <= :date
+    AND (h.term_end IS NULL OR h.term_end >= :date)
+ORDER BY g.country ASC
+----
+
+====
+
+[[HOG_SCHEMA_A_03]]
+==== HOG_SCHEMA_A_03: The incumbents' contemporaries
+
+On the day each incumbent took office, who headed the other offices?
+One row per pair, the incumbent first.
+
+.`__/03_advanced.sql`, HOG_SCHEMA_A_03
+[%collapsible]
+====
+[source,sql]
+----
+SELECT i.*, o.*, g.*
+FROM head i
+         JOIN head o ON o.country <> i.country
+    AND o.term_start <= i.term_start
+    AND (o.term_end IS NULL OR o.term_end >= i.term_start)
+         JOIN office g ON g.country = o.country
+WHERE i.term_end IS NULL
+ORDER BY i.country ASC, o.country ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_A_04]]
+==== HOG_SCHEMA_A_04: Each office's longest-lived head
+
+Per office, with its title, the head who lived the most years (died less born) among those who have died; ties share the place and are listed by name.
+
+.`__/03_advanced.sql`, HOG_SCHEMA_A_04
+[%collapsible]
+====
+[source,sql]
+----
+SELECT country, head_title, name, born, died, age
+FROM (SELECT DISTINCT g.country,
+                      g.head_title,
+                      h.name,
+                      h.born,
+                      h.died,
+                      h.died - h.born                                                    AS age,
+                      RANK() OVER (PARTITION BY g.country ORDER BY h.died - h.born DESC) AS place
+      FROM office g
+               JOIN head h ON h.country = g.country
+      WHERE h.died IS NOT NULL)
+WHERE place = 1
+ORDER BY country ASC, name ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_A_05]]
+==== HOG_SCHEMA_A_05: Presidents and the prime ministers of their time
+
+For each president's term, how many different prime ministers, of any office, were in office at some point during it; the ten terms with the most first and, at a tie, the earlier term first, then by country.
+Two terms overlap when each starts on or before the other's end, the handover day counting for both; an open term ends at '9999-12-31'.
+
+.`__/03_advanced.sql`, HOG_SCHEMA_A_05
+[%collapsible]
+====
+[source,sql]
+----
+SELECT p.*, COUNT(DISTINCT m.country || ' ' || m.name) AS prime_ministers
+FROM head p
+         JOIN office pg ON pg.country = p.country AND pg.head_kind = 'PRESIDENT'
+         JOIN head m ON m.term_start <= COALESCE(p.term_end, '9999-12-31')
+    AND COALESCE(m.term_end, '9999-12-31') >= p.term_start
+         JOIN office mg ON mg.country = m.country AND mg.head_kind = 'PRIME_MINISTER'
+GROUP BY p.id
+ORDER BY prime_ministers DESC, p.term_start ASC, p.country ASC
+LIMIT 10
+----
+
+
+====
+
+[[HOG_SCHEMA_A_06]]
+==== HOG_SCHEMA_A_06: New heads per century, with a running total
+
+Per office, with its title, how many persons first took office in each century, and the running total of persons up to that century, by country, then by century.
+The century is the first two digits of the year plus one, so 1800 counts in the 19th; a name is taken as one person within a country.
+
+.`__/03_advanced.sql`, HOG_SCHEMA_A_06
+[%collapsible]
+====
+[source,sql]
+----
+WITH firsts AS (SELECT country, name, MIN(term_start) AS first_start
+                FROM head
+                GROUP BY country, name),
+     per_century AS (SELECT g.country,
+                            g.head_title,
+                            CAST(SUBSTR(f.first_start, 1, 2) AS INTEGER) + 1 AS century,
+                            COUNT(*)                                         AS new_persons
+                     FROM office g
+                              JOIN firsts f ON f.country = g.country
+                     GROUP BY g.country, g.head_title, century)
+SELECT country,
+       head_title,
+       century,
+       new_persons,
+       SUM(new_persons) OVER (PARTITION BY country ORDER BY century) AS persons_so_far
+FROM per_century
+ORDER BY country ASC, century ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_A_07]]
+==== HOG_SCHEMA_A_07: Decades in which every office changed hands
+
+The decades in which a term began in every office, with how many terms began in all, oldest first.
+This is relational division: a decade qualifies when the number of distinct countries with a term begun in it equals the number of offices.
+
+.`__/03_advanced.sql`, HOG_SCHEMA_A_07
+[%collapsible]
+====
+[source,sql]
+----
+SELECT SUBSTR(h.term_start, 1, 3) || '0s' AS decade, COUNT(*) AS terms
+FROM head h
+GROUP BY decade
+HAVING COUNT(DISTINCT h.country) = (SELECT COUNT(*) FROM office)
+ORDER BY decade ASC
+----
+
+
+====
+
+[[HOG_SCHEMA_A_08]]
+==== HOG_SCHEMA_A_08: The median completed term of each office
+
+Per office, with its title, how many terms have ended and the median of their lengths in days, cut to whole days, by country code.
+The median is the middle length, or the average of the two middle ones when the count is even: ROW_NUMBER numbers the lengths, COUNT(*) OVER gives the count n, and the middle rows are (n + 1) / 2 and (n + 2) / 2 in integer division, one row when n is odd.
+
+.`__/03_advanced.sql`, HOG_SCHEMA_A_08
+[%collapsible]
+====
+[source,sql]
+----
+WITH lengths AS (SELECT country,
+                        julianday(term_end) - julianday(term_start)                     AS days,
+                        ROW_NUMBER() OVER (PARTITION BY country
+                            ORDER BY julianday(term_end) - julianday(term_start)) AS rn,
+                        COUNT(*) OVER (PARTITION BY country)                            AS n
+                 FROM head
+                 WHERE term_end IS NOT NULL)
+SELECT g.country, g.head_title, l.n AS terms, CAST(AVG(l.days) AS INTEGER) AS median_days
+FROM office g
+         JOIN lengths l ON l.country = g.country
+WHERE l.rn IN ((l.n + 1) / 2, (l.n + 2) / 2)
+GROUP BY g.country, g.head_title, l.n
+ORDER BY g.country ASC
+----
+
+
+====

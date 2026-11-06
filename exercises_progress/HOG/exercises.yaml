@@ -1,0 +1,442 @@
+# Registry of the exercises in EXERCISES.asciidoc and the <section>/<NN>_<level>.sql files beside it.
+#
+# An id is HOG_<SECTION>_<TIER>_<NN>: the table the exercise reads alone, or SCHEMA for one that reads more than one,
+# the tier (B for Basic, I for Intermediate, A for Advanced), and a number within that section and tier.
+#
+# Ids are permanent. A new exercise takes the next unused number of its section and tier; an exercise that moves or
+# changes tier keeps its id; an id of a removed exercise is marked `retired: true` and never reused. EXERCISES.asciidoc
+# carries each id as the anchor and the prefix of the exercise's heading, and the .sql file carries it in the marker
+# above the statement, followed by the title.
+#
+# `sql` is the file that answers the exercise in SQL; `test` is the test, and its nested class, that answers it in JPQL
+# and with the Criteria API, or with a native query where neither can, which `native-only: true` marks. The nested class
+# is numbered by the exercise's place in its file, which may change; the id does not.
+
+
+# ---- head
+
+- id: HOG_HEAD_B_01
+  section: "HEAD"
+  tier: Basic
+  title: "Who held office on a day"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_01_Test
+- id: HOG_HEAD_B_02
+  section: "HEAD"
+  tier: Basic
+  title: "One country's list"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_02_Test
+- id: HOG_HEAD_B_03
+  section: "HEAD"
+  tier: Basic
+  title: "The incumbents"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_03_Test
+- id: HOG_HEAD_B_04
+  section: "HEAD"
+  tier: Basic
+  title: "Terms by name"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_04_Test
+- id: HOG_HEAD_B_05
+  section: "HEAD"
+  tier: Basic
+  title: "Terms that began in a year"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_05_Test
+- id: HOG_HEAD_B_06
+  section: "HEAD"
+  tier: Basic
+  title: "The oldest living heads"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_06_Test
+- id: HOG_HEAD_B_07
+  section: "HEAD"
+  tier: Basic
+  title: "Terms begun during the Second World War"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_07_Test
+  retired: true
+- id: HOG_HEAD_B_08
+  section: "HEAD"
+  tier: Basic
+  title: "Heads who lived past ninety-two"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_08_Test
+- id: HOG_HEAD_B_09
+  section: "HEAD"
+  tier: Basic
+  title: "The ten latest terms"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_09_Test
+- id: HOG_HEAD_B_10
+  section: "HEAD"
+  tier: Basic
+  title: "A country's list, ten terms a page"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_10_Test
+- id: HOG_HEAD_B_11
+  section: "HEAD"
+  tier: Basic
+  title: "Heads born in the 1940s, the living first"
+  sql: src/test/sql-exercises/head/01_basic.sql
+  test: Head_Exercises_01_Basic_PersistenceTest.HOG_HEAD_B_11_Test
+- id: HOG_HEAD_I_01
+  section: "HEAD"
+  tier: Intermediate
+  title: "The longest terms of a country"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_01_Test
+  native-only: true
+- id: HOG_HEAD_I_02
+  section: "HEAD"
+  tier: Intermediate
+  title: "More than one term"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_02_Test
+  native-only: true
+  retired: true
+- id: HOG_HEAD_I_03
+  section: "HEAD"
+  tier: Intermediate
+  title: "Age on taking office"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_03_Test
+- id: HOG_HEAD_I_04
+  section: "HEAD"
+  tier: Intermediate
+  title: "Terms per party"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_04_Test
+- id: HOG_HEAD_I_05
+  section: "HEAD"
+  tier: Intermediate
+  title: "Living former heads"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_05_Test
+- id: HOG_HEAD_I_06
+  section: "HEAD"
+  tier: Intermediate
+  title: "Terms begun per decade"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_06_Test
+  native-only: true
+- id: HOG_HEAD_I_07
+  section: "HEAD"
+  tier: Intermediate
+  title: "The latest terms of each country"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_07_Test
+  retired: true
+- id: HOG_HEAD_I_08
+  section: "HEAD"
+  tier: Intermediate
+  title: "The first and the latest terms of each country"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_08_Test
+- id: HOG_HEAD_I_09
+  section: "HEAD"
+  tier: Intermediate
+  title: "The first two terms of each country"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_09_Test
+- id: HOG_HEAD_I_10
+  section: "HEAD"
+  tier: Intermediate
+  title: "Two or more terms, the top three per country"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_10_Test
+- id: HOG_HEAD_I_11
+  section: "HEAD"
+  tier: Intermediate
+  title: "Party share of completed terms, the top three per country"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_11_Test
+  native-only: true
+- id: HOG_HEAD_I_12
+  section: "HEAD"
+  tier: Intermediate
+  title: "Terms that ended in the year the head died"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_12_Test
+- id: HOG_HEAD_I_13
+  section: "HEAD"
+  tier: Intermediate
+  title: "Terms begun per day of the week"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_13_Test
+  native-only: true
+- id: HOG_HEAD_I_14
+  section: "HEAD"
+  tier: Intermediate
+  title: "Years lived after leaving office"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_14_Test
+- id: HOG_HEAD_I_15
+  section: "HEAD"
+  tier: Intermediate
+  title: "Years with a new term in four or more countries"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_15_Test
+- id: HOG_HEAD_I_16
+  section: "HEAD"
+  tier: Intermediate
+  title: "Overlapping terms in a country"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_16_Test
+- id: HOG_HEAD_I_17
+  section: "HEAD"
+  tier: Intermediate
+  title: "Terms begun fifteen years younger than the country's average"
+  sql: src/test/sql-exercises/head/02_intermediate.sql
+  test: Head_Exercises_02_Intermediate_PersistenceTest.HOG_HEAD_I_17_Test
+- id: HOG_HEAD_A_01
+  section: "HEAD"
+  tier: Advanced
+  title: "Vacancies"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_01_Test
+  native-only: true
+- id: HOG_HEAD_A_02
+  section: "HEAD"
+  tier: Advanced
+  title: "Longest in office"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_02_Test
+  native-only: true
+- id: HOG_HEAD_A_03
+  section: "HEAD"
+  tier: Advanced
+  title: "The longest run of one party"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_03_Test
+  native-only: true
+- id: HOG_HEAD_A_04
+  section: "HEAD"
+  tier: Advanced
+  title: "Every party of a head, one per row"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_04_Test
+  native-only: true
+- id: HOG_HEAD_A_05
+  section: "HEAD"
+  tier: Advanced
+  title: "Predecessor and successor"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_05_Test
+- id: HOG_HEAD_A_06
+  section: "HEAD"
+  tier: Advanced
+  title: "How often a new head brings a new party"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_06_Test
+- id: HOG_HEAD_A_07
+  section: "HEAD"
+  tier: Advanced
+  title: "Comebacks"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_07_Test
+  native-only: true
+- id: HOG_HEAD_A_08
+  section: "HEAD"
+  tier: Advanced
+  title: "Living heads who outlived their successor"
+  sql: src/test/sql-exercises/head/03_advanced.sql
+  test: Head_Exercises_03_Advanced_PersistenceTest.HOG_HEAD_A_08_Test
+
+# ---- office
+
+- id: HOG_OFFICE_B_01
+  section: "OFFICE"
+  tier: Basic
+  title: "An office by country"
+  sql: src/test/sql-exercises/office/01_basic.sql
+  test: Office_Exercises_01_Basic_PersistenceTest.HOG_OFFICE_B_01_Test
+- id: HOG_OFFICE_B_02
+  section: "OFFICE"
+  tier: Basic
+  title: "The offices"
+  sql: src/test/sql-exercises/office/01_basic.sql
+  test: Office_Exercises_01_Basic_PersistenceTest.HOG_OFFICE_B_02_Test
+- id: HOG_OFFICE_B_03
+  section: "OFFICE"
+  tier: Basic
+  title: "Offices where a number can repeat"
+  sql: src/test/sql-exercises/office/01_basic.sql
+  test: Office_Exercises_01_Basic_PersistenceTest.HOG_OFFICE_B_03_Test
+- id: HOG_OFFICE_B_04
+  section: "OFFICE"
+  tier: Basic
+  title: "The offices headed by a prime minister"
+  sql: src/test/sql-exercises/office/01_basic.sql
+  test: Office_Exercises_01_Basic_PersistenceTest.HOG_OFFICE_B_04_Test
+- id: HOG_OFFICE_I_01
+  section: "OFFICE"
+  tier: Intermediate
+  title: "Offices by the kind of head"
+  sql: src/test/sql-exercises/office/02_intermediate.sql
+  test: Office_Exercises_02_Intermediate_PersistenceTest.HOG_OFFICE_I_01_Test
+  native-only: true
+- id: HOG_OFFICE_I_02
+  section: "OFFICE"
+  tier: Intermediate
+  title: "Titles outside ASCII"
+  sql: src/test/sql-exercises/office/02_intermediate.sql
+  test: Office_Exercises_02_Intermediate_PersistenceTest.HOG_OFFICE_I_02_Test
+  native-only: true
+- id: HOG_OFFICE_I_03
+  section: "OFFICE"
+  tier: Intermediate
+  title: "Offices without an incumbent"
+  sql: src/test/sql-exercises/office/02_intermediate.sql
+  test: Office_Exercises_02_Intermediate_PersistenceTest.HOG_OFFICE_I_03_Test
+- id: HOG_OFFICE_A_01
+  section: "OFFICE"
+  tier: Advanced
+  title: "What number counts, in a phrase"
+  sql: src/test/sql-exercises/office/03_advanced.sql
+  test: Office_Exercises_03_Advanced_PersistenceTest.HOG_OFFICE_A_01_Test
+
+# ---- schema
+
+- id: HOG_SCHEMA_B_01
+  section: "SCHEMA"
+  tier: Basic
+  title: "The incumbents, with their titles"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceTest.HOG_SCHEMA_B_01_Test
+- id: HOG_SCHEMA_B_02
+  section: "SCHEMA"
+  tier: Basic
+  title: "A country's list, with the rule for its numbers"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceTest.HOG_SCHEMA_B_02_Test
+  retired: true
+- id: HOG_SCHEMA_B_03
+  section: "SCHEMA"
+  tier: Basic
+  title: "Terms per office"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceTest.HOG_SCHEMA_B_03_Test
+- id: HOG_SCHEMA_B_04
+  section: "SCHEMA"
+  tier: Basic
+  title: "The first head of each office"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceTest.HOG_SCHEMA_B_04_Test
+  retired: true
+- id: HOG_SCHEMA_B_05
+  section: "SCHEMA"
+  tier: Basic
+  title: "Presidents since 2000"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceTest.HOG_SCHEMA_B_05_Test
+- id: HOG_SCHEMA_B_06
+  section: "SCHEMA"
+  tier: Basic
+  title: "Presidents without a party"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceTest.HOG_SCHEMA_B_06_Test
+- id: HOG_SCHEMA_B_07
+  section: "SCHEMA"
+  tier: Basic
+  title: "Terms since 2000 per office"
+  sql: src/test/sql-exercises/__/01_basic.sql
+  test: __Exercises_01_Basic_PersistenceTest.HOG_SCHEMA_B_07_Test
+- id: HOG_SCHEMA_I_01
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "Presidents against prime ministers"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceTest.HOG_SCHEMA_I_01_Test
+  native-only: true
+- id: HOG_SCHEMA_I_02
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "Numbering in practice"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceTest.HOG_SCHEMA_I_02_Test
+- id: HOG_SCHEMA_I_03
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "The span of each list"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceTest.HOG_SCHEMA_I_03_Test
+- id: HOG_SCHEMA_I_04
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "Living heads per office"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceTest.HOG_SCHEMA_I_04_Test
+- id: HOG_SCHEMA_I_05
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "Terms per century, side by side"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceTest.HOG_SCHEMA_I_05_Test
+- id: HOG_SCHEMA_I_06
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "Age at first taking office, by the kind of head"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceTest.HOG_SCHEMA_I_06_Test
+- id: HOG_SCHEMA_I_07
+  section: "SCHEMA"
+  tier: Intermediate
+  title: "The shortest completed term of each office"
+  sql: src/test/sql-exercises/__/02_intermediate.sql
+  test: __Exercises_02_Intermediate_PersistenceTest.HOG_SCHEMA_I_07_Test
+  native-only: true
+- id: HOG_SCHEMA_A_01
+  section: "SCHEMA"
+  tier: Advanced
+  title: "Each office's longest-serving head"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_01_Test
+  native-only: true
+  retired: true
+- id: HOG_SCHEMA_A_02
+  section: "SCHEMA"
+  tier: Advanced
+  title: "Every office on a day, vacant or not"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_02_Test
+- id: HOG_SCHEMA_A_03
+  section: "SCHEMA"
+  tier: Advanced
+  title: "The incumbents' contemporaries"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_03_Test
+- id: HOG_SCHEMA_A_04
+  section: "SCHEMA"
+  tier: Advanced
+  title: "Each office's longest-lived head"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_04_Test
+- id: HOG_SCHEMA_A_05
+  section: "SCHEMA"
+  tier: Advanced
+  title: "Presidents and the prime ministers of their time"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_05_Test
+- id: HOG_SCHEMA_A_06
+  section: "SCHEMA"
+  tier: Advanced
+  title: "New heads per century, with a running total"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_06_Test
+  native-only: true
+- id: HOG_SCHEMA_A_07
+  section: "SCHEMA"
+  tier: Advanced
+  title: "Decades in which every office changed hands"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_07_Test
+- id: HOG_SCHEMA_A_08
+  section: "SCHEMA"
+  tier: Advanced
+  title: "The median completed term of each office"
+  sql: src/test/sql-exercises/__/03_advanced.sql
+  test: __Exercises_03_Advanced_PersistenceTest.HOG_SCHEMA_A_08_Test
+  native-only: true

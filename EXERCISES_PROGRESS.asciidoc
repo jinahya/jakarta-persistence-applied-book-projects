@@ -1,0 +1,137 @@
+= Exercises progress
+:toc: left
+:toclevels: 2
+
+////
+AGENT INSTRUCTIONS (not rendered). Read them whenever the author mentions this file, exercises review, or asks to
+continue. Any agent may run them; a run picks up where the last one stopped.
+
+What this is: an everlasting review of the exercises of every -persistence project, one schema at a time. Each unit
+gets a blind review by Codex and an independent review by Claude; the two are discussed, the conclusions applied.
+Nothing is missing that started it; it is kept going so the exercises keep getting better.
+
+Rules
+- One unit at a time, in the order of the queue below. A run starts at the first unit whose status is not `done`, and
+  resumes a unit from the step its status names.
+- Never run the SQL during Phase 1, and never tell Codex to. No database, no container, no docker. SQL is validated
+  only in Phase 2, after every unit of Phase 1 is `done`.
+- Ids are never reused. An exercise whose meaning changes is retired and added anew; a fix keeps the id only when the
+  request stays the same question. A new exercise takes the next unused number of its section and tier, counting the
+  retired ones.
+- A retired exercise stays in EXERCISES.yaml with `retired: true`; it leaves EXERCISES.asciidoc, its .sql file and its
+  nested test class.
+- Where an output would be, a new or changed exercise carries `NOT YET RUN` instead: in EXERCISES.asciidoc a line
+  `// NOT YET RUN` where the `....` block goes; in the .sql file a line `-- NOT YET RUN` under the statement, in a module
+  whose .sql files carry output. Phase 2 replaces each with a fresh run's output.
+- Every live exercise has its nested class in src/test/java-exercises: `@DisplayName("<ID>: <title>") @Nested class
+  <ID>_Test {}`, in the `<Dir>_Exercises_<NN>_<Level>_Persistence{IT|Test}` class of its .sql file (projects/CLAUDE.md).
+  A nested class that has tests stays as it is; a missing one is added empty.
+- Keep the module's own conventions (its CLAUDE.md, the header of its EXERCISES.yaml, projects/CLAUDE.md, and the
+  paging rule of ../CLAUDE.md). Do not touch the book.
+- Before a unit, check that no other session or loop is writing the same files (`git status`, recent mtimes).
+- If Codex fails (token limit, error, timeout), record `codex: skipped (<why>)` for the unit, review it alone, and go on.
+- Each unit ends with `./mvnw -o -q test-compile` in its project, a local commit in the affected submodule and in
+  projects/ (on develop, never pushed), and its status `done`.
+
+Steps of a unit (the status names the next step)
+1. `pending` -> gather the inputs into exercises_progress/<UNIT>/: the unit's EXERCISES.asciidoc sections, its
+   EXERCISES.yaml entries (retired ones too, for the numbering), and the schema's source DDL (see the queue).
+2. `inputs` -> Codex, blind: run
+     codex exec -s read-only --skip-git-repo-check -C exercises_progress/<UNIT> -o exercises_progress/<UNIT>/review-codex.md \
+       "$(cat exercises_progress/CODEX_PROMPT.md)"
+   with only the inputs in that directory. Status `codex`.
+3. `codex` -> Claude reviews the same inputs before reading review-codex.md, into exercises_progress/<UNIT>/review-claude.md.
+   Status `claude`.
+4. `claude` -> discuss: read review-codex.md against review-claude.md; for each item decide agreed / rejected / merged, with a
+   reason. Items the two disagree on go back to Codex once (exercises_progress/<UNIT>/review-codex-reply.md). The decisions go
+   in this file, under the unit. Status `decided`.
+5. `decided` -> apply the decisions to EXERCISES.asciidoc, EXERCISES.yaml and the .sql files, and the nested classes.
+   test-compile, commit. Status `done`.
+
+Phase 2, after every unit is `done`: one database at a time, start its container (`docker compose up -d` in the
+project), run every statement whose output is `NOT YET RUN`, write the output in its place, fix a statement that fails,
+then `docker compose down -v` and remove what it pulled if disk is short, before the next database. Never two at once.
+////
+
+== Queue
+
+[%autowidth,options="header"]
+|===
+| # | Unit | Project | Sections | Source DDL | Status
+
+| 1 | HOG | heads-of-governments-persistence | HEAD, OFFICE, SCHEMA | `db/schema.sql` | done
+| 2 | SAKILA | mysql-sakila-persistence | every table and view, SCHEMA | `docker-entrypoint-initdb.d/01-sakila-schema.sql` | pending
+| 3 | DEMODB | postgresql-demodb-persistence | every table and view of `bookings`, SCHEMA | https://github.com/jinahya/postgresql-demodb-docker | pending
+| 4 | CO | oracle-sample-schemas-persistence-co | every table and view, SCHEMA | `db-sample-schemas/customer_orders/` | pending
+| 5 | HR | oracle-sample-schemas-persistence-hr | every table and view, SCHEMA | `db-sample-schemas/human_resources/` | pending
+| 6 | SH | oracle-sample-schemas-persistence-sh | every table and view, SCHEMA | `db-sample-schemas/sales_history/` | pending
+| 7 | FUTON | sqlserver-samples-persistence-futonmanufacturing | DBO | microsoft/sql-server-samples, `samples/databases/futon-manufacturing` | pending
+| 8 | AW_DBO | sqlserver-samples-persistence-adventureworks | DBO | microsoft/sql-server-samples, `samples/databases/adventure-works` | pending
+| 9 | AW_HUMANRESOURCES | sqlserver-samples-persistence-adventureworks | HUMANRESOURCES | (same) | pending
+| 10 | AW_PERSON | sqlserver-samples-persistence-adventureworks | PERSON | (same) | pending
+| 11 | AW_PRODUCTION | sqlserver-samples-persistence-adventureworks | PRODUCTION | (same) | pending
+| 12 | AW_PURCHASING | sqlserver-samples-persistence-adventureworks | PURCHASING | (same) | pending
+| 13 | AW_SALES | sqlserver-samples-persistence-adventureworks | SALES | (same) | pending
+| 14 | WWI_APPLICATION | sqlserver-samples-persistence-wideworldimporters | APPLICATION | microsoft/sql-server-samples, `samples/databases/wide-world-importers` | pending
+| 15 | WWI_PURCHASING | sqlserver-samples-persistence-wideworldimporters | PURCHASING | (same) | pending
+| 16 | WWI_SALES | sqlserver-samples-persistence-wideworldimporters | SALES | (same) | pending
+| 17 | WWI_WAREHOUSE | sqlserver-samples-persistence-wideworldimporters | WAREHOUSE | (same) | pending
+| 18 | WWI_WEBSITE | sqlserver-samples-persistence-wideworldimporters | WEBSITE | (same) | pending
+|===
+
+A source DDL path is relative to the project. Where the project has none, take it from upstream at the commit its
+`compose.yaml` or README names, into the unit's inputs.
+
+== Phase 2
+
+[%autowidth,options="header"]
+|===
+| Database | Container | Statements `NOT YET RUN` | Status
+
+| heads-of-governments (SQLite, no container) | — | 7 (HOG) | pending
+| Sakila | `mysql-sakila-persistence/compose.yaml` | | pending
+| demodb | `postgresql-demodb-persistence/compose.yaml` | | pending
+| Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | | pending
+| SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | | pending
+|===
+
+== Units
+
+The decisions of each unit, newest last. Codex's proposals and Claude's review are in `exercises_progress/<UNIT>/`.
+
+=== 1. HOG (2026-11-06)
+
+Codex reviewed it blind (15 items) and answered the disagreements once (`exercises_progress/HOG/review-codex-reply.md`,
+5 agree, 1 hold); Claude reviewed it alone (7 items). Before: 60 live exercises, 6 retired. After: 64 live.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| HOG_HEAD_B_01 | Claude | fixed, request | a handover day gives both heads; the request says so
+| HOG_HEAD_B_10 | Codex | fixed, request | Codex asked for an id tie-break; resolved instead by stating that term_start is distinct within a country and that HOG_HEAD_I_18 checks it (Codex: "unless distinct starts are stated as a prerequisite")
+| HOG_HEAD_B_12 | Codex | added, "A term by its official number" | no exercise looks a term up by number; (country, number) is not unique
+| HOG_HEAD_B_13 | Claude | added, "Terms that end after the head died" | a data check the DDL invites
+| HOG_HEAD_I_01, I_08, A_01, A_02, A_03, A_05 | Claude | fixed, format | `date ('now')`, two window columns on one line; the statements are the same, so the outputs stand
+| HOG_HEAD_I_08 | Codex | fixed, request | the sets overlap below 2 * :n terms, not at 2 * :n; the move to Advanced and the id tie-break rejected
+| HOG_HEAD_I_11 | both | fixed, SQL | no tie-break in ROW_NUMBER nor in the outer ORDER BY; Codex's CTE, with NULLIF; stays Intermediate
+| HOG_HEAD_I_18 | Codex | added, "Repeated term starts" | guards the distinct term_start the exercises rely on
+| HOG_HEAD_I_19 | Claude | added, "More than one incumbent" | the other side of HOG_OFFICE_I_03
+| HOG_SCHEMA_I_04 | Codex | fixed, SQL | "per office" needs a LEFT JOIN, the condition on died in the join
+| HOG_SCHEMA_I_05 | Codex | fixed, SQL and request | the module's "1800s" centuries kept (Codex agreed), stated in the request; the first and the last buckets get both bounds
+| HOG_SCHEMA_A_02 | Claude | fixed, SQL and request | two `name` and two `country` columns; '(vacant)' as the SQL writes it; the handover day
+| HOG_SCHEMA_A_03 | Claude | fixed, SQL | `i.*, o.*, g.*` repeated every column of head; the columns named
+| HOG_HEAD_I_09 | Codex | kept (Codex agreed) | the plain top-n per group that HOG_HEAD_I_08 builds on
+| HOG_HEAD_B_04 | Codex | kept (Codex agreed) | the exercise is about LIKE; INSTR would lose that
+| HOG_SCHEMA_A_06 | Codex | kept (Codex agreed) | the module counts centuries as "the 1800s"
+| HOG_SCHEMA_A_05 | Codex | kept (Codex agreed) | a president with no prime minister cannot reach the top ten
+| HOG_OFFICE_A_02 | Codex | not added (Codex agreed) | five titles ranked by length is not a reader's question
+| HOG_OFFICE_I_03, HOG_OFFICE_A_01 | Codex | not moved (Codex agreed) | an id names its section and tier
+|===
+
+`NOT YET RUN`: HOG_HEAD_B_13, HOG_HEAD_I_11, HOG_HEAD_I_18, HOG_HEAD_I_19, HOG_SCHEMA_I_04, HOG_SCHEMA_I_05,
+HOG_SCHEMA_A_03. Their nested classes in src/test/java-exercises have tests for the old SQL where they had them; the new
+ones (HOG_HEAD_B_12, B_13, I_18, I_19) are empty.
+
+Process notes from this unit: CODEX_PROMPT.md no longer defines the levels (it had sent Codex moving exercises between
+tiers); review files are `review-*.md`, since a `claude.md` loads as CLAUDE.md on a case-insensitive disk.
