@@ -95,6 +95,6 @@ resolve from there.
   `@Find List<T> findAll(Order<T>)` declared in `_Repository` works as `List<Head>` for `HeadRepository` without
   `CrudRepository<Head, Long>`. (The module now declares `@Find List<E> findAll(Order<E>)` in each repository, with its own
   entity type, and `_Repository` declares no methods.)
-* For the book: chapter 1's Jakarta Data section (`chapter01_06_data.asciidoc`) shows the repositories with the
+* For the book: chapter 1's Jakarta Data section (`chapter01_90_data.asciidoc`) shows the repositories with the
   workaround in place.
 
