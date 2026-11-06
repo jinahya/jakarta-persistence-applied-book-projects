@@ -77,18 +77,18 @@ then `docker compose down -v` and remove what it pulled if disk is short, before
 | 4 | CO | oracle-sample-schemas-persistence-co | every table and view, SCHEMA | `db-sample-schemas/customer_orders/` | done
 | 5 | HR | oracle-sample-schemas-persistence-hr | every table and view, SCHEMA | `db-sample-schemas/human_resources/` | done
 | 6 | SH | oracle-sample-schemas-persistence-sh | every table and view, SCHEMA | `db-sample-schemas/sales_history/` | done
-| 7 | FUTON | sqlserver-samples-persistence-futonmanufacturing | DBO | microsoft/sql-server-samples, `samples/databases/futon-manufacturing` | pending
-| 8 | AW_DBO | sqlserver-samples-persistence-adventureworks | DBO | microsoft/sql-server-samples, `samples/databases/adventure-works` | pending
-| 9 | AW_HUMANRESOURCES | sqlserver-samples-persistence-adventureworks | HUMANRESOURCES | (same) | pending
-| 10 | AW_PERSON | sqlserver-samples-persistence-adventureworks | PERSON | (same) | pending
-| 11 | AW_PRODUCTION | sqlserver-samples-persistence-adventureworks | PRODUCTION | (same) | pending
-| 12 | AW_PURCHASING | sqlserver-samples-persistence-adventureworks | PURCHASING | (same) | pending
-| 13 | AW_SALES | sqlserver-samples-persistence-adventureworks | SALES | (same) | pending
-| 14 | WWI_APPLICATION | sqlserver-samples-persistence-wideworldimporters | APPLICATION | microsoft/sql-server-samples, `samples/databases/wide-world-importers` | pending
-| 15 | WWI_PURCHASING | sqlserver-samples-persistence-wideworldimporters | PURCHASING | (same) | pending
-| 16 | WWI_SALES | sqlserver-samples-persistence-wideworldimporters | SALES | (same) | pending
-| 17 | WWI_WAREHOUSE | sqlserver-samples-persistence-wideworldimporters | WAREHOUSE | (same) | pending
-| 18 | WWI_WEBSITE | sqlserver-samples-persistence-wideworldimporters | WEBSITE | (same) | pending
+| 7 | FUTON | sqlserver-samples-persistence-futonmanufacturing | DBO | microsoft/sql-server-samples, `samples/databases/futon-manufacturing` | done
+| 8 | AW_DBO | sqlserver-samples-persistence-adventureworks | DBO | microsoft/sql-server-samples, `samples/databases/adventure-works` | done
+| 9 | AW_HUMANRESOURCES | sqlserver-samples-persistence-adventureworks | HUMANRESOURCES | (same) | done
+| 10 | AW_PERSON | sqlserver-samples-persistence-adventureworks | PERSON | (same) | done
+| 11 | AW_PRODUCTION | sqlserver-samples-persistence-adventureworks | PRODUCTION | (same) | done
+| 12 | AW_PURCHASING | sqlserver-samples-persistence-adventureworks | PURCHASING | (same) | done
+| 13 | AW_SALES | sqlserver-samples-persistence-adventureworks | SALES | (same) | done
+| 14 | WWI_APPLICATION | sqlserver-samples-persistence-wideworldimporters | APPLICATION | microsoft/sql-server-samples, `samples/databases/wide-world-importers` | done
+| 15 | WWI_PURCHASING | sqlserver-samples-persistence-wideworldimporters | PURCHASING | (same) | done
+| 16 | WWI_SALES | sqlserver-samples-persistence-wideworldimporters | SALES | (same) | done
+| 17 | WWI_WAREHOUSE | sqlserver-samples-persistence-wideworldimporters | WAREHOUSE | (same) | done
+| 18 | WWI_WEBSITE | sqlserver-samples-persistence-wideworldimporters | WEBSITE | (same) | done
 |===
 
 A source DDL path is relative to the project. Where the project has none, take it from upstream at the commit its
@@ -104,7 +104,7 @@ A source DDL path is relative to the project. Where the project has none, take i
 | Sakila | `mysql-sakila-persistence/compose.yaml` | 63 (SAKILA) | pending
 | demodb | `postgresql-demodb-persistence/compose.yaml` | 47 (DEMODB) | pending
 | Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | 14 (CO), 14 (HR), 7 (SH), and the JPQL marked | pending
-| SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | | pending
+| SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | 22 (FUTON), 22 (AW), 24 (WWI), and the JPQL marked | pending
 |===
 
 == Units
@@ -448,3 +448,119 @@ where the SQL changed.
 |===
 
 `NOT YET RUN`: SH_SUPPLEMENTARY_DEMOGRAPHICS_A_01, SH_SCHEMA_A_12, SH_SUPPLEMENTARY_DEMOGRAPHICS_I_02, SH_PRODUCTS_I_02, SH_PRODUCTS_I_03, SH_SCHEMA_I_11, SH_CUSTOMERS_I_02.
+
+=== 7. FUTON (2026-11-06)
+
+DDL: `exercises_progress/_ddl/sqlserver/futon/`, from microsoft/sql-server-samples at `3c71696`. 14 Codex items, 14 Claude items; Codex answered
+the disagreements once (`exercises_progress/FUTON/review-codex-reply.md`: 4 agree). Before: 15 live. After:
+27 live. Production, a subject no exercise had, got its own heading in EXERCISES.asciidoc; two native-query captions named stale ids (FUTON_BOM_A_02_Test, FUTON_SALES_A_01_Test) and now name FUTON_DBO_A_02_Test and FUTON_DBO_A_04_Test.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| FUTON_DBO_A_03 | both | fixed, request and sql | the inner join to Inventory dropped a component with no stock, so a futon missing one still counted as buildable; Codex's, with a finished good without a BOM shown as NULL and a negative stock as 0
+| FUTON_DBO_B_05 | both | fixed, request and sql | <> 'Delivered' also returned cancelled orders, and SQL Server put the orders with no requested date first
+| FUTON_DBO_I_03 | both | fixed, request and sql | a row is an item in a warehouse, but the warehouse was neither shown nor ordered, so two rows could tie and TOP (5) cut between them
+| FUTON_DBO_I_04 | both | fixed, request and sql | 'on receipt' is InspectionType 'Incoming', which the query did not ask for; the share divided by a sum that may be 0
+| FUTON_DBO_I_05 | both | fixed, request and sql | cancelled orders counted as sales (Claude); a channel with no order was left out, and equal amounts had no tie-break (Codex); the cancelled ones go out in the outer join's condition
+| FUTON_DBO_I_06 | Claude | fixed, request and sql | it counted every item of an order line, not only futons, and the lines of cancelled orders
+| FUTON_DBO_A_04 | Claude | fixed, request and sql | the running total added the net amount of cancelled orders
+| FUTON_DBO_B_04 | Claude | fixed, request and sql | SupplierItem keeps dated rows with no unique key on supplier and item, so an item came back twice, once with an ended price
+| FUTON_DBO_A_01 | Codex | fixed, request and sql | a component at the end of the explosion is not always a raw material; a raw material with no stock showed no availability instead of 0
+| FUTON_DBO_I_02 | Codex | fixed, request and sql | starting from the BOM rows left out a finished good with no active component; it shows with no cost
+| FUTON_DBO_I_07 | Codex | added, "the BOM links that break the planning assumptions" | nothing enforces positive quantities, known scrap rates, one unit, unique active pairs or raw materials being leaves, which the BOM exercises assume
+| FUTON_DBO_A_05 | Codex | added, "the items in a cycle of the bill of materials" | CHK_BOM_NotSelf stops a direct self-reference only; the recursive exercises assume no cycle at all
+| FUTON_DBO_B_06 | Codex | added, "an item's inventory transactions in a month" | InventoryTransaction and TransactionType are read by no exercise; a half-open month on a datetime2
+| FUTON_DBO_A_06 | Claude | added, "the last movement of each item in the main warehouse" | the greatest row per group, with ROW_NUMBER, over the transactions no exercise reads
+| FUTON_DBO_B_07 | Codex | added, "the purchase-order lines still to receive" | PurchaseOrderDetail is read by no exercise; QuantityReceived is nullable, and the line number is no declared key
+| FUTON_DBO_B_08 | Claude | added, "the accepted quotes not turned into orders" | SalesQuote is read by no exercise; its nullable ConvertedToOrderID is a Basic IS NULL
+| FUTON_DBO_I_08 | Claude | added, "the share of each item returned" | returns and the link from a return line to its order line are read by no exercise; summed per line first, so a line returned twice counts once
+| FUTON_DBO_I_09 | Codex | added, "the quantities returned and refunded, by reason and item" | ReturnReason is read by no exercise; the line refunds summed, not the header's
+| FUTON_DBO_B_09 | Claude | added, "the production orders completed late" | no exercise covers production; two dates compared, and the nullable work center by an outer join
+| FUTON_DBO_B_10 | Codex | added, "the open production schedule" | the open production orders, the work center not yet assigned kept by an outer join
+| FUTON_DBO_I_10 | Claude | added, "the scrap rate of each work center" | the Intermediate exercise of production: COALESCE in a join, NULL-safe sums, a guarded share
+| FUTON_DBO_I_11 | Codex | added, "the production materials still to issue" | ProductionOrderMaterial is read by no exercise; summed per order and item before the join to stock
+|===
+
+`NOT YET RUN`: FUTON_DBO_A_03, FUTON_DBO_B_05, FUTON_DBO_I_03, FUTON_DBO_I_04, FUTON_DBO_I_05, FUTON_DBO_I_06, FUTON_DBO_A_04, FUTON_DBO_B_04, FUTON_DBO_A_01, FUTON_DBO_I_02, FUTON_DBO_I_07, FUTON_DBO_A_05, FUTON_DBO_B_06, FUTON_DBO_A_06, FUTON_DBO_B_07, FUTON_DBO_B_08, FUTON_DBO_I_08, FUTON_DBO_I_09, FUTON_DBO_B_09, FUTON_DBO_B_10, FUTON_DBO_I_10, FUTON_DBO_I_11.
+
+=== 8-13. AW_DBO, AW_HUMANRESOURCES, AW_PERSON, AW_PRODUCTION, AW_PURCHASING, AW_SALES (2026-11-06)
+
+DDL: `exercises_progress/_ddl/sqlserver/adventureworks/`, from microsoft/sql-server-samples at `3c71696`. 17 Codex items, 15 Claude items; Codex answered
+the disagreements once (`exercises_progress/AW/review-codex-reply.md`: 4 agree). Before: 24 live. After:
+34 live. The six schema units ran as one review of the database: it has 24 exercises over its schemas, which a query joins across, and its DDL is one 324 KB script. dbo has no exercise; none was proposed.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| AW_PRODUCTION_I_01 | both | fixed, request and sql | the inner join from ProductInventory dropped a product with no inventory row, a stock of 0 and the most urgent
+| AW_SALES_A_01 | both | fixed, request and sql | PIVOT grouped by LastName alone, so two sales persons of one name would merge (Claude); sales persons without orders were left out, the years and the tie order unstated (Codex)
+| AW_SALES_B_02 | Claude | fixed, request and sql | a customer may be a person buying for a store, both columns set, so COUNT(PersonID) and COUNT(StoreID) overlapped
+| AW_PURCHASING_I_02 | both | fixed, request and sql | ReceivedQty may be 0, so the division could fail; Vendor.Name is not unique, so the key breaks the tie
+| AW_PURCHASING_I_01 | Claude | fixed, request and sql | rejected (3) and pending (1) orders were counted as money spent; Claude's approved and complete orders, over Codex's 'all statuses, called order amounts'
+| AW_PRODUCTION_I_02 | both | fixed, request and sql | a scrap reason means part of an order was scrapped, not that it stopped; TOP (5) on the sum alone had no tie-break
+| AW_PERSON_I_01 | both | fixed, request and sql | TOP (5) by a count alone was unstable at a tie
+| AW_SALES_I_02 | both | fixed, sql | TOP (5) by revenue alone was unstable at a tie
+| AW_SALES_I_04 | both | fixed, sql | TOP (5) by SalesYTD alone was unstable at a tie
+| AW_PRODUCTION_A_01 | Codex | fixed, request and sql | both recursive branches ignored StartDate and left out a row still effective with a future EndDate
+| AW_PERSON_A_01 | Codex | fixed, request and sql | Demographics is nullable and YearlyIncome optional in its schema, so a missing answer counted as a band of its own
+| AW_HUMANRESOURCES_B_01 | Codex | fixed, sql | the inner join left out a department with no current employee
+| AW_PURCHASING_A_01 | both | added, "The yearly spend with each vendor, against the year before" | Purchasing has no Advanced exercise; Claude's LAG over a yearly aggregate, on the approved and complete orders as AW_PURCHASING_I_01, over Codex's monthly running total of 2025
+| AW_PERSON_B_02 | Claude | added, "The addresses of each address type" | BusinessEntityAddress and AddressType, how every person, store and vendor reaches an address, are never read
+| AW_PERSON_B_03 | Codex | added, "An organization's contacts and their roles" | BusinessEntityContact and ContactType are read by no exercise
+| AW_HUMANRESOURCES_I_03 | Claude | added, "The employees who worked in more than one department" | EmployeeDepartmentHistory is read only for its current rows; its history is what makes it interesting
+| AW_HUMANRESOURCES_I_04 | Codex | added, "Shift lengths across midnight" | Shift and its time columns are read by no exercise; time arithmetic across midnight
+| AW_SALES_I_05 | Claude | added, "The orders and their amounts in each currency" | the nullable CurrencyRateID and CurrencyRate are read by no exercise; an outer join with COALESCE
+| AW_SALES_B_03 | Claude | added, "The orders that gave each sales reason" | the many-to-many SalesOrderHeaderSalesReason is never read
+| AW_PRODUCTION_B_02 | Claude | added, "The list price of a product on a date" | the dated price history is never queried; a date-range lookup with a NULL end
+| AW_PRODUCTION_I_03 | Claude | added, "The ten products whose work orders finish late the most" | WorkOrder is read only for scrap; its nullable EndDate against DueDate
+| AW_PURCHASING_B_02 | Claude | added, "The purchase orders of each status" | the coded Status, 1 to 4, documented only in the DDL's comment, is a CASE label and an enum mapping
+|===
+
+`NOT YET RUN`: AW_PRODUCTION_I_01, AW_SALES_A_01, AW_SALES_B_02, AW_PURCHASING_I_02, AW_PURCHASING_I_01, AW_PRODUCTION_I_02, AW_PERSON_I_01, AW_SALES_I_02, AW_SALES_I_04, AW_PRODUCTION_A_01, AW_PERSON_A_01, AW_HUMANRESOURCES_B_01, AW_PURCHASING_A_01, AW_PERSON_B_02, AW_PERSON_B_03, AW_HUMANRESOURCES_I_03, AW_HUMANRESOURCES_I_04, AW_SALES_I_05, AW_SALES_B_03, AW_PRODUCTION_B_02, AW_PRODUCTION_I_03, AW_PURCHASING_B_02.
+
+=== 14-18. WWI_APPLICATION, WWI_PURCHASING, WWI_SALES, WWI_WAREHOUSE, WWI_WEBSITE (2026-11-06)
+
+DDL: `exercises_progress/_ddl/sqlserver/wideworldimporters/`, from microsoft/sql-server-samples at `3c71696`. 16 Codex items, 13 Claude items; Codex answered
+the disagreements once (`exercises_progress/WWI/review-codex-reply.md`: 2 agree, 1 hold (applied: a check that every purchase order has lines and every line an expected price, WWI_PURCHASING_I_02)). Before: 22 live. After:
+33 live. The five schema units ran as one review of the database, as AW. Website has no section of its own; its views are read from Sales and Warehouse (WWI_WAREHOUSE_B_03). nested.py gave the six native-only exercises, which had no test, their empty nested classes.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| WWI_SALES_A_02 | both | fixed, request and sql | CreditLimit is nullable (no limit), and <> is unknown against a NULL, so a limit set or removed since the moment was missed; Claude's INTERSECT test, which takes two NULLs as equal
+| WWI_WAREHOUSE_A_01 | both | fixed, request and sql | FOR SYSTEM_TIME FROM ... TO also returned the reading recorded before @from that was still current at @from; the reading's own time is RecordedWhen
+| WWI_SALES_I_04 | Claude | fixed, request and sql | a customer gets a new version whenever any column changes, so 'every version' listed many where the limit did not
+| WWI_SALES_I_01 | both | fixed, request and sql | TOP (5) by revenue alone was unstable at a tie
+| WWI_SALES_A_01 | both | fixed, request and sql | RANK gives a tie one place and can return more than three; the order within a place was undefined
+| WWI_PURCHASING_B_02 | both | fixed, request and sql | ORDER BY Outstanding alone left suppliers of one balance in any order; SupplierName is unique
+| WWI_WAREHOUSE_I_02 | Claude | fixed, request and sql | few countries, so equal counts are likely and were in no order; an item without the key forms a NULL group the request did not name
+| WWI_SALES_I_03 | Codex | fixed, request and sql | filtering on InvoiceDate took in unconfirmed deliveries and left out older invoices delivered after the date; the delivery's own time is ConfirmedDeliveryTime
+| WWI_APPLICATION_A_01 | Codex | fixed, request and sql | a city with no location gives a NULL distance, and equal distances made TOP unstable
+| WWI_PURCHASING_I_01 | Codex | fixed, sql | equal amounts were in no order; SupplierID breaks the tie
+| WWI_SALES_B_01 | Codex | fixed, request and sql | starting from Customers left out a buying group with no customer
+| WWI_WAREHOUSE_I_01 | Codex | fixed, request and sql | the inner join left out a stock group with no item
+| WWI_APPLICATION_B_01 | Codex | fixed, sql | FullName is not unique; PersonID breaks a tie
+| WWI_PURCHASING_A_01 | Claude | added, "The suppliers' late deliveries" | Purchasing has no Advanced exercise, and the nullable delivery dates of purchase orders are used by none
+| WWI_PURCHASING_A_02 | Codex | added, "Each supplier's three most overdue purchase orders" | the open orders past their expected date, ranked per supplier
+| WWI_SALES_I_05 | Claude | added, "The special deals in force on a date" | Sales.SpecialDeals and its five nullable foreign keys are used by no exercise
+| WWI_SALES_I_06 | Codex | added, "The special deals that apply to a customer and an item" | the deals that apply to one customer and item: a NULL key matches anything
+| WWI_SALES_I_07 | Claude | added, "The ten customers using the most of their credit limit" | Sales.CustomerTransactions and the credit limit are never compared; a NULL limit is no limit
+| WWI_APPLICATION_B_02 | Claude | added, "The sales territories of a country" | the country-to-state hierarchy and SalesTerritory are never used
+| WWI_APPLICATION_B_03 | Codex | added, "The cities of a country's states and provinces" | no exercise follows Cities to StateProvinces to Countries
+| WWI_WAREHOUSE_I_03 | Claude | added, "The movements of a stock item in a year, by transaction type" | the stock ledger and TransactionTypes are not used anywhere
+| WWI_WAREHOUSE_I_04 | Codex | added, "Incoming and outgoing stock movements" | the ledger's sign convention, in positive, out negative, with conditional sums
+| WWI_WAREHOUSE_B_03 | Claude | added, "The latest vehicle temperature readings" | the Website.VehicleTemperatures view is not used
+| WWI_PURCHASING_I_02 | Codex (reply) | added, "Purchase orders the amounts cannot count" | WWI_PURCHASING_I_01 assumes every order has lines and every line an expected price, which nothing enforces; a check guards both
+|===
+
+`NOT YET RUN`: WWI_SALES_A_02, WWI_WAREHOUSE_A_01, WWI_SALES_I_04, WWI_SALES_I_01, WWI_SALES_A_01, WWI_PURCHASING_B_02, WWI_WAREHOUSE_I_02, WWI_SALES_I_03, WWI_APPLICATION_A_01, WWI_PURCHASING_I_01, WWI_SALES_B_01, WWI_WAREHOUSE_I_01, WWI_APPLICATION_B_01, WWI_PURCHASING_A_01, WWI_PURCHASING_A_02, WWI_SALES_I_05, WWI_SALES_I_06, WWI_SALES_I_07, WWI_APPLICATION_B_02, WWI_APPLICATION_B_03, WWI_WAREHOUSE_I_03, WWI_WAREHOUSE_I_04, WWI_WAREHOUSE_B_03, WWI_PURCHASING_I_02.
+
+== Phase 1 done (2026-11-06)
+
+Every unit of the queue is done. Phase 2 runs each database's `NOT YET RUN` statements, one database at a time, and the
+agent answering the exercises in JPQL takes the `JPQL NOT YET UPDATED` marks with the nested test classes.
+

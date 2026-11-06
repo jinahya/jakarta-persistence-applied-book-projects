@@ -1,0 +1,260 @@
+{
+ "module": "sqlserver-samples-persistence/sqlserver-samples-persistence-adventureworks",
+ "changes": [
+  {
+   "op": "fix",
+   "id": "AW_PRODUCTION_I_01",
+   "_src": "both",
+   "_why": "the inner join from ProductInventory dropped a product with no inventory row, a stock of 0 and the most urgent",
+   "rerun": true,
+   "request": [
+    "The warehouse refills the shelves. Show the products whose stock, over every location, is less than half their safety stock level, a product with no inventory row counting as 0, the lowest stock first; `ProductID` breaks a tie."
+   ],
+   "sql": "SELECT p.ProductID, p.Name, p.SafetyStockLevel, COALESCE(SUM(i.Quantity), 0) AS Quantity\nFROM Production.Product p\n         LEFT JOIN Production.ProductInventory i ON i.ProductID = p.ProductID\nGROUP BY p.ProductID, p.Name, p.SafetyStockLevel\nHAVING COALESCE(SUM(i.Quantity), 0) * 2 < p.SafetyStockLevel\nORDER BY Quantity, p.ProductID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_SALES_A_01",
+   "_src": "both",
+   "_why": "PIVOT grouped by LastName alone, so two sales persons of one name would merge (Claude); sales persons without orders were left out, the years and the tie order unstated (Codex)",
+   "rerun": true,
+   "request": [
+    "The sales director compares the sales persons over the years. Show every sales person's order subtotals for the fiscal years ending in 2022, 2023, 2024 and 2025, a column per year, `0` for a year without sales; Adventure Works' fiscal year starts on the 1st of July.",
+    "`SalesPersonID` goes through the pivot, so two sales persons of one last name stay apart; the rows are ordered by the 2025 sales, the most first, then by `SalesPersonID`."
+   ],
+   "sql": "SELECT pvt.SalesPersonID,\n       pvt.LastName,\n       COALESCE(pvt.[2022], 0) AS [2022],\n       COALESCE(pvt.[2023], 0) AS [2023],\n       COALESCE(pvt.[2024], 0) AS [2024],\n       COALESCE(pvt.[2025], 0) AS [2025]\nFROM (SELECT sp.BusinessEntityID AS SalesPersonID, p.LastName, h.SubTotal, YEAR(DATEADD(MONTH, 6, h.OrderDate)) AS FiscalYear\n      FROM Sales.SalesPerson sp\n               JOIN Person.Person p ON p.BusinessEntityID = sp.BusinessEntityID\n               LEFT JOIN Sales.SalesOrderHeader h ON h.SalesPersonID = sp.BusinessEntityID\n          AND h.OrderDate >= '20210701'\n          AND h.OrderDate < '20250701') AS s\n         PIVOT (SUM(s.SubTotal) FOR s.FiscalYear IN ([2022], [2023], [2024], [2025])) AS pvt\nORDER BY COALESCE(pvt.[2025], 0) DESC, pvt.SalesPersonID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_SALES_B_02",
+   "_src": "Claude",
+   "_why": "a customer may be a person buying for a store, both columns set, so COUNT(PersonID) and COUNT(StoreID) overlapped",
+   "rerun": true,
+   "request": [
+    "Sales counts its customers. Show how many customers there are, how many of them are persons buying for themselves, how many are stores, and how many are persons buying for a store; the three kinds add up to the total."
+   ],
+   "sql": "SELECT COUNT(*)                                                                         AS Customers,\n       SUM(CASE WHEN c.PersonID IS NOT NULL AND c.StoreID IS NULL THEN 1 ELSE 0 END)     AS Persons,\n       SUM(CASE WHEN c.PersonID IS NULL AND c.StoreID IS NOT NULL THEN 1 ELSE 0 END)     AS Stores,\n       SUM(CASE WHEN c.PersonID IS NOT NULL AND c.StoreID IS NOT NULL THEN 1 ELSE 0 END) AS StoreContacts\nFROM Sales.Customer c"
+  },
+  {
+   "op": "fix",
+   "id": "AW_PURCHASING_I_02",
+   "_src": "both",
+   "_why": "ReceivedQty may be 0, so the division could fail; Vendor.Name is not unique, so the key breaks the tie",
+   "rerun": true,
+   "request": [
+    "Quality assurance looks for unreliable vendors. Show the five vendors whose received goods were rejected the most, by the share of the quantity received, vendors with nothing received left out; `BusinessEntityID` breaks a tie."
+   ],
+   "sql": "SELECT TOP (5) v.Name,\n               SUM(d.ReceivedQty) AS ReceivedQty,\n               SUM(d.RejectedQty) AS RejectedQty,\n               CAST(SUM(d.RejectedQty) * 100.0 / NULLIF(SUM(d.ReceivedQty), 0) AS decimal(19, 2)) AS RejectedPercent\nFROM Purchasing.PurchaseOrderDetail d\n         JOIN Purchasing.PurchaseOrderHeader h ON h.PurchaseOrderID = d.PurchaseOrderID\n         JOIN Purchasing.Vendor v ON v.BusinessEntityID = h.VendorID\nGROUP BY v.BusinessEntityID, v.Name\nHAVING SUM(d.ReceivedQty) > 0\nORDER BY SUM(d.RejectedQty) / NULLIF(SUM(d.ReceivedQty), 0) DESC, v.BusinessEntityID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_PURCHASING_I_01",
+   "_src": "Claude",
+   "_why": "rejected (3) and pending (1) orders were counted as money spent; Claude's approved and complete orders, over Codex's 'all statuses, called order amounts'",
+   "rerun": true,
+   "request": [
+    "The purchasing manager prepares the vendor reviews. Show the five vendors the company spent the most with, counting approved and complete purchase orders, `Status` 2 and 4, and how many such orders each one had; `BusinessEntityID` breaks a tie."
+   ],
+   "sql": "SELECT TOP (5) v.AccountNumber, v.Name, COUNT(*) AS Orders, SUM(h.TotalDue) AS TotalDue\nFROM Purchasing.PurchaseOrderHeader h\n         JOIN Purchasing.Vendor v ON v.BusinessEntityID = h.VendorID\nWHERE h.Status IN (2, 4)\nGROUP BY v.BusinessEntityID, v.AccountNumber, v.Name\nORDER BY TotalDue DESC, v.BusinessEntityID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_PRODUCTION_I_02",
+   "_src": "both",
+   "_why": "a scrap reason means part of an order was scrapped, not that it stopped; TOP (5) on the sum alone had no tie-break",
+   "rerun": true,
+   "request": [
+    "The plant manager looks for the costliest failures. Show the five scrap reasons with the most scrapped quantity, and how many work orders scrapped parts for each one; `ScrapReasonID` breaks a tie."
+   ],
+   "sql": "SELECT TOP (5) r.Name, COUNT(*) AS WorkOrders, SUM(w.ScrappedQty) AS ScrappedQty\nFROM Production.WorkOrder w\n         JOIN Production.ScrapReason r ON r.ScrapReasonID = w.ScrapReasonID\nGROUP BY r.ScrapReasonID, r.Name\nORDER BY ScrappedQty DESC, r.ScrapReasonID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_PERSON_I_01",
+   "_src": "both",
+   "_why": "TOP (5) by a count alone was unstable at a tie",
+   "rerun": true,
+   "request": [
+    "Marketing picks the countries for a mailing. Show the five countries with the most addresses; `CountryRegionCode` breaks a tie."
+   ],
+   "sql": "SELECT TOP (5) c.CountryRegionCode, c.Name, COUNT(*) AS Addresses\nFROM Person.Address a\n         JOIN Person.StateProvince s ON s.StateProvinceID = a.StateProvinceID\n         JOIN Person.CountryRegion c ON c.CountryRegionCode = s.CountryRegionCode\nGROUP BY c.CountryRegionCode, c.Name\nORDER BY Addresses DESC, c.CountryRegionCode"
+  },
+  {
+   "op": "fix",
+   "id": "AW_SALES_I_02",
+   "_src": "both",
+   "_why": "TOP (5) by revenue alone was unstable at a tie",
+   "rerun": true,
+   "sql": "SELECT TOP (5) p.ProductNumber, p.Name, SUM(d.OrderQty) AS OrderQty, SUM(d.LineTotal) AS LineTotal\nFROM Sales.SalesOrderDetail d\n         JOIN Production.Product p ON p.ProductID = d.ProductID\nGROUP BY p.ProductID, p.ProductNumber, p.Name\nORDER BY LineTotal DESC, p.ProductID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_SALES_I_04",
+   "_src": "both",
+   "_why": "TOP (5) by SalesYTD alone was unstable at a tie",
+   "rerun": true,
+   "sql": "SELECT TOP (5) p.FirstName, p.LastName, t.Name AS Territory, sp.SalesYTD\nFROM Sales.SalesPerson sp\n         JOIN HumanResources.Employee e ON e.BusinessEntityID = sp.BusinessEntityID\n         JOIN Person.Person p ON p.BusinessEntityID = e.BusinessEntityID\n         LEFT JOIN Sales.SalesTerritory t ON t.TerritoryID = sp.TerritoryID\nORDER BY sp.SalesYTD DESC, sp.BusinessEntityID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_PRODUCTION_A_01",
+   "_src": "Codex",
+   "_why": "both recursive branches ignored StartDate and left out a row still effective with a future EndDate",
+   "rerun": true,
+   "request": [
+    "Show every part of a product from its bill of materials effective now, down to the raw materials, with the quantity its immediate assembly takes and its depth; a row is effective from its `StartDate` through its `EndDate`, or with no end."
+   ],
+   "sql": "DECLARE @productId int = 818;\nDECLARE @asOf datetime = GETDATE();\nWITH Parts (AssemblyID, ComponentID, PerAssemblyQty, BomLevel) AS (SELECT b.ProductAssemblyID, b.ComponentID, b.PerAssemblyQty, 1\n                                                                   FROM Production.BillOfMaterials b\n                                                                   WHERE b.ProductAssemblyID = @productId\n                                                                     AND b.StartDate <= @asOf\n                                                                     AND (b.EndDate IS NULL OR b.EndDate >= @asOf)\n                                                                   UNION ALL\n                                                                   SELECT b.ProductAssemblyID, b.ComponentID, b.PerAssemblyQty, p.BomLevel + 1\n                                                                   FROM Production.BillOfMaterials b\n                                                                            JOIN Parts p ON p.ComponentID = b.ProductAssemblyID\n                                                                   WHERE b.StartDate <= @asOf\n                                                                     AND (b.EndDate IS NULL OR b.EndDate >= @asOf))\nSELECT p.AssemblyID, p.ComponentID, c.Name, p.PerAssemblyQty, p.BomLevel\nFROM Parts p\n         JOIN Production.Product c ON c.ProductID = p.ComponentID\nORDER BY p.BomLevel, p.AssemblyID, p.ComponentID"
+  },
+  {
+   "op": "fix",
+   "id": "AW_PERSON_A_01",
+   "_src": "Codex",
+   "_why": "Demographics is nullable and YearlyIncome optional in its schema, so a missing answer counted as a band of its own",
+   "rerun": true,
+   "request": [
+    "Marketing segments the individual customers. Show how many of them answered each yearly income band of the survey stored in their Demographics document, the customers who did not answer left out."
+   ],
+   "sql": "WITH XMLNAMESPACES (DEFAULT 'http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/IndividualSurvey')\nSELECT i.YearlyIncome, COUNT(*) AS Persons\nFROM (SELECT p.Demographics.value('(/IndividualSurvey/YearlyIncome)[1]', 'nvarchar(30)') AS YearlyIncome\n      FROM Person.Person p\n      WHERE p.PersonType = 'IN'\n        AND p.Demographics.exist('/IndividualSurvey/YearlyIncome') = 1) AS i\nGROUP BY i.YearlyIncome\nORDER BY i.YearlyIncome"
+  },
+  {
+   "op": "fix",
+   "id": "AW_HUMANRESOURCES_B_01",
+   "_src": "Codex",
+   "_why": "the inner join left out a department with no current employee",
+   "rerun": true,
+   "sql": "SELECT d.Name, d.GroupName, COUNT(h.BusinessEntityID) AS Employees\nFROM HumanResources.Department d\n         LEFT JOIN HumanResources.EmployeeDepartmentHistory h ON h.DepartmentID = d.DepartmentID AND h.EndDate IS NULL\nGROUP BY d.DepartmentID, d.Name, d.GroupName\nORDER BY Employees DESC, d.Name"
+  },
+  {
+   "op": "add",
+   "id": "AW_PURCHASING_A_01",
+   "after": "last",
+   "_src": "both",
+   "_why": "Purchasing has no Advanced exercise; Claude's LAG over a yearly aggregate, on the approved and complete orders as AW_PURCHASING_I_01, over Codex's monthly running total of 2025",
+   "rerun": true,
+   "title": "The yearly spend with each vendor, against the year before",
+   "request": [
+    "The purchasing manager watches how the spend with each vendor moves. Show, for each vendor and year, what was spent on its approved and complete purchase orders, the spend of the vendor's previous year with orders, and the change."
+   ],
+   "sql": "WITH Yearly (VendorID, OrderYear, TotalDue) AS (SELECT h.VendorID, YEAR(h.OrderDate), SUM(h.TotalDue)\n                                                FROM Purchasing.PurchaseOrderHeader h\n                                                WHERE h.Status IN (2, 4)\n                                                GROUP BY h.VendorID, YEAR(h.OrderDate))\nSELECT v.Name,\n       y.OrderYear,\n       y.TotalDue,\n       LAG(y.TotalDue) OVER (PARTITION BY y.VendorID ORDER BY y.OrderYear)              AS PreviousTotalDue,\n       y.TotalDue - LAG(y.TotalDue) OVER (PARTITION BY y.VendorID ORDER BY y.OrderYear) AS Change\nFROM Yearly y\n         JOIN Purchasing.Vendor v ON v.BusinessEntityID = y.VendorID\nORDER BY v.Name, y.VendorID, y.OrderYear"
+  },
+  {
+   "op": "add",
+   "id": "AW_PERSON_B_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "BusinessEntityAddress and AddressType, how every person, store and vendor reaches an address, are never read",
+   "rerun": true,
+   "title": "The addresses of each address type",
+   "request": [
+    "The data steward checks how the addresses are used. Show how many addresses are held for each address type, the most first."
+   ],
+   "sql": "SELECT t.Name, COUNT(*) AS Addresses\nFROM Person.BusinessEntityAddress bea\n         JOIN Person.AddressType t ON t.AddressTypeID = bea.AddressTypeID\nGROUP BY t.AddressTypeID, t.Name\nORDER BY Addresses DESC, t.Name"
+  },
+  {
+   "op": "add",
+   "id": "AW_PERSON_B_03",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "BusinessEntityContact and ContactType are read by no exercise",
+   "rerun": true,
+   "title": "An organization's contacts and their roles",
+   "request": [
+    "The account manager wants the contact persons of a business entity and the role of each, ordered by last name, first name, person and role."
+   ],
+   "sql": "DECLARE @businessEntityId int = 1492;\nSELECT p.BusinessEntityID AS PersonID, p.FirstName, p.LastName, t.Name AS ContactType\nFROM Person.BusinessEntityContact c\n         JOIN Person.Person p ON p.BusinessEntityID = c.PersonID\n         JOIN Person.ContactType t ON t.ContactTypeID = c.ContactTypeID\nWHERE c.BusinessEntityID = @businessEntityId\nORDER BY p.LastName, p.FirstName, p.BusinessEntityID, t.ContactTypeID"
+  },
+  {
+   "op": "add",
+   "id": "AW_HUMANRESOURCES_I_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "EmployeeDepartmentHistory is read only for its current rows; its history is what makes it interesting",
+   "rerun": true,
+   "title": "The employees who worked in more than one department",
+   "request": [
+    "HR looks at internal mobility. Show the employees who have worked in more than one department, with how many departments each one worked in."
+   ],
+   "sql": "SELECT p.FirstName, p.LastName, COUNT(DISTINCT h.DepartmentID) AS Departments\nFROM HumanResources.EmployeeDepartmentHistory h\n         JOIN Person.Person p ON p.BusinessEntityID = h.BusinessEntityID\nGROUP BY h.BusinessEntityID, p.FirstName, p.LastName\nHAVING COUNT(DISTINCT h.DepartmentID) > 1\nORDER BY p.LastName, p.FirstName, h.BusinessEntityID"
+  },
+  {
+   "op": "add",
+   "id": "AW_HUMANRESOURCES_I_04",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "Shift and its time columns are read by no exercise; time arithmetic across midnight",
+   "rerun": true,
+   "title": "Shift lengths across midnight",
+   "request": [
+    "HR wants each shift's start, end and length in minutes; a shift that ends at or before its start ends the next day."
+   ],
+   "sql": "SELECT s.ShiftID, s.Name, s.StartTime, s.EndTime,\n       DATEDIFF(MINUTE, s.StartTime, s.EndTime) + CASE WHEN s.EndTime <= s.StartTime THEN 1440 ELSE 0 END AS DurationMinutes\nFROM HumanResources.Shift s\nORDER BY s.ShiftID"
+  },
+  {
+   "op": "add",
+   "id": "AW_SALES_I_05",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the nullable CurrencyRateID and CurrencyRate are read by no exercise; an outer join with COALESCE",
+   "rerun": true,
+   "title": "The orders and their amounts in each currency",
+   "request": [
+    "Finance reports sales by currency. Show, for each currency the orders were paid in, how many orders there were, their total in US dollars, and their total in that currency; an order with no rate is in US dollars."
+   ],
+   "sql": "SELECT COALESCE(r.ToCurrencyCode, N'USD')           AS CurrencyCode,\n       COUNT(*)                                     AS Orders,\n       SUM(h.TotalDue)                              AS TotalDueUsd,\n       SUM(h.TotalDue * COALESCE(r.AverageRate, 1)) AS TotalDueInCurrency\nFROM Sales.SalesOrderHeader h\n         LEFT JOIN Sales.CurrencyRate r ON r.CurrencyRateID = h.CurrencyRateID\nGROUP BY COALESCE(r.ToCurrencyCode, N'USD')\nORDER BY Orders DESC, CurrencyCode"
+  },
+  {
+   "op": "add",
+   "id": "AW_SALES_B_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the many-to-many SalesOrderHeaderSalesReason is never read",
+   "rerun": true,
+   "title": "The orders that gave each sales reason",
+   "request": [
+    "Marketing asks why customers buy. Show, for each sales reason and its type, how many orders gave it, the most first, a reason no order gave included."
+   ],
+   "sql": "SELECT r.ReasonType, r.Name, COUNT(hr.SalesOrderID) AS Orders\nFROM Sales.SalesReason r\n         LEFT JOIN Sales.SalesOrderHeaderSalesReason hr ON hr.SalesReasonID = r.SalesReasonID\nGROUP BY r.SalesReasonID, r.ReasonType, r.Name\nORDER BY Orders DESC, r.Name"
+  },
+  {
+   "op": "add",
+   "id": "AW_PRODUCTION_B_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the dated price history is never queried; a date-range lookup with a NULL end",
+   "rerun": true,
+   "title": "The list price of a product on a date",
+   "request": [
+    "A customer disputes an old invoice. Show the list price a product had on a given date; a price runs from its `StartDate` through its `EndDate`, or with no end."
+   ],
+   "sql": "DECLARE @productId int = 707;\nDECLARE @onDate date = '2024-01-01';\nSELECT h.ProductID, h.ListPrice, CAST(h.StartDate AS date) AS StartDate, CAST(h.EndDate AS date) AS EndDate\nFROM Production.ProductListPriceHistory h\nWHERE h.ProductID = @productId\n  AND h.StartDate <= @onDate\n  AND (h.EndDate IS NULL OR h.EndDate >= @onDate)"
+  },
+  {
+   "op": "add",
+   "id": "AW_PRODUCTION_I_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "WorkOrder is read only for scrap; its nullable EndDate against DueDate",
+   "rerun": true,
+   "title": "The ten products whose work orders finish late the most",
+   "request": [
+    "The plant manager looks for late production. Show the ten products with the most work orders finished after their due date, and by how many days they were late on average; `ProductID` breaks a tie.",
+    "`AVG` of the integer `DATEDIFF` returns would truncate, so it averages a decimal."
+   ],
+   "sql": "SELECT TOP (10) p.ProductID, p.Name, COUNT(*) AS LateWorkOrders, AVG(1.0 * DATEDIFF(DAY, w.DueDate, w.EndDate)) AS AverageDaysLate\nFROM Production.WorkOrder w\n         JOIN Production.Product p ON p.ProductID = w.ProductID\nWHERE w.EndDate > w.DueDate\nGROUP BY p.ProductID, p.Name\nORDER BY LateWorkOrders DESC, p.ProductID"
+  },
+  {
+   "op": "add",
+   "id": "AW_PURCHASING_B_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the coded Status, 1 to 4, documented only in the DDL's comment, is a CASE label and an enum mapping",
+   "rerun": true,
+   "title": "The purchase orders of each status",
+   "request": [
+    "The purchasing manager checks the pipeline. Show, for each status of the purchase orders, how many orders there are and what they come to: 1 Pending, 2 Approved, 3 Rejected, 4 Complete."
+   ],
+   "sql": "SELECT h.Status,\n       CASE h.Status WHEN 1 THEN 'Pending' WHEN 2 THEN 'Approved' WHEN 3 THEN 'Rejected' WHEN 4 THEN 'Complete' END AS StatusName,\n       COUNT(*)        AS Orders,\n       SUM(h.TotalDue) AS TotalDue\nFROM Purchasing.PurchaseOrderHeader h\nGROUP BY h.Status\nORDER BY h.Status"
+  }
+ ]
+}

@@ -1,0 +1,609 @@
+= Exercises
+:toc: left
+:toclevels: 3
+:sectanchors:
+:source-highlighter: rouge
+
+Exercises for the FutonManufacturing database: questions a production planner, a buyer or a sales manager of a futon
+maker would ask, each answered with a query. Every problem is stated as a request, followed by its answer. The `sql`
+blocks are Transact-SQL against the installed database (see link:../../../../README.md[README.md]), with the values written
+in; the files are in `src/test/sql-exercises/_dbo`, a file per level, each exercise under a ruler that carries its id.
+The `jpaql` blocks are Jakarta Persistence 3.2 query language against this module's entities, with named
+parameters. The `_Dbo_Exercises_<NN>_<Level>_PersistenceIT` classes, in `src/test/java-exercises`, answer each with the query language and with the Criteria
+API, as a nested class named after the id, or with a native query where the query language cannot, and check the
+rows the SQL gives.
+
+An id is `FUTON_DBO_<TIER>_<NN>`, after `dbo`, the only schema; the tier is B (Basic), I (Intermediate) or A
+(Advanced), and the number is within that tier. `EXERCISES.yaml` registers every id; an id is never reused or
+renumbered.
+
+The outputs were taken on 2026-11-01 from `sqlcmd -W -s '|'`, aligned with `column -t -s '|'`.
+
+== Bill of materials
+
+Reads `BillOfMaterials`, `Items`, `ItemType`, `UnitOfMeasure`, `Inventory`, `vw_WhereUsed`.
+
+[[FUTON_DBO_B_01]]
+=== FUTON_DBO_B_01: the direct components of a finished futon
+
+The direct components of a finished futon, FG-FUT-003, with the quantity, the unit and the scrap rate of each.
+
+[source,sql]
+----
+SELECT c.ItemCode, c.ItemName, b.Quantity, u.UnitCode, b.ScrapRate
+FROM BillOfMaterials b
+         JOIN Items p ON p.ItemID = b.ParentItemID
+         JOIN Items c ON c.ItemID = b.ComponentItemID
+         JOIN UnitOfMeasure u ON u.UnitID = b.UnitID
+WHERE p.ItemCode = 'FG-FUT-003'
+  AND b.IsActive = 1
+ORDER BY c.ItemCode
+;
+----
+
+.`_dbo/01_basic.sql`, FUTON_DBO_B_01, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT b
+FROM DboBillOfMaterials b
+WHERE b.parentItem.itemCode = :itemCode
+  AND b.isActive = TRUE
+ORDER BY b.componentItem.itemCode
+----
+
+[[FUTON_DBO_B_02]]
+=== FUTON_DBO_B_02: the raw materials no item uses
+
+The raw materials which no item uses: bought, and stocked, for nothing.
+
+[source,sql]
+----
+SELECT i.ItemCode, i.ItemName
+FROM Items i
+         JOIN ItemType t ON t.ItemTypeID = i.ItemTypeID
+WHERE t.TypeCode = 'RAW'
+  AND NOT EXISTS (SELECT 1
+                  FROM BillOfMaterials b
+                  WHERE b.ComponentItemID = i.ItemID
+                    AND b.IsActive = 1)
+ORDER BY i.ItemCode
+;
+----
+
+.`_dbo/01_basic.sql`, FUTON_DBO_B_02, run on 2026-11-01
+[%collapsible]
+====
+====
+
+The unused raw materials are found with `NOT EXISTS`.
+
+[source,jpaql]
+----
+SELECT i
+FROM DboItem i
+WHERE i.itemType.typeCode = :typeCode
+  AND NOT EXISTS (SELECT b
+                  FROM DboBillOfMaterials b
+                  WHERE b.componentItem = i
+                    AND b.isActive = TRUE)
+ORDER BY i.itemCode
+----
+
+[[FUTON_DBO_I_01]]
+=== FUTON_DBO_I_01: the raw materials which four or more items use
+
+The raw materials which four or more items use directly, with the number of those items, the most used first.
+
+[source,sql]
+----
+SELECT c.ItemCode, c.ItemName, COUNT(*) AS Parents
+FROM BillOfMaterials b
+         JOIN Items c ON c.ItemID = b.ComponentItemID
+         JOIN ItemType t ON t.ItemTypeID = c.ItemTypeID
+WHERE t.TypeCode = 'RAW'
+  AND b.IsActive = 1
+GROUP BY c.ItemID, c.ItemCode, c.ItemName
+HAVING COUNT(*) >= 4
+ORDER BY Parents DESC, c.ItemCode
+;
+----
+
+.`_dbo/02_intermediate.sql`, FUTON_DBO_I_01, run on 2026-11-01
+[%collapsible]
+====
+====
+
+The Criteria API answer joins `b.componentItem` and groups by it; `HAVING` takes `builder.ge(parents, 4L)`.
+
+[source,jpaql]
+----
+SELECT c, COUNT(b) AS parents
+FROM DboBillOfMaterials b
+     JOIN b.componentItem c
+WHERE c.itemType.typeCode = :typeCode
+  AND b.isActive = TRUE
+GROUP BY c
+HAVING COUNT(b) >= 4
+ORDER BY parents DESC, c.itemCode
+----
+
+[[FUTON_DBO_I_02]]
+=== FUTON_DBO_I_02: the material cost and the margin of each finished futon
+
+The material cost of each finished futon, from the standard costs of its direct components and their scrap rates, and
+what is left of its list price.
+
+[source,sql]
+----
+SELECT p.ItemCode,
+       p.ItemName,
+       CAST(SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost) AS DECIMAL(18, 4)) AS MaterialCost,
+       p.ListPrice,
+       CAST(p.ListPrice - SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost) AS DECIMAL(18, 4)) AS Margin
+FROM BillOfMaterials b
+         JOIN Items p ON p.ItemID = b.ParentItemID
+         JOIN Items c ON c.ItemID = b.ComponentItemID
+         JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID
+WHERE t.TypeCode = 'FG'
+  AND b.IsActive = 1
+GROUP BY p.ItemID, p.ItemCode, p.ItemName, p.ListPrice
+ORDER BY p.ItemCode
+;
+----
+
+.`_dbo/02_intermediate.sql`, FUTON_DBO_I_02, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT p,
+       SUM(b.quantity * (1 + b.scrapRate / 100) * c.standardCost),
+       p.listPrice - SUM(b.quantity * (1 + b.scrapRate / 100) * c.standardCost)
+FROM DboBillOfMaterials b
+     JOIN b.parentItem p
+     JOIN b.componentItem c
+WHERE p.itemType.typeCode = :typeCode
+  AND b.isActive = TRUE
+GROUP BY p
+ORDER BY p.itemCode
+----
+
+[[FUTON_DBO_A_01]]
+=== FUTON_DBO_A_01: the raw materials ten futons need, through every level
+
+The raw materials which ten of FG-FUT-003 need, through every level of the bill of materials, with the scrap of each
+level, beside what is available of each.
+
+[source,sql]
+----
+WITH Explosion AS (SELECT b.ComponentItemID,
+                          CAST(10 * b.Quantity * (1 + b.ScrapRate / 100) AS DECIMAL(28, 8)) AS Quantity
+                   FROM BillOfMaterials b
+                            JOIN Items p ON p.ItemID = b.ParentItemID
+                   WHERE p.ItemCode = 'FG-FUT-003'
+                     AND b.IsActive = 1
+                   UNION ALL
+                   SELECT b.ComponentItemID,
+                          CAST(e.Quantity * b.Quantity * (1 + b.ScrapRate / 100) AS DECIMAL(28, 8))
+                   FROM Explosion e
+                            JOIN BillOfMaterials b ON b.ParentItemID = e.ComponentItemID
+                   WHERE b.IsActive = 1)
+SELECT i.ItemCode,
+       i.ItemName,
+       CAST(SUM(e.Quantity) AS DECIMAL(18, 4)) AS Quantity,
+       u.UnitCode,
+       (SELECT SUM(v.QuantityAvailable) FROM Inventory v WHERE v.ItemID = i.ItemID) AS Available
+FROM Explosion e
+         JOIN Items i ON i.ItemID = e.ComponentItemID
+         JOIN UnitOfMeasure u ON u.UnitID = i.UnitID
+WHERE NOT EXISTS (SELECT 1
+                  FROM BillOfMaterials b
+                  WHERE b.ParentItemID = e.ComponentItemID
+                    AND b.IsActive = 1)
+GROUP BY i.ItemID, i.ItemCode, i.ItemName, u.UnitCode
+ORDER BY i.ItemCode
+;
+----
+
+.`_dbo/03_advanced.sql`, FUTON_DBO_A_01, run on 2026-11-01
+[%collapsible]
+====
+====
+
+Jakarta Persistence has no recursive query. The test walks the bill of materials a level at a time instead: one query
+per level, `+b.parentItemId IN :parentItemIds+`, the quantities multiplied in Java; the JPQL below is that per-level
+query.
+
+[source,jpaql]
+----
+SELECT b
+FROM DboBillOfMaterials b
+WHERE b.parentItemId IN :parentItemIds
+  AND b.isActive = TRUE
+----
+
+[[FUTON_DBO_A_02]]
+=== FUTON_DBO_A_02: the finished goods which use a raw material, at any level
+
+The finished goods which use RM-FILL-001, at any level, a row per path, with the quantity along the path.
+
+[source,sql]
+----
+WITH WhereUsed AS (SELECT b.ParentItemID,
+                          CAST(b.Quantity AS DECIMAL(18, 4)) AS Quantity,
+                          1 AS Level,
+                          CAST(c.ItemCode + ' used in ' + p.ItemCode AS NVARCHAR(MAX)) AS UsagePath
+                   FROM BillOfMaterials b
+                            JOIN Items c ON c.ItemID = b.ComponentItemID
+                            JOIN Items p ON p.ItemID = b.ParentItemID
+                   WHERE c.ItemCode = 'RM-FILL-001'
+                     AND b.IsActive = 1
+                   UNION ALL
+                   SELECT b.ParentItemID,
+                          CAST(w.Quantity * b.Quantity AS DECIMAL(18, 4)),
+                          w.Level + 1,
+                          CAST(w.UsagePath + ' > ' + p.ItemCode AS NVARCHAR(MAX))
+                   FROM WhereUsed w
+                            JOIN BillOfMaterials b ON b.ComponentItemID = w.ParentItemID
+                            JOIN Items p ON p.ItemID = b.ParentItemID
+                   WHERE b.IsActive = 1)
+SELECT i.ItemCode, w.Level, w.Quantity, w.UsagePath
+FROM WhereUsed w
+         JOIN Items i ON i.ItemID = w.ParentItemID
+         JOIN ItemType t ON t.ItemTypeID = i.ItemTypeID
+WHERE t.TypeCode = 'FG'
+ORDER BY i.ItemCode, w.UsagePath
+;
+----
+
+.`_dbo/03_advanced.sql`, FUTON_DBO_A_02, run on 2026-11-01
+[%collapsible]
+====
+====
+
+SQL only: a recursive common table expression. The view `vw_WhereUsed` gives the same rows; the test reads it with the
+native query below and builds a `WhereUsedView`, a keyless class, from each row through its public constructor.
+
+.The native query of `FUTON_BOM_A_02_Test.nativeQuery`
+[source,sql]
+----
+SELECT ComponentItemID, ComponentItemCode, ComponentItemName,
+       ParentItemID, ParentItemCode, ParentItemName, ParentType,
+       Level, Quantity, UnitCode, UsagePath
+FROM dbo.vw_WhereUsed
+WHERE ComponentItemCode = ?1
+  AND ParentType = 'Finished Goods'
+ORDER BY ParentItemCode, UsagePath
+----
+
+== Inventory
+
+Reads `Inventory`, `Items`, `ItemType`, `Warehouse`, `BillOfMaterials`.
+
+[[FUTON_DBO_B_03]]
+=== FUTON_DBO_B_03: the finished goods in the main warehouse, the fewest first
+
+The finished goods in the main warehouse, WH-MAIN, the fewest available first.
+
+[source,sql]
+----
+SELECT i.ItemCode, i.ItemName, v.QuantityAvailable, i.ReorderPoint
+FROM Inventory v
+         JOIN Items i ON i.ItemID = v.ItemID
+         JOIN ItemType t ON t.ItemTypeID = i.ItemTypeID
+         JOIN Warehouse w ON w.WarehouseID = v.WarehouseID
+WHERE t.TypeCode = 'FG'
+  AND w.WarehouseCode = 'WH-MAIN'
+ORDER BY v.QuantityAvailable, i.ItemCode
+;
+----
+
+.`_dbo/01_basic.sql`, FUTON_DBO_B_03, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT v
+FROM DboInventory v
+WHERE v.item.itemType.typeCode = :typeCode
+  AND v.warehouse.warehouseCode = :warehouseCode
+ORDER BY v.quantityAvailable, v.item.itemCode
+----
+
+[[FUTON_DBO_I_03]]
+=== FUTON_DBO_I_03: the five stocks nearest to their reorder points
+
+The five stocks nearest to their reorder points: the ratio of the quantity available to the reorder point, the smallest
+first.
+
+[source,sql]
+----
+SELECT TOP (5) i.ItemCode,
+               i.ItemName,
+               v.QuantityAvailable,
+               i.ReorderPoint,
+               CAST(v.QuantityAvailable / i.ReorderPoint AS DECIMAL(9, 2)) AS Ratio
+FROM Inventory v
+         JOIN Items i ON i.ItemID = v.ItemID
+WHERE i.ReorderPoint > 0
+ORDER BY v.QuantityAvailable / i.ReorderPoint, i.ItemCode
+;
+----
+
+.`_dbo/02_intermediate.sql`, FUTON_DBO_I_03, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT v, v.quantityAvailable / i.reorderPoint AS ratio
+FROM DboInventory v
+     JOIN v.item i
+WHERE i.reorderPoint > 0
+ORDER BY ratio, i.itemCode
+----
+
+[[FUTON_DBO_A_03]]
+=== FUTON_DBO_A_03: how many of each futon the components in stock can build
+
+How many of each finished futon the components available in WH-MAIN can build: for each component, how many times its
+quantity is available, and the smallest of those.
+
+[source,sql]
+----
+SELECT p.ItemCode, p.ItemName, MIN(FLOOR(v.QuantityAvailable / b.Quantity)) AS Buildable
+FROM BillOfMaterials b
+         JOIN Items p ON p.ItemID = b.ParentItemID
+         JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID
+         JOIN Inventory v ON v.ItemID = b.ComponentItemID
+         JOIN Warehouse w ON w.WarehouseID = v.WarehouseID
+WHERE t.TypeCode = 'FG'
+  AND b.IsActive = 1
+  AND w.WarehouseCode = 'WH-MAIN'
+GROUP BY p.ItemID, p.ItemCode, p.ItemName
+ORDER BY Buildable DESC, p.ItemCode
+;
+----
+
+.`_dbo/03_advanced.sql`, FUTON_DBO_A_03, run on 2026-11-01
+[%collapsible]
+====
+====
+
+The query language joins `Inventory` with `+JOIN Inventory v ON v.item = b.componentItem+`, and the Criteria API answer
+with an entity join, `From.join(Class)`, and its `on`.
+
+[source,jpaql]
+----
+SELECT p, MIN(FLOOR(v.quantityAvailable / b.quantity)) AS buildable
+FROM DboBillOfMaterials b
+     JOIN b.parentItem p
+     JOIN DboInventory v ON v.item = b.componentItem
+WHERE p.itemType.typeCode = :typeCode
+  AND b.isActive = TRUE
+  AND v.warehouse.warehouseCode = :warehouseCode
+GROUP BY p
+ORDER BY buildable DESC, p.itemCode
+----
+
+== Purchasing
+
+Reads `Supplier`, `SupplierItem`, `Items`, `PurchaseOrder`, `QualityInspection`.
+
+[[FUTON_DBO_B_04]]
+=== FUTON_DBO_B_04: the items a supplier supplies, its price beside the standard cost
+
+The items a supplier, SUP-002, supplies, with its price beside the item's standard cost.
+
+[source,sql]
+----
+SELECT i.ItemCode, i.ItemName, si.UnitPrice, i.StandardCost, si.MinimumOrderQuantity, si.LeadTimeDays
+FROM SupplierItem si
+         JOIN Supplier s ON s.SupplierID = si.SupplierID
+         JOIN Items i ON i.ItemID = si.ItemID
+WHERE s.SupplierCode = 'SUP-002'
+ORDER BY i.ItemCode
+;
+----
+
+.`_dbo/01_basic.sql`, FUTON_DBO_B_04, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT si
+FROM DboSupplierItem si
+WHERE si.supplier.supplierCode = :supplierCode
+ORDER BY si.item.itemCode
+----
+
+[[FUTON_DBO_I_04]]
+=== FUTON_DBO_I_04: the share rejected on receipt, for each supplier
+
+The share of what was inspected on receipt that was rejected, for each supplier, the worst first; an inspection names
+its purchase order by number, not by a foreign key.
+
+[source,sql]
+----
+SELECT s.SupplierCode,
+       s.SupplierName,
+       SUM(q.QuantityInspected) AS Inspected,
+       SUM(q.QuantityRejected) AS Rejected,
+       CAST(SUM(q.QuantityRejected) * 100 / SUM(q.QuantityInspected) AS DECIMAL(5, 2)) AS RejectedPercent
+FROM PurchaseOrder po
+         JOIN Supplier s ON s.SupplierID = po.SupplierID
+         JOIN QualityInspection q ON q.ReferenceType = 'PO' AND q.ReferenceNumber = po.PONumber
+GROUP BY s.SupplierID, s.SupplierCode, s.SupplierName
+ORDER BY RejectedPercent DESC, s.SupplierCode
+;
+----
+
+.`_dbo/02_intermediate.sql`, FUTON_DBO_I_04, run on 2026-11-01
+[%collapsible]
+====
+====
+
+An inspection names its purchase order by `ReferenceNumber`, not by a foreign key, so there is no association to
+navigate: the query language joins on the column, and the Criteria API answer with an entity join.
+
+[source,jpaql]
+----
+SELECT s,
+       SUM(q.quantityInspected),
+       SUM(q.quantityRejected),
+       SUM(q.quantityRejected) * 100 / SUM(q.quantityInspected) AS rejectedPercent
+FROM DboPurchaseOrder po
+     JOIN po.supplier s
+     JOIN DboQualityInspection q
+          ON q.referenceType = 'PO' AND q.referenceNumber = po.poNumber
+GROUP BY s
+ORDER BY rejectedPercent DESC, s.supplierCode
+----
+
+== Sales
+
+Reads `SalesOrder`, `SalesOrderDetail`, `Customer`, `SalesChannel`.
+
+[[FUTON_DBO_B_05]]
+=== FUTON_DBO_B_05: the orders not delivered yet
+
+The orders not delivered yet, the earliest requested delivery date first.
+
+[source,sql]
+----
+SELECT so.OrderNumber, c.CustomerName, so.Status, so.RequestedDeliveryDate, so.NetAmount
+FROM SalesOrder so
+         JOIN Customer c ON c.CustomerID = so.CustomerID
+WHERE so.Status <> 'Delivered'
+ORDER BY so.RequestedDeliveryDate, so.OrderNumber
+;
+----
+
+.`_dbo/01_basic.sql`, FUTON_DBO_B_05, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT so
+FROM DboSalesOrder so
+WHERE so.status <> :status
+ORDER BY so.requestedDeliveryDate, so.orderNumber
+----
+
+[[FUTON_DBO_I_05]]
+=== FUTON_DBO_I_05: the orders and the net amount of each sales channel
+
+The number of orders and the net amount of each sales channel, the largest first.
+
+[source,sql]
+----
+SELECT ch.ChannelCode, ch.ChannelName, COUNT(*) AS Orders, SUM(so.NetAmount) AS NetAmount
+FROM SalesOrder so
+         JOIN SalesChannel ch ON ch.SalesChannelID = so.SalesChannelID
+GROUP BY ch.SalesChannelID, ch.ChannelCode, ch.ChannelName
+ORDER BY NetAmount DESC
+;
+----
+
+.`_dbo/02_intermediate.sql`, FUTON_DBO_I_05, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT ch, COUNT(so), SUM(so.netAmount) AS netAmount
+FROM DboSalesOrder so
+     JOIN so.salesChannel ch
+GROUP BY ch
+ORDER BY netAmount DESC
+----
+
+[[FUTON_DBO_I_06]]
+=== FUTON_DBO_I_06: the three futons sold the most
+
+The three futons sold the most, by quantity, with the net amount of their lines.
+
+[source,sql]
+----
+SELECT TOP (3) i.ItemCode, i.ItemName, SUM(d.Quantity) AS Quantity, SUM(d.NetAmount) AS NetAmount
+FROM SalesOrderDetail d
+         JOIN Items i ON i.ItemID = d.ItemID
+GROUP BY i.ItemID, i.ItemCode, i.ItemName
+ORDER BY Quantity DESC, i.ItemCode
+;
+----
+
+.`_dbo/02_intermediate.sql`, FUTON_DBO_I_06, run on 2026-11-01
+[%collapsible]
+====
+====
+
+[source,jpaql]
+----
+SELECT i, SUM(d.quantity) AS quantity, SUM(d.netAmount)
+FROM DboSalesOrderDetail d
+     JOIN d.item i
+GROUP BY i
+ORDER BY quantity DESC, i.itemCode
+----
+
+[[FUTON_DBO_A_04]]
+=== FUTON_DBO_A_04: the running total of each wholesale customer
+
+The orders of the wholesale customers, each with the running total of its customer's net amount, in the order of their
+dates.
+
+[source,sql]
+----
+SELECT c.CustomerCode,
+       so.OrderNumber,
+       so.OrderDate,
+       so.NetAmount,
+       SUM(so.NetAmount) OVER (PARTITION BY so.CustomerID
+                               ORDER BY so.OrderDate, so.SalesOrderID
+                               ROWS UNBOUNDED PRECEDING) AS RunningTotal
+FROM SalesOrder so
+         JOIN Customer c ON c.CustomerID = so.CustomerID
+WHERE c.CustomerType = 'Wholesale'
+ORDER BY c.CustomerCode, so.OrderDate, so.SalesOrderID
+;
+----
+
+.`_dbo/03_advanced.sql`, FUTON_DBO_A_04, run on 2026-11-01
+[%collapsible]
+====
+====
+
+SQL only: the query language has no window function. The test runs the SQL as a native query.
+
+.The native query of `FUTON_SALES_A_01_Test.nativeQuery`
+[source,sql]
+----
+SELECT c.CustomerCode,
+       so.OrderNumber,
+       so.OrderDate,
+       so.NetAmount,
+       SUM(so.NetAmount) OVER (PARTITION BY so.CustomerID
+                               ORDER BY so.OrderDate, so.SalesOrderID
+                               ROWS UNBOUNDED PRECEDING) AS RunningTotal
+FROM SalesOrder so
+         JOIN Customer c ON c.CustomerID = so.CustomerID
+WHERE c.CustomerType = ?1
+ORDER BY c.CustomerCode, so.OrderDate, so.SalesOrderID
+----
+
+

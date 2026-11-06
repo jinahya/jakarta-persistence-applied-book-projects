@@ -29,6 +29,21 @@ def pascal(d):
     return lead + ''.join(p[:1].upper() + p[1:].lower() if p.islower() or p.isupper() else p for p in parts)
 
 
+
+def ensure_imports(t):
+    """The JUnit imports an added nested class needs, where the class does not import them yet."""
+    for name in ('DisplayName', 'Nested'):
+        imp = f'import org.junit.jupiter.api.{name};'
+        if f'@{name}' in t and imp not in t:
+            junit = list(re.finditer(r'(?m)^import org\.junit\.jupiter\.api\.[\w.]+;$', t))
+            if junit:
+                t = t[:junit[0].start()] + imp + '\n' + t[junit[0].start():]
+            else:
+                first = re.search(r'(?m)^import ', t)
+                t = t[:first.start()] + imp + '\n' + t[first.start():]
+    return t
+
+
 # the package and the license, from the module's own persistence tests
 samples = sorted(glob.glob(os.path.join(MOD, 'src/test/java/**/*_PersistenceIT.java'), recursive=True)) or \
           sorted(glob.glob(os.path.join(MOD, 'src/test/java/**/*_PersistenceTest.java'), recursive=True))
@@ -111,7 +126,7 @@ new_yaml = re.sub(r'(?ms)^- id: (\S+)\n.*?(?=^- id: |^# ---|\Z)', with_test, yam
 if not DRY:
     os.makedirs(jdir, exist_ok=True)
     for p, t in writes.items():
-        open(p, 'w').write(t)
+        open(p, 'w').write(ensure_imports(t))
     open(yaml_path, 'w').write(new_yaml)
 if DRY:
     print('would make', made, 'would add', added[:8], '...' if len(added) > 8 else '')

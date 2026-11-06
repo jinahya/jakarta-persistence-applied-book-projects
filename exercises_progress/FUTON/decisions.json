@@ -1,0 +1,284 @@
+{
+ "module": "sqlserver-samples-persistence/sqlserver-samples-persistence-futonmanufacturing",
+ "changes": [
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_A_03",
+   "_src": "both",
+   "_why": "the inner join to Inventory dropped a component with no stock, so a futon missing one still counted as buildable; Codex's, with a finished good without a BOM shown as NULL and a negative stock as 0",
+   "rerun": true,
+   "request": [
+    "How many of each finished futon the components available in WH-MAIN can build: for each direct component, how many times its quantity is available, none where WH-MAIN does not stock it, and the smallest of those; scrap is not counted.",
+    "A futon without an active bill of materials shows NULL."
+   ],
+   "sql": "SELECT p.ItemCode,\n       p.ItemName,\n       MIN(FLOOR(CASE WHEN v.QuantityAvailable > 0 THEN v.QuantityAvailable ELSE 0 END / b.Quantity)) AS Buildable\nFROM Items p\n         JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID\n         LEFT JOIN BillOfMaterials b ON b.ParentItemID = p.ItemID AND b.IsActive = 1\n         LEFT JOIN Inventory v ON v.ItemID = b.ComponentItemID\n    AND v.WarehouseID = (SELECT w.WarehouseID FROM Warehouse w WHERE w.WarehouseCode = 'WH-MAIN')\nWHERE t.TypeCode = 'FG'\nGROUP BY p.ItemID, p.ItemCode, p.ItemName\nORDER BY Buildable DESC, p.ItemCode"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_B_05",
+   "_src": "both",
+   "_why": "<> 'Delivered' also returned cancelled orders, and SQL Server put the orders with no requested date first",
+   "rerun": true,
+   "request": [
+    "The orders not delivered yet and not cancelled, the earliest requested delivery date first, the orders without one last."
+   ],
+   "sql": "SELECT so.OrderNumber, c.CustomerName, so.Status, so.RequestedDeliveryDate, so.NetAmount\nFROM SalesOrder so\n         JOIN Customer c ON c.CustomerID = so.CustomerID\nWHERE so.Status NOT IN ('Delivered', 'Cancelled')\nORDER BY CASE WHEN so.RequestedDeliveryDate IS NULL THEN 1 ELSE 0 END, so.RequestedDeliveryDate, so.OrderNumber"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_I_03",
+   "_src": "both",
+   "_why": "a row is an item in a warehouse, but the warehouse was neither shown nor ordered, so two rows could tie and TOP (5) cut between them",
+   "rerun": true,
+   "request": [
+    "The five stocks, an item in a warehouse, with the lowest ratio of the quantity available to the reorder point, for the items whose reorder point is above 0; a tie is broken by the item code and the warehouse code."
+   ],
+   "sql": "SELECT TOP (5) i.ItemCode,\n               i.ItemName,\n               w.WarehouseCode,\n               v.QuantityAvailable,\n               i.ReorderPoint,\n               CAST(v.QuantityAvailable / i.ReorderPoint AS DECIMAL(18, 2)) AS Ratio\nFROM Inventory v\n         JOIN Items i ON i.ItemID = v.ItemID\n         JOIN Warehouse w ON w.WarehouseID = v.WarehouseID\nWHERE i.ReorderPoint > 0\nORDER BY v.QuantityAvailable / i.ReorderPoint, i.ItemCode, w.WarehouseCode"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_I_04",
+   "_src": "both",
+   "_why": "'on receipt' is InspectionType 'Incoming', which the query did not ask for; the share divided by a sum that may be 0",
+   "rerun": true,
+   "request": [
+    "The share of what was inspected on receipt, `InspectionType` `Incoming`, that was rejected, for each supplier, the worst first; an inspection names its purchase order by number, not by a foreign key, and a share is NULL where nothing was inspected."
+   ],
+   "sql": "SELECT s.SupplierCode,\n       s.SupplierName,\n       SUM(q.QuantityInspected) AS Inspected,\n       SUM(q.QuantityRejected) AS Rejected,\n       CAST(SUM(q.QuantityRejected) * 100 / NULLIF(SUM(q.QuantityInspected), 0) AS DECIMAL(9, 2)) AS RejectedPercent\nFROM PurchaseOrder po\n         JOIN Supplier s ON s.SupplierID = po.SupplierID\n         JOIN QualityInspection q ON q.ReferenceType = 'PO' AND q.ReferenceNumber = po.PONumber AND q.InspectionType = 'Incoming'\nGROUP BY s.SupplierID, s.SupplierCode, s.SupplierName\nORDER BY RejectedPercent DESC, s.SupplierCode"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_I_05",
+   "_src": "both",
+   "_why": "cancelled orders counted as sales (Claude); a channel with no order was left out, and equal amounts had no tie-break (Codex); the cancelled ones go out in the outer join's condition",
+   "rerun": true,
+   "request": [
+    "The number of orders not cancelled and their net amount, for every sales channel, `0` for a channel without one, the largest first; channels with the same amount are ordered by code."
+   ],
+   "sql": "SELECT ch.ChannelCode,\n       ch.ChannelName,\n       COUNT(so.SalesOrderID)         AS Orders,\n       COALESCE(SUM(so.NetAmount), 0) AS NetAmount\nFROM SalesChannel ch\n         LEFT JOIN SalesOrder so ON so.SalesChannelID = ch.SalesChannelID AND so.Status <> 'Cancelled'\nGROUP BY ch.SalesChannelID, ch.ChannelCode, ch.ChannelName\nORDER BY NetAmount DESC, ch.ChannelCode"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_I_06",
+   "_src": "Claude",
+   "_why": "it counted every item of an order line, not only futons, and the lines of cancelled orders",
+   "rerun": true,
+   "request": [
+    "The three futons sold the most, by quantity, on orders not cancelled, with the net amount of their lines."
+   ],
+   "sql": "SELECT TOP (3) i.ItemCode, i.ItemName, SUM(d.Quantity) AS Quantity, SUM(d.NetAmount) AS NetAmount\nFROM SalesOrderDetail d\n         JOIN SalesOrder so ON so.SalesOrderID = d.SalesOrderID\n         JOIN Items i ON i.ItemID = d.ItemID\n         JOIN ItemType t ON t.ItemTypeID = i.ItemTypeID\nWHERE t.TypeCode = 'FG'\n  AND so.Status <> 'Cancelled'\nGROUP BY i.ItemID, i.ItemCode, i.ItemName\nORDER BY Quantity DESC, i.ItemCode"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_A_04",
+   "_src": "Claude",
+   "_why": "the running total added the net amount of cancelled orders",
+   "rerun": true,
+   "request": [
+    "The orders of the wholesale customers, cancelled ones left out, each with the running total of its customer's net amount, in the order of their dates."
+   ],
+   "sql": "SELECT c.CustomerCode,\n       so.OrderNumber,\n       so.OrderDate,\n       so.NetAmount,\n       SUM(so.NetAmount) OVER (PARTITION BY so.CustomerID ORDER BY so.OrderDate, so.SalesOrderID ROWS UNBOUNDED PRECEDING) AS RunningTotal\nFROM SalesOrder so\n         JOIN Customer c ON c.CustomerID = so.CustomerID\nWHERE c.CustomerType = 'Wholesale'\n  AND so.Status <> 'Cancelled'\nORDER BY c.CustomerCode, so.OrderDate, so.SalesOrderID"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_B_04",
+   "_src": "Claude",
+   "_why": "SupplierItem keeps dated rows with no unique key on supplier and item, so an item came back twice, once with an ended price",
+   "rerun": true,
+   "request": [
+    "The items a supplier, SUP-002, supplies now, its offers not ended, with its price beside the item's standard cost."
+   ],
+   "sql": "SELECT i.ItemCode, i.ItemName, si.UnitPrice, i.StandardCost, si.MinimumOrderQuantity, si.LeadTimeDays\nFROM SupplierItem si\n         JOIN Supplier s ON s.SupplierID = si.SupplierID\n         JOIN Items i ON i.ItemID = si.ItemID\nWHERE s.SupplierCode = 'SUP-002'\n  AND si.EndDate IS NULL\nORDER BY i.ItemCode"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_A_01",
+   "_src": "Codex",
+   "_why": "a component at the end of the explosion is not always a raw material; a raw material with no stock showed no availability instead of 0",
+   "rerun": true,
+   "request": [
+    "The raw materials, `RAW`, ten FG-FUT-003 futons need through every active level of the bill of materials, each level's scrap included, and how much of each is available across the warehouses, `0` where none is stocked."
+   ],
+   "sql": "WITH Explosion AS (SELECT b.ComponentItemID, CAST(10 * b.Quantity * (1 + b.ScrapRate / 100) AS DECIMAL(28, 8)) AS Quantity\n                   FROM BillOfMaterials b\n                            JOIN Items p ON p.ItemID = b.ParentItemID\n                   WHERE p.ItemCode = 'FG-FUT-003'\n                     AND b.IsActive = 1\n                   UNION ALL\n                   SELECT b.ComponentItemID, CAST(e.Quantity * b.Quantity * (1 + b.ScrapRate / 100) AS DECIMAL(28, 8))\n                   FROM Explosion e\n                            JOIN BillOfMaterials b ON b.ParentItemID = e.ComponentItemID\n                   WHERE b.IsActive = 1)\nSELECT i.ItemCode,\n       i.ItemName,\n       CAST(SUM(e.Quantity) AS DECIMAL(18, 4))                                          AS Quantity,\n       u.UnitCode,\n       COALESCE((SELECT SUM(v.QuantityAvailable) FROM Inventory v WHERE v.ItemID = i.ItemID), 0) AS Available\nFROM Explosion e\n         JOIN Items i ON i.ItemID = e.ComponentItemID\n         JOIN ItemType t ON t.ItemTypeID = i.ItemTypeID\n         JOIN UnitOfMeasure u ON u.UnitID = i.UnitID\nWHERE t.TypeCode = 'RAW'\nGROUP BY i.ItemID, i.ItemCode, i.ItemName, u.UnitCode\nORDER BY i.ItemCode\nOPTION (MAXRECURSION 0)"
+  },
+  {
+   "op": "fix",
+   "id": "FUTON_DBO_I_02",
+   "_src": "Codex",
+   "_why": "starting from the BOM rows left out a finished good with no active component; it shows with no cost",
+   "rerun": true,
+   "request": [
+    "Each finished futon's direct material cost, scrap included, and what remains of its list price; a futon without an active bill of materials shows NULL for both."
+   ],
+   "sql": "SELECT p.ItemCode,\n       p.ItemName,\n       CAST(SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost) AS DECIMAL(18, 4))               AS MaterialCost,\n       p.ListPrice,\n       CAST(p.ListPrice - SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost) AS DECIMAL(18, 4)) AS Margin\nFROM Items p\n         JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID\n         LEFT JOIN BillOfMaterials b ON b.ParentItemID = p.ItemID AND b.IsActive = 1\n         LEFT JOIN Items c ON c.ItemID = b.ComponentItemID\nWHERE t.TypeCode = 'FG'\nGROUP BY p.ItemID, p.ItemCode, p.ItemName, p.ListPrice\nORDER BY p.ItemCode"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_I_07",
+   "after": "FUTON_DBO_I_02",
+   "_src": "Codex",
+   "_why": "nothing enforces positive quantities, known scrap rates, one unit, unique active pairs or raw materials being leaves, which the BOM exercises assume",
+   "rerun": true,
+   "title": "the BOM links that break the planning assumptions",
+   "request": [
+    "The exercises on the bill of materials assume an active link has a positive quantity, a known scrap rate not below 0, the component's own unit, no twin, and a parent that is not a raw material; the schema enforces none of it.",
+    "Find the active links that break one of these; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT b.BOMID, p.ItemCode AS ParentCode, c.ItemCode AS ComponentCode, b.Quantity, b.ScrapRate, bu.UnitCode AS BOMUnit, cu.UnitCode AS StockUnit\nFROM BillOfMaterials b\n         JOIN Items p ON p.ItemID = b.ParentItemID\n         JOIN ItemType pt ON pt.ItemTypeID = p.ItemTypeID\n         JOIN Items c ON c.ItemID = b.ComponentItemID\n         JOIN UnitOfMeasure bu ON bu.UnitID = b.UnitID\n         JOIN UnitOfMeasure cu ON cu.UnitID = c.UnitID\nWHERE b.IsActive = 1\n  AND (b.Quantity <= 0\n    OR b.ScrapRate IS NULL\n    OR b.ScrapRate < 0\n    OR b.UnitID <> c.UnitID\n    OR pt.TypeCode = 'RAW'\n    OR EXISTS (SELECT 1\n               FROM BillOfMaterials other\n               WHERE other.ParentItemID = b.ParentItemID\n                 AND other.ComponentItemID = b.ComponentItemID\n                 AND other.IsActive = 1\n                 AND other.BOMID <> b.BOMID))\nORDER BY p.ItemCode, c.ItemCode, b.BOMID"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_A_05",
+   "after": "FUTON_DBO_A_02",
+   "_src": "Codex",
+   "_why": "CHK_BOM_NotSelf stops a direct self-reference only; the recursive exercises assume no cycle at all",
+   "rerun": true,
+   "title": "the items in a cycle of the bill of materials",
+   "request": [
+    "The recursive exercises assume no item is, through any number of levels, a component of itself; the schema stops only the direct case.",
+    "Find the items in a cycle of active links; the check passes when nothing comes back.",
+    "Each path carries the items it has passed, and stops when it meets one again."
+   ],
+   "sql": "WITH Walk AS (SELECT b.ParentItemID AS StartItemID,\n                     b.ComponentItemID AS CurrentItemID,\n                     CAST('/' + CAST(b.ParentItemID AS VARCHAR(11)) + '/' + CAST(b.ComponentItemID AS VARCHAR(11)) + '/' AS VARCHAR(MAX)) AS ItemPath,\n                     0 AS IsCycle\n              FROM BillOfMaterials b\n              WHERE b.IsActive = 1\n              UNION ALL\n              SELECT w.StartItemID,\n                     b.ComponentItemID,\n                     CAST(w.ItemPath + CAST(b.ComponentItemID AS VARCHAR(11)) + '/' AS VARCHAR(MAX)),\n                     CASE WHEN CHARINDEX('/' + CAST(b.ComponentItemID AS VARCHAR(11)) + '/', w.ItemPath) > 0 THEN 1 ELSE 0 END\n              FROM Walk w\n                       JOIN BillOfMaterials b ON b.ParentItemID = w.CurrentItemID\n              WHERE b.IsActive = 1\n                AND w.IsCycle = 0)\nSELECT DISTINCT i.ItemCode, i.ItemName\nFROM Walk w\n         JOIN Items i ON i.ItemID = w.StartItemID\nWHERE w.IsCycle = 1\n  AND w.CurrentItemID = w.StartItemID\nORDER BY i.ItemCode\nOPTION (MAXRECURSION 0)"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_B_06",
+   "after": "FUTON_DBO_B_03",
+   "_src": "Codex",
+   "_why": "InventoryTransaction and TransactionType are read by no exercise; a half-open month on a datetime2",
+   "rerun": true,
+   "title": "an item's inventory transactions in a month",
+   "request": [
+    "The inventory transactions of RM-FILL-001 in November 2026, with the warehouse, the transaction type, the signed quantity, the unit cost recorded and the reference, in the order they happened.",
+    "The month runs from November 1 up to, not including, December 1, so every time of its last day is in."
+   ],
+   "sql": "SELECT it.TransactionID, it.TransactionDate, w.WarehouseCode, tt.TypeCode, it.Quantity, it.UnitCost, it.ReferenceType, it.ReferenceNumber\nFROM InventoryTransaction it\n         JOIN Items i ON i.ItemID = it.ItemID\n         JOIN Warehouse w ON w.WarehouseID = it.WarehouseID\n         JOIN TransactionType tt ON tt.TransactionTypeID = it.TransactionTypeID\nWHERE i.ItemCode = 'RM-FILL-001'\n  AND it.TransactionDate >= '20261101'\n  AND it.TransactionDate < '20261201'\nORDER BY it.TransactionDate, it.TransactionID"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_A_06",
+   "after": "FUTON_DBO_A_03",
+   "_src": "Claude",
+   "_why": "the greatest row per group, with ROW_NUMBER, over the transactions no exercise reads",
+   "rerun": true,
+   "title": "the last movement of each item in the main warehouse",
+   "request": [
+    "For each item in WH-MAIN, its last inventory transaction: the type, the quantity, what it refers to, and when.",
+    "`ROW_NUMBER` over each item, the latest first, keeps one row; `TransactionID` breaks a tie, and a transaction with no date comes last."
+   ],
+   "sql": "WITH Ranked AS (SELECT t.ItemID,\n                       t.TransactionTypeID,\n                       t.Quantity,\n                       t.ReferenceType,\n                       t.ReferenceNumber,\n                       t.TransactionDate,\n                       ROW_NUMBER() OVER (PARTITION BY t.ItemID ORDER BY t.TransactionDate DESC, t.TransactionID DESC) AS Rn\n                FROM InventoryTransaction t\n                         JOIN Warehouse w ON w.WarehouseID = t.WarehouseID\n                WHERE w.WarehouseCode = 'WH-MAIN')\nSELECT i.ItemCode, i.ItemName, tt.TypeCode, r.Quantity, r.ReferenceType, r.ReferenceNumber, r.TransactionDate\nFROM Ranked r\n         JOIN Items i ON i.ItemID = r.ItemID\n         JOIN TransactionType tt ON tt.TransactionTypeID = r.TransactionTypeID\nWHERE r.Rn = 1\nORDER BY i.ItemCode"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_B_07",
+   "after": "FUTON_DBO_B_04",
+   "_src": "Codex",
+   "_why": "PurchaseOrderDetail is read by no exercise; QuantityReceived is nullable, and the line number is no declared key",
+   "rerun": true,
+   "title": "the purchase-order lines still to receive",
+   "request": [
+    "The lines of the purchase orders not cancelled whose quantity received is below the quantity ordered, or not recorded, with the supplier, the receiving warehouse and the expected delivery date, the earliest first and the undated last."
+   ],
+   "sql": "SELECT po.PONumber, d.LineNumber, d.PODetailID, s.SupplierCode, w.WarehouseCode, i.ItemCode, d.Quantity, d.QuantityReceived,\n       d.Quantity - d.QuantityReceived AS Outstanding, po.ExpectedDeliveryDate\nFROM PurchaseOrder po\n         JOIN PurchaseOrderDetail d ON d.PurchaseOrderID = po.PurchaseOrderID\n         JOIN Supplier s ON s.SupplierID = po.SupplierID\n         JOIN Warehouse w ON w.WarehouseID = po.WarehouseID\n         JOIN Items i ON i.ItemID = d.ItemID\nWHERE po.Status <> 'Cancelled'\n  AND (d.QuantityReceived < d.Quantity OR d.QuantityReceived IS NULL)\nORDER BY CASE WHEN po.ExpectedDeliveryDate IS NULL THEN 1 ELSE 0 END, po.ExpectedDeliveryDate, po.PONumber, d.LineNumber, d.PODetailID"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_B_08",
+   "after": "FUTON_DBO_B_05",
+   "_src": "Claude",
+   "_why": "SalesQuote is read by no exercise; its nullable ConvertedToOrderID is a Basic IS NULL",
+   "rerun": true,
+   "title": "the accepted quotes not turned into orders",
+   "request": [
+    "The quotes a customer accepted that have not become an order yet, the oldest first."
+   ],
+   "sql": "SELECT q.QuoteNumber, c.CustomerName, q.QuoteDate, q.ExpirationDate, q.TotalAmount\nFROM SalesQuote q\n         JOIN Customer c ON c.CustomerID = q.CustomerID\nWHERE q.Status = 'Accepted'\n  AND q.ConvertedToOrderID IS NULL\nORDER BY q.QuoteDate, q.QuoteNumber"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_I_08",
+   "after": "FUTON_DBO_I_06",
+   "_src": "Claude",
+   "_why": "returns and the link from a return line to its order line are read by no exercise; summed per line first, so a line returned twice counts once",
+   "rerun": true,
+   "title": "the share of each item returned",
+   "request": [
+    "For each item sold on orders not cancelled, the quantity sold, the quantity returned, denied returns left out, and the share returned, the highest first.",
+    "The returns are summed per order line before the join, so a line returned more than once is not counted twice."
+   ],
+   "sql": "SELECT i.ItemCode,\n       i.ItemName,\n       SUM(d.Quantity)                                                       AS Sold,\n       SUM(COALESCE(r.Returned, 0))                                          AS Returned,\n       CAST(SUM(COALESCE(r.Returned, 0)) * 100 / SUM(d.Quantity) AS DECIMAL(9, 2)) AS ReturnedPercent\nFROM SalesOrderDetail d\n         JOIN SalesOrder so ON so.SalesOrderID = d.SalesOrderID\n         JOIN Items i ON i.ItemID = d.ItemID\n         LEFT JOIN (SELECT rd.SODetailID, SUM(rd.QuantityReturned) AS Returned\n                    FROM SalesReturnDetail rd\n                             JOIN SalesReturn sr ON sr.ReturnID = rd.ReturnID\n                    WHERE sr.Status <> 'Denied'\n                    GROUP BY rd.SODetailID) r ON r.SODetailID = d.SODetailID\nWHERE so.Status <> 'Cancelled'\nGROUP BY i.ItemID, i.ItemCode, i.ItemName\nORDER BY ReturnedPercent DESC, i.ItemCode"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_I_09",
+   "after": "FUTON_DBO_I_08",
+   "_src": "Codex",
+   "_why": "ReturnReason is read by no exercise; the line refunds summed, not the header's",
+   "rerun": true,
+   "title": "the quantities returned and refunded, by reason and item",
+   "request": [
+    "For the returns received or refunded, the quantity returned and the line refunds by reason and item, with the number of original order lines affected, the largest refund first."
+   ],
+   "sql": "SELECT rr.ReasonCode, rr.ReasonDescription, i.ItemCode, i.ItemName,\n       COUNT(DISTINCT d.SODetailID) AS SalesLines,\n       SUM(d.QuantityReturned)      AS QuantityReturned,\n       SUM(d.RefundAmount)          AS RefundAmount\nFROM SalesReturn r\n         JOIN ReturnReason rr ON rr.ReturnReasonID = r.ReturnReasonID\n         JOIN SalesReturnDetail d ON d.ReturnID = r.ReturnID\n         JOIN Items i ON i.ItemID = d.ItemID\nWHERE r.Status IN ('Received', 'Refunded')\nGROUP BY rr.ReturnReasonID, rr.ReasonCode, rr.ReasonDescription, i.ItemID, i.ItemCode, i.ItemName\nORDER BY RefundAmount DESC, rr.ReasonCode, i.ItemCode"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_B_09",
+   "after": "FUTON_DBO_B_08",
+   "_src": "Claude",
+   "_why": "no exercise covers production; two dates compared, and the nullable work center by an outer join",
+   "rerun": true,
+   "title": "the production orders completed late",
+   "request": [
+    "The production orders completed after their planned completion date, with the item and the work center, if any, the earliest planned first."
+   ],
+   "sql": "SELECT po.WorkOrderNumber, i.ItemCode, wc.WorkCenterCode, po.PlannedCompletionDate, po.ActualCompletionDate\nFROM ProductionOrder po\n         JOIN Items i ON i.ItemID = po.ItemID\n         LEFT JOIN WorkCenter wc ON wc.WorkCenterID = po.WorkCenterID\nWHERE po.Status = 'Completed'\n  AND po.ActualCompletionDate > po.PlannedCompletionDate\nORDER BY po.PlannedCompletionDate, po.WorkOrderNumber"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_B_10",
+   "after": "FUTON_DBO_B_09",
+   "_src": "Codex",
+   "_why": "the open production orders, the work center not yet assigned kept by an outer join",
+   "rerun": true,
+   "title": "the open production schedule",
+   "request": [
+    "The production orders planned, released or in progress, with their item, warehouse, work center, priority and planned completion, the known dates first, the earliest first."
+   ],
+   "sql": "SELECT po.WorkOrderNumber, i.ItemCode, w.WarehouseCode, wc.WorkCenterCode, po.Status, po.Priority, po.PlannedCompletionDate\nFROM ProductionOrder po\n         JOIN Items i ON i.ItemID = po.ItemID\n         JOIN Warehouse w ON w.WarehouseID = po.WarehouseID\n         LEFT JOIN WorkCenter wc ON wc.WorkCenterID = po.WorkCenterID\nWHERE po.Status IN ('Planned', 'Released', 'InProgress')\nORDER BY CASE WHEN po.PlannedCompletionDate IS NULL THEN 1 ELSE 0 END, po.PlannedCompletionDate,\n         CASE WHEN po.Priority IS NULL THEN 1 ELSE 0 END, po.Priority, po.WorkOrderNumber"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_I_10",
+   "after": "FUTON_DBO_I_09",
+   "_src": "Claude",
+   "_why": "the Intermediate exercise of production: COALESCE in a join, NULL-safe sums, a guarded share",
+   "rerun": true,
+   "title": "the scrap rate of each work center",
+   "request": [
+    "For each work center, what its completions made and scrapped, and the share scrapped, the worst first; a completion without a work center counts for its production order's."
+   ],
+   "sql": "SELECT wc.WorkCenterCode,\n       wc.WorkCenterName,\n       SUM(pc.QuantityCompleted)             AS Completed,\n       SUM(COALESCE(pc.QuantityScrapped, 0)) AS Scrapped,\n       CAST(SUM(COALESCE(pc.QuantityScrapped, 0)) * 100\n           / NULLIF(SUM(pc.QuantityCompleted + COALESCE(pc.QuantityScrapped, 0)), 0) AS DECIMAL(9, 2)) AS ScrapPercent\nFROM ProductionCompletion pc\n         JOIN ProductionOrder po ON po.ProductionOrderID = pc.ProductionOrderID\n         JOIN WorkCenter wc ON wc.WorkCenterID = COALESCE(pc.WorkCenterID, po.WorkCenterID)\nGROUP BY wc.WorkCenterID, wc.WorkCenterCode, wc.WorkCenterName\nORDER BY ScrapPercent DESC, wc.WorkCenterCode"
+  },
+  {
+   "op": "add",
+   "id": "FUTON_DBO_I_11",
+   "after": "FUTON_DBO_I_10",
+   "_src": "Codex",
+   "_why": "ProductionOrderMaterial is read by no exercise; summed per order and item before the join to stock",
+   "rerun": true,
+   "title": "the production materials still to issue",
+   "request": [
+    "For the open production orders, each material still to issue and its stock in the order's warehouse, `0` where none is stocked; a material whose quantity issued is not recorded is counted apart."
+   ],
+   "sql": "WITH Materials AS (SELECT m.ProductionOrderID,\n                          m.ItemID,\n                          SUM(m.RequiredQuantity - m.IssuedQuantity)               AS Remaining,\n                          SUM(CASE WHEN m.IssuedQuantity IS NULL THEN 1 ELSE 0 END) AS UnknownIssued\n                   FROM ProductionOrderMaterial m\n                   GROUP BY m.ProductionOrderID, m.ItemID)\nSELECT po.WorkOrderNumber,\n       i.ItemCode,\n       w.WarehouseCode,\n       CASE WHEN m.UnknownIssued = 0 THEN m.Remaining END AS Remaining,\n       COALESCE(v.QuantityAvailable, 0)                  AS Available,\n       m.UnknownIssued\nFROM Materials m\n         JOIN ProductionOrder po ON po.ProductionOrderID = m.ProductionOrderID\n         JOIN Items i ON i.ItemID = m.ItemID\n         JOIN Warehouse w ON w.WarehouseID = po.WarehouseID\n         LEFT JOIN Inventory v ON v.ItemID = m.ItemID AND v.WarehouseID = po.WarehouseID\nWHERE po.Status IN ('Planned', 'Released', 'InProgress')\n  AND (m.Remaining > 0 OR m.UnknownIssued > 0)\nORDER BY po.WorkOrderNumber, i.ItemCode"
+  }
+ ],
+ "production": [
+  "FUTON_DBO_B_09",
+  "FUTON_DBO_B_10",
+  "FUTON_DBO_I_10",
+  "FUTON_DBO_I_11"
+ ]
+}

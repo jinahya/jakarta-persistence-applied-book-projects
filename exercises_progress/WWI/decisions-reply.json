@@ -1,0 +1,6 @@
+{"module": "sqlserver-samples-persistence/sqlserver-samples-persistence-wideworldimporters", "changes": [
+ {"op": "add", "id": "WWI_PURCHASING_I_02", "after": "last", "_src": "Codex (reply)", "_why": "WWI_PURCHASING_I_01 assumes every order has lines and every line an expected price, which nothing enforces; a check guards both", "rerun": true,
+  "title": "Purchase orders the amounts cannot count",
+  "request": ["WWI_PURCHASING_I_01 sums the lines of each order at their expected prices, which assumes every order has a line and every line an expected price; the schema enforces neither.",
+              "Count the purchase orders with no line, and the lines with no expected price; the check passes when both are 0."],
+  "sql": "SELECT (SELECT COUNT(*)\n        FROM Purchasing.PurchaseOrders po\n        WHERE NOT EXISTS (SELECT 1 FROM Purchasing.PurchaseOrderLines pol WHERE pol.PurchaseOrderID = po.PurchaseOrderID)) AS OrdersWithoutLines,\n       (SELECT COUNT(*) FROM Purchasing.PurchaseOrderLines WHERE ExpectedUnitPricePerOuter IS NULL)              AS LinesWithoutPrice"}]}

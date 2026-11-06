@@ -1,0 +1,278 @@
+{
+ "module": "sqlserver-samples-persistence/sqlserver-samples-persistence-wideworldimporters",
+ "changes": [
+  {
+   "op": "fix",
+   "id": "WWI_SALES_A_02",
+   "_src": "both",
+   "_why": "CreditLimit is nullable (no limit), and <> is unknown against a NULL, so a limit set or removed since the moment was missed; Claude's INTERSECT test, which takes two NULLs as equal",
+   "rerun": true,
+   "request": [
+    "Accounts receivable wants the customers whose credit limit is not what it was at a past moment, a limit set or removed since then included, with the limit then and now.",
+    "`NOT EXISTS (SELECT then INTERSECT SELECT now)` compares the two with NULLs as equal, which `<>` does not."
+   ],
+   "sql": "DECLARE @asOf datetime2 = '2015-01-01';\nSELECT c.CustomerID, c.CustomerName, h.CreditLimit AS CreditLimitThen, c.CreditLimit AS CreditLimitNow\nFROM Sales.Customers c\n         JOIN Sales.Customers FOR SYSTEM_TIME AS OF @asOf h ON h.CustomerID = c.CustomerID\nWHERE NOT EXISTS (SELECT h.CreditLimit\n                  INTERSECT\n                  SELECT c.CreditLimit)\nORDER BY c.CustomerID"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_WAREHOUSE_A_01",
+   "_src": "both",
+   "_why": "FOR SYSTEM_TIME FROM ... TO also returned the reading recorded before @from that was still current at @from; the reading's own time is RecordedWhen",
+   "rerun": true,
+   "request": [
+    "Quality control checks the cold rooms over a period: for each sensor, the number of readings recorded in the period and the lowest, highest and average temperature.",
+    "Each reading is a version of a row of a system-versioned table, so the query reads them all with `FOR SYSTEM_TIME ALL` and keeps those recorded in the period by `RecordedWhen`; `FROM ... TO` would also return the reading still in force when the period began. This is SQL only."
+   ],
+   "sql": "DECLARE @from datetime2 = '2016-05-01', @to datetime2 = '2016-05-02';\nSELECT ColdRoomSensorNumber,\n       COUNT(*)                                 AS Readings,\n       MIN(Temperature)                         AS Lowest,\n       MAX(Temperature)                         AS Highest,\n       CAST(AVG(Temperature) AS decimal(10, 2)) AS Average\nFROM Warehouse.ColdRoomTemperatures FOR SYSTEM_TIME ALL\nWHERE RecordedWhen >= @from\n  AND RecordedWhen < @to\nGROUP BY ColdRoomSensorNumber\nORDER BY ColdRoomSensorNumber"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_SALES_I_04",
+   "_src": "Claude",
+   "_why": "a customer gets a new version whenever any column changes, so 'every version' listed many where the limit did not",
+   "rerun": true,
+   "request": [
+    "Accounts receivable wants the history of a customer's credit limit: each limit it has had, from when it was set, the oldest first.",
+    "`FOR SYSTEM_TIME ALL` reads the current row and the history together, and `LAG` keeps the versions whose limit changed, NULLs compared as equal; this is SQL only."
+   ],
+   "sql": "DECLARE @customerId int = 890;\nWITH versions AS (SELECT CustomerID,\n                         CreditLimit,\n                         ValidFrom,\n                         LAG(CreditLimit) OVER (ORDER BY ValidFrom) AS PreviousLimit,\n                         ROW_NUMBER() OVER (ORDER BY ValidFrom)     AS Version\n                  FROM Sales.Customers FOR SYSTEM_TIME ALL\n                  WHERE CustomerID = @customerId)\nSELECT CustomerID, CreditLimit, ValidFrom AS SetFrom\nFROM versions\nWHERE Version = 1\n   OR NOT EXISTS (SELECT CreditLimit\n                  INTERSECT\n                  SELECT PreviousLimit)\nORDER BY ValidFrom"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_SALES_I_01",
+   "_src": "both",
+   "_why": "TOP (5) by revenue alone was unstable at a tie",
+   "rerun": true,
+   "request": [
+    "The sales manager wants the five stock items which earned the most in a year, by the invoiced extended price, with the quantity sold; `StockItemID` breaks a tie."
+   ],
+   "sql": "DECLARE @from date = '2015-01-01', @to date = '2016-01-01';\nSELECT TOP (5) si.StockItemID, si.StockItemName, SUM(il.Quantity) AS Quantity, SUM(il.ExtendedPrice) AS Revenue\nFROM Sales.InvoiceLines il\n         JOIN Sales.Invoices i ON i.InvoiceID = il.InvoiceID\n         JOIN Warehouse.StockItems si ON si.StockItemID = il.StockItemID\nWHERE i.InvoiceDate >= @from\n  AND i.InvoiceDate < @to\nGROUP BY si.StockItemID, si.StockItemName\nORDER BY Revenue DESC, si.StockItemID"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_SALES_A_01",
+   "_src": "both",
+   "_why": "RANK gives a tie one place and can return more than three; the order within a place was undefined",
+   "rerun": true,
+   "request": [
+    "The sales manager ranks the salespeople of each year by the invoiced extended price and wants the top three places of each year, all of those tied for a place included, ordered by `PersonID` within a place.",
+    "`RANK() OVER (...)`, a window function, is SQL only; a tie for third can return more than three rows."
+   ],
+   "sql": "WITH yearly AS (SELECT YEAR(i.InvoiceDate) AS SalesYear, i.SalespersonPersonID, SUM(il.ExtendedPrice) AS Revenue\n                FROM Sales.Invoices i\n                         JOIN Sales.InvoiceLines il ON il.InvoiceID = i.InvoiceID\n                GROUP BY YEAR(i.InvoiceDate), i.SalespersonPersonID),\n     ranked AS (SELECT y.*, RANK() OVER (PARTITION BY y.SalesYear ORDER BY y.Revenue DESC) AS SalesRank\n                FROM yearly y)\nSELECT r.SalesYear, r.SalesRank, p.PersonID, p.FullName, r.Revenue\nFROM ranked r\n         JOIN Application.People p ON p.PersonID = r.SalespersonPersonID\nWHERE r.SalesRank <= 3\nORDER BY r.SalesYear, r.SalesRank, p.PersonID"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_PURCHASING_B_02",
+   "_src": "both",
+   "_why": "ORDER BY Outstanding alone left suppliers of one balance in any order; SupplierName is unique",
+   "rerun": true,
+   "request": [
+    "Accounts payable wants what is still owed to each supplier: the transactions not finalized, their number and the outstanding balance, the largest first, a tie by name.",
+    "`IsFinalized` is a computed column."
+   ],
+   "sql": "SELECT s.SupplierName, COUNT(*) AS Transactions, SUM(st.OutstandingBalance) AS Outstanding\nFROM Purchasing.SupplierTransactions st\n         JOIN Purchasing.Suppliers s ON s.SupplierID = st.SupplierID\nWHERE st.IsFinalized = 0\nGROUP BY s.SupplierID, s.SupplierName\nORDER BY Outstanding DESC, s.SupplierName"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_WAREHOUSE_I_02",
+   "_src": "Claude",
+   "_why": "few countries, so equal counts are likely and were in no order; an item without the key forms a NULL group the request did not name",
+   "rerun": true,
+   "request": [
+    "Compliance counts the stock items by country of manufacture, which is in the CustomFields JSON document, the most first, a tie by country; the items with no country recorded count as one group.",
+    "`JSON_VALUE` is SQL only."
+   ],
+   "sql": "SELECT JSON_VALUE(CustomFields, '$.CountryOfManufacture') AS CountryOfManufacture, COUNT(*) AS StockItems\nFROM Warehouse.StockItems\nGROUP BY JSON_VALUE(CustomFields, '$.CountryOfManufacture')\nORDER BY StockItems DESC, CountryOfManufacture"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_SALES_I_03",
+   "_src": "Codex",
+   "_why": "filtering on InvoiceDate took in unconfirmed deliveries and left out older invoices delivered after the date; the delivery's own time is ConfirmedDeliveryTime",
+   "rerun": true,
+   "request": [
+    "Show a customer's deliveries confirmed on or after a date, with the invoice, the confirmation time and who received it, the earliest confirmation first."
+   ],
+   "sql": "DECLARE @customerId int = 1, @from date = '2016-04-01';\nSELECT InvoiceID, InvoiceDate, ConfirmedDeliveryTime, ConfirmedReceivedBy\nFROM Sales.Invoices\nWHERE CustomerID = @customerId\n  AND ConfirmedDeliveryTime >= @from\nORDER BY ConfirmedDeliveryTime, InvoiceID"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_APPLICATION_A_01",
+   "_src": "Codex",
+   "_why": "a city with no location gives a NULL distance, and equal distances made TOP unstable",
+   "rerun": true,
+   "request": [
+    "Find the five other cities nearest to a given city, with their state code and the distance in kilometres; a city whose distance cannot be computed is left out, and `CityID` breaks a tie."
+   ],
+   "sql": "DECLARE @cityId int = 30378; -- San Francisco\nSELECT TOP (5) c.CityID, c.CityName, sp.StateProvinceCode, CAST(c.Location.STDistance(o.Location) / 1000 AS decimal(10, 1)) AS Kilometres\nFROM Application.Cities c\n         JOIN Application.StateProvinces sp ON sp.StateProvinceID = c.StateProvinceID\n         JOIN Application.Cities o ON o.CityID = @cityId\nWHERE c.CityID <> o.CityID\n  AND c.Location.STDistance(o.Location) IS NOT NULL\nORDER BY c.Location.STDistance(o.Location), c.CityID"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_PURCHASING_I_01",
+   "_src": "Codex",
+   "_why": "equal amounts were in no order; SupplierID breaks the tie",
+   "rerun": true,
+   "sql": "DECLARE @from date = '2015-01-01', @to date = '2016-01-01';\nSELECT s.SupplierName,\n       COUNT(DISTINCT po.PurchaseOrderID)                     AS Orders,\n       SUM(pol.OrderedOuters * pol.ExpectedUnitPricePerOuter) AS Amount\nFROM Purchasing.PurchaseOrders po\n         JOIN Purchasing.PurchaseOrderLines pol ON pol.PurchaseOrderID = po.PurchaseOrderID\n         JOIN Purchasing.Suppliers s ON s.SupplierID = po.SupplierID\nWHERE po.OrderDate >= @from\n  AND po.OrderDate < @to\nGROUP BY s.SupplierID, s.SupplierName\nORDER BY Amount DESC, s.SupplierID"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_SALES_B_01",
+   "_src": "Codex",
+   "_why": "starting from Customers left out a buying group with no customer",
+   "rerun": true,
+   "request": [
+    "Count the customers of every buying group, a group without customers included, with the customers in no group as a group of their own, NULL; the most first, then by name."
+   ],
+   "sql": "SELECT bg.BuyingGroupName, COUNT(c.CustomerID) AS Customers\nFROM Sales.BuyingGroups bg\n         LEFT JOIN Sales.Customers c ON c.BuyingGroupID = bg.BuyingGroupID\nGROUP BY bg.BuyingGroupID, bg.BuyingGroupName\nUNION ALL\nSELECT CAST(NULL AS nvarchar(50)), COUNT(*)\nFROM Sales.Customers\nWHERE BuyingGroupID IS NULL\nORDER BY Customers DESC, BuyingGroupName"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_WAREHOUSE_I_01",
+   "_src": "Codex",
+   "_why": "the inner join left out a stock group with no item",
+   "rerun": true,
+   "request": [
+    "Count the stock items in every stock group, a group without items included, the most first; a tie by the group's name."
+   ],
+   "sql": "SELECT sg.StockGroupName, COUNT(sisg.StockItemStockGroupID) AS StockItems\nFROM Warehouse.StockGroups sg\n         LEFT JOIN Warehouse.StockItemStockGroups sisg ON sisg.StockGroupID = sg.StockGroupID\nGROUP BY sg.StockGroupID, sg.StockGroupName\nORDER BY StockItems DESC, sg.StockGroupName"
+  },
+  {
+   "op": "fix",
+   "id": "WWI_APPLICATION_B_01",
+   "_src": "Codex",
+   "_why": "FullName is not unique; PersonID breaks a tie",
+   "rerun": true,
+   "sql": "SELECT PersonID, FullName, PhoneNumber, EmailAddress\nFROM Application.People\nWHERE IsSalesperson = 1\nORDER BY FullName, PersonID"
+  },
+  {
+   "op": "add",
+   "id": "WWI_PURCHASING_A_01",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "Purchasing has no Advanced exercise, and the nullable delivery dates of purchase orders are used by none",
+   "rerun": true,
+   "title": "The suppliers' late deliveries",
+   "request": [
+    "The buyer rates the suppliers on delivery: for each supplier, the finalized purchase orders received in full, how many of them arrived after the expected delivery date, and the average days late; the most late orders first, a tie by name."
+   ],
+   "sql": "WITH received AS (SELECT po.PurchaseOrderID, po.SupplierID, po.ExpectedDeliveryDate, MAX(pol.LastReceiptDate) AS ReceivedDate\n                  FROM Purchasing.PurchaseOrders po\n                           JOIN Purchasing.PurchaseOrderLines pol ON pol.PurchaseOrderID = po.PurchaseOrderID\n                  WHERE po.IsOrderFinalized = 1\n                    AND po.ExpectedDeliveryDate IS NOT NULL\n                  GROUP BY po.PurchaseOrderID, po.SupplierID, po.ExpectedDeliveryDate\n                  HAVING COUNT(pol.LastReceiptDate) = COUNT(*))\nSELECT s.SupplierName,\n       COUNT(*)                                                                                AS Orders,\n       SUM(CASE WHEN r.ReceivedDate > r.ExpectedDeliveryDate THEN 1 ELSE 0 END)                AS Late,\n       CAST(AVG(CAST(DATEDIFF(day, r.ExpectedDeliveryDate, r.ReceivedDate) AS decimal(10, 1))) AS decimal(10, 1)) AS AverageDaysLate\nFROM received r\n         JOIN Purchasing.Suppliers s ON s.SupplierID = r.SupplierID\nGROUP BY s.SupplierID, s.SupplierName\nORDER BY Late DESC, s.SupplierName"
+  },
+  {
+   "op": "add",
+   "id": "WWI_PURCHASING_A_02",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "the open orders past their expected date, ranked per supplier",
+   "rerun": true,
+   "title": "Each supplier's three most overdue purchase orders",
+   "request": [
+    "For each supplier, up to three purchase orders not finalized whose expected delivery date is before a cutoff and which have a line not finalized and short-received, the earliest expected first; `PurchaseOrderID` breaks a tie."
+   ],
+   "sql": "DECLARE @asOf date = '2016-06-01';\nWITH overdue AS (SELECT po.PurchaseOrderID,\n                        po.SupplierID,\n                        po.ExpectedDeliveryDate,\n                        ROW_NUMBER() OVER (PARTITION BY po.SupplierID ORDER BY po.ExpectedDeliveryDate, po.PurchaseOrderID) AS Position\n                 FROM Purchasing.PurchaseOrders po\n                 WHERE po.IsOrderFinalized = 0\n                   AND po.ExpectedDeliveryDate < @asOf\n                   AND EXISTS (SELECT 1\n                               FROM Purchasing.PurchaseOrderLines pol\n                               WHERE pol.PurchaseOrderID = po.PurchaseOrderID\n                                 AND pol.IsOrderLineFinalized = 0\n                                 AND pol.ReceivedOuters < pol.OrderedOuters))\nSELECT s.SupplierID, s.SupplierName, o.PurchaseOrderID, o.ExpectedDeliveryDate\nFROM overdue o\n         JOIN Purchasing.Suppliers s ON s.SupplierID = o.SupplierID\nWHERE o.Position <= 3\nORDER BY s.SupplierName, o.Position"
+  },
+  {
+   "op": "add",
+   "id": "WWI_SALES_I_05",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "Sales.SpecialDeals and its five nullable foreign keys are used by no exercise",
+   "rerun": true,
+   "title": "The special deals in force on a date",
+   "request": [
+    "The sales desk wants the special deals in force on a date: each deal, what it applies to (stock item or stock group, customer, buying group or customer category) and its discount or price, by deal."
+   ],
+   "sql": "DECLARE @on date = '2016-01-01';\nSELECT d.SpecialDealID, d.DealDescription, d.StartDate, d.EndDate,\n       si.StockItemName, sg.StockGroupName, c.CustomerName, bg.BuyingGroupName, cc.CustomerCategoryName,\n       d.DiscountAmount, d.DiscountPercentage, d.UnitPrice\nFROM Sales.SpecialDeals d\n         LEFT JOIN Warehouse.StockItems si ON si.StockItemID = d.StockItemID\n         LEFT JOIN Warehouse.StockGroups sg ON sg.StockGroupID = d.StockGroupID\n         LEFT JOIN Sales.Customers c ON c.CustomerID = d.CustomerID\n         LEFT JOIN Sales.BuyingGroups bg ON bg.BuyingGroupID = d.BuyingGroupID\n         LEFT JOIN Sales.CustomerCategories cc ON cc.CustomerCategoryID = d.CustomerCategoryID\nWHERE d.StartDate <= @on\n  AND d.EndDate >= @on\nORDER BY d.SpecialDealID"
+  },
+  {
+   "op": "add",
+   "id": "WWI_SALES_I_06",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "the deals that apply to one customer and item: a NULL key matches anything",
+   "rerun": true,
+   "title": "The special deals that apply to a customer and an item",
+   "request": [
+    "List the special deals that apply to a given customer and stock item on a date, a NULL target meaning no restriction and both dates included, with their three pricing options, without choosing one deal over another."
+   ],
+   "sql": "DECLARE @customerId int = 1, @stockItemId int = 1, @on date = '2016-05-01';\nSELECT sd.SpecialDealID, sd.DealDescription, sd.StartDate, sd.EndDate, sd.DiscountAmount, sd.DiscountPercentage, sd.UnitPrice\nFROM Sales.SpecialDeals sd\n         JOIN Sales.Customers c ON c.CustomerID = @customerId\n         JOIN Warehouse.StockItems si ON si.StockItemID = @stockItemId\nWHERE sd.StartDate <= @on\n  AND sd.EndDate >= @on\n  AND (sd.CustomerID IS NULL OR sd.CustomerID = c.CustomerID)\n  AND (sd.BuyingGroupID IS NULL OR sd.BuyingGroupID = c.BuyingGroupID)\n  AND (sd.CustomerCategoryID IS NULL OR sd.CustomerCategoryID = c.CustomerCategoryID)\n  AND (sd.StockItemID IS NULL OR sd.StockItemID = si.StockItemID)\n  AND (sd.StockGroupID IS NULL\n    OR EXISTS (SELECT 1 FROM Warehouse.StockItemStockGroups sisg WHERE sisg.StockItemID = si.StockItemID AND sisg.StockGroupID = sd.StockGroupID))\nORDER BY sd.SpecialDealID"
+  },
+  {
+   "op": "add",
+   "id": "WWI_SALES_I_07",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "Sales.CustomerTransactions and the credit limit are never compared; a NULL limit is no limit",
+   "rerun": true,
+   "title": "The ten customers using the most of their credit limit",
+   "request": [
+    "Accounts receivable wants the ten customers with a credit limit whose outstanding balance uses the most of it: the limit, the balance of the transactions not finalized, and the share of the limit used; `CustomerID` breaks a tie."
+   ],
+   "sql": "SELECT TOP (10) c.CustomerID,\n                c.CustomerName,\n                c.CreditLimit,\n                SUM(ct.OutstandingBalance)                                               AS Outstanding,\n                CAST(SUM(ct.OutstandingBalance) * 100 / c.CreditLimit AS decimal(10, 1)) AS PercentUsed\nFROM Sales.CustomerTransactions ct\n         JOIN Sales.Customers c ON c.CustomerID = ct.CustomerID\nWHERE ct.IsFinalized = 0\n  AND c.CreditLimit > 0\nGROUP BY c.CustomerID, c.CustomerName, c.CreditLimit\nORDER BY PercentUsed DESC, c.CustomerID"
+  },
+  {
+   "op": "add",
+   "id": "WWI_APPLICATION_B_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the country-to-state hierarchy and SalesTerritory are never used",
+   "rerun": true,
+   "title": "The sales territories of a country",
+   "request": [
+    "The sales manager sizes the sales territories of a country: for each territory, the number of states or provinces and their total population, the most populous first, a tie by territory."
+   ],
+   "sql": "DECLARE @countryName nvarchar(60) = N'United States';\nSELECT sp.SalesTerritory, COUNT(*) AS StateProvinces, SUM(sp.LatestRecordedPopulation) AS Population\nFROM Application.StateProvinces sp\n         JOIN Application.Countries c ON c.CountryID = sp.CountryID\nWHERE c.CountryName = @countryName\nGROUP BY sp.SalesTerritory\nORDER BY Population DESC, sp.SalesTerritory"
+  },
+  {
+   "op": "add",
+   "id": "WWI_APPLICATION_B_03",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "no exercise follows Cities to StateProvinces to Countries",
+   "rerun": true,
+   "title": "The cities of a country's states and provinces",
+   "request": [
+    "List a country's cities with their state or province and their latest recorded population, by state or province, city name and `CityID`."
+   ],
+   "sql": "DECLARE @countryId int = 230;\nSELECT c.CityID, c.CityName, sp.StateProvinceName, co.CountryName, c.LatestRecordedPopulation\nFROM Application.Cities c\n         JOIN Application.StateProvinces sp ON sp.StateProvinceID = c.StateProvinceID\n         JOIN Application.Countries co ON co.CountryID = sp.CountryID\nWHERE co.CountryID = @countryId\nORDER BY sp.StateProvinceName, c.CityName, c.CityID"
+  },
+  {
+   "op": "add",
+   "id": "WWI_WAREHOUSE_I_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the stock ledger and TransactionTypes are not used anywhere",
+   "rerun": true,
+   "title": "The movements of a stock item in a year, by transaction type",
+   "request": [
+    "The warehouse manager wants the movements of a stock item in a year: for each transaction type, the number of transactions and the net quantity, by type name."
+   ],
+   "sql": "DECLARE @stockItemId int = 1, @from datetime2 = '2015-01-01', @to datetime2 = '2016-01-01';\nSELECT tt.TransactionTypeName, COUNT(*) AS Transactions, SUM(sit.Quantity) AS Quantity\nFROM Warehouse.StockItemTransactions sit\n         JOIN Application.TransactionTypes tt ON tt.TransactionTypeID = sit.TransactionTypeID\nWHERE sit.StockItemID = @stockItemId\n  AND sit.TransactionOccurredWhen >= @from\n  AND sit.TransactionOccurredWhen < @to\nGROUP BY tt.TransactionTypeID, tt.TransactionTypeName\nORDER BY tt.TransactionTypeName"
+  },
+  {
+   "op": "add",
+   "id": "WWI_WAREHOUSE_I_04",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "the ledger's sign convention, in positive, out negative, with conditional sums",
+   "rerun": true,
+   "title": "Incoming and outgoing stock movements",
+   "request": [
+    "For each stock item with movements in a period, the quantity in, the quantity out as a positive amount, and the net movement, by item name."
+   ],
+   "sql": "DECLARE @from datetime2 = '2016-05-01', @to datetime2 = '2016-06-01';\nSELECT si.StockItemID,\n       si.StockItemName,\n       SUM(CASE WHEN st.Quantity > 0 THEN st.Quantity ELSE 0 END)  AS Incoming,\n       SUM(CASE WHEN st.Quantity < 0 THEN -st.Quantity ELSE 0 END) AS Outgoing,\n       SUM(st.Quantity)                                             AS NetMovement\nFROM Warehouse.StockItemTransactions st\n         JOIN Warehouse.StockItems si ON si.StockItemID = st.StockItemID\nWHERE st.TransactionOccurredWhen >= @from\n  AND st.TransactionOccurredWhen < @to\nGROUP BY si.StockItemID, si.StockItemName\nORDER BY si.StockItemName"
+  },
+  {
+   "op": "add",
+   "id": "WWI_WAREHOUSE_B_03",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the Website.VehicleTemperatures view is not used",
+   "rerun": true,
+   "title": "The latest vehicle temperature readings",
+   "request": [
+    "The transport team wants the ten latest chiller readings of the delivery vehicles, from the Website.VehicleTemperatures view, with the vehicle, sensor, temperature and full sensor data; `VehicleTemperatureID` breaks a tie."
+   ],
+   "sql": "SELECT TOP (10) VehicleTemperatureID, VehicleRegistration, ChillerSensorNumber, RecordedWhen, Temperature, FullSensorData\nFROM Website.VehicleTemperatures\nORDER BY RecordedWhen DESC, VehicleTemperatureID DESC"
+  }
+ ]
+}

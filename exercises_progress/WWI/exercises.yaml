@@ -1,0 +1,159 @@
+# Registry of the exercises in EXERCISES.asciidoc and the <section>/<NN>_<level>.sql files beside it.
+#
+# An id is WWI_<SECTION>_<TIER>_<NN>: the section is the schema the exercise is filed under, though it may read the
+# tables of other schemas too; the tier is B for Basic, I for Intermediate and A for Advanced; and the number is within
+# that section and tier. A database of several schemas takes its sections from the schemas, not from the tables.
+#
+# Ids are permanent. A new exercise takes the next unused number of its section and tier; an exercise that moves or
+# changes tier keeps its id; an id of a removed exercise is marked `retired: true` and never reused. EXERCISES.asciidoc
+# carries each id as the anchor and the prefix of the exercise's heading, and the .sql file repeats it in the marker
+# above the statement.
+#
+# `sql` is the file that answers the exercise in SQL; `test` is the integration test, and its nested class, that
+# answers it in JPQL and with the Criteria API. `native-only: true` marks an exercise only SQL can answer; its `test`,
+# if it has one, sends the SQL as a native query.
+
+# ---- application
+
+- id: WWI_APPLICATION_B_01
+  section: "APPLICATION"
+  tier: Basic
+  title: "The salespeople, by name"
+  sql: src/test/sql-exercises/_Application/01_basic.sql
+  test: _Application_Exercises_01_Basic_PersistenceIT.WWI_APPLICATION_B_01_Test
+- id: WWI_APPLICATION_I_01
+  section: "APPLICATION"
+  tier: Intermediate
+  title: "The countries and the population of each continent"
+  sql: src/test/sql-exercises/_Application/02_intermediate.sql
+  test: _Application_Exercises_02_Intermediate_PersistenceIT.WWI_APPLICATION_I_01_Test
+- id: WWI_APPLICATION_I_02
+  section: "APPLICATION"
+  tier: Intermediate
+  title: "The employees by title, from the CustomFields JSON"
+  sql: src/test/sql-exercises/_Application/02_intermediate.sql
+  native-only: true
+- id: WWI_APPLICATION_A_01
+  section: "APPLICATION"
+  tier: Advanced
+  title: "The five cities nearest to a city"
+  sql: src/test/sql-exercises/_Application/03_advanced.sql
+  native-only: true
+
+# ---- purchasing
+
+- id: WWI_PURCHASING_B_01
+  section: "PURCHASING"
+  tier: Basic
+  title: "The suppliers, by category and then by name"
+  sql: src/test/sql-exercises/_Purchasing/01_basic.sql
+  test: _Purchasing_Exercises_01_Basic_PersistenceIT.WWI_PURCHASING_B_01_Test
+- id: WWI_PURCHASING_B_02
+  section: "PURCHASING"
+  tier: Basic
+  title: "What is still owed to each supplier"
+  sql: src/test/sql-exercises/_Purchasing/01_basic.sql
+  test: _Purchasing_Exercises_01_Basic_PersistenceIT.WWI_PURCHASING_B_02_Test
+- id: WWI_PURCHASING_I_01
+  section: "PURCHASING"
+  tier: Intermediate
+  title: "The purchase orders and the amount ordered from each supplier in a year"
+  sql: src/test/sql-exercises/_Purchasing/02_intermediate.sql
+  test: _Purchasing_Exercises_02_Intermediate_PersistenceIT.WWI_PURCHASING_I_01_Test
+
+# ---- sales
+
+- id: WWI_SALES_B_01
+  section: "SALES"
+  tier: Basic
+  title: "The customers of each buying group"
+  sql: src/test/sql-exercises/_Sales/01_basic.sql
+  test: _Sales_Exercises_01_Basic_PersistenceIT.WWI_SALES_B_01_Test
+- id: WWI_SALES_B_02
+  section: "SALES"
+  tier: Basic
+  title: "The customers billed for others"
+  sql: src/test/sql-exercises/_Sales/01_basic.sql
+  test: _Sales_Exercises_01_Basic_PersistenceIT.WWI_SALES_B_02_Test
+- id: WWI_SALES_B_03
+  section: "SALES"
+  tier: Basic
+  title: "The first five customers of no buying group, from the Website.Customers view"
+  sql: src/test/sql-exercises/_Sales/01_basic.sql
+  test: _Sales_Exercises_01_Basic_PersistenceIT.WWI_SALES_B_03_Test
+- id: WWI_SALES_I_01
+  section: "SALES"
+  tier: Intermediate
+  title: "The five stock items which earned the most in a year"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  test: _Sales_Exercises_02_Intermediate_PersistenceIT.WWI_SALES_I_01_Test
+- id: WWI_SALES_I_02
+  section: "SALES"
+  tier: Intermediate
+  title: "The sales of a year by month"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  test: _Sales_Exercises_02_Intermediate_PersistenceIT.WWI_SALES_I_02_Test
+- id: WWI_SALES_I_03
+  section: "SALES"
+  tier: Intermediate
+  title: "The confirmed deliveries of a customer since a date"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  test: _Sales_Exercises_02_Intermediate_PersistenceIT.WWI_SALES_I_03_Test
+- id: WWI_SALES_I_04
+  section: "SALES"
+  tier: Intermediate
+  title: "The history of a customer's credit limit"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  native-only: true
+- id: WWI_SALES_A_01
+  section: "SALES"
+  tier: Advanced
+  title: "The top three salespeople of each year"
+  sql: src/test/sql-exercises/_Sales/03_advanced.sql
+  native-only: true
+- id: WWI_SALES_A_02
+  section: "SALES"
+  tier: Advanced
+  title: "The customers whose credit limit changed since a moment, by a native query"
+  sql: src/test/sql-exercises/_Sales/03_advanced.sql
+  test: _Sales_Exercises_03_Advanced_PersistenceIT.WWI_SALES_A_02_Test
+  native-only: true
+- id: WWI_SALES_A_03
+  section: "SALES"
+  tier: Advanced
+  title: "The five oldest backorders never invoiced, and the orders which backordered them"
+  sql: src/test/sql-exercises/_Sales/03_advanced.sql
+  test: _Sales_Exercises_03_Advanced_PersistenceIT.WWI_SALES_A_03_Test
+
+# ---- warehouse
+
+- id: WWI_WAREHOUSE_B_01
+  section: "WAREHOUSE"
+  tier: Basic
+  title: "The stock items below their reorder level"
+  sql: src/test/sql-exercises/_Warehouse/01_basic.sql
+  test: _Warehouse_Exercises_01_Basic_PersistenceIT.WWI_WAREHOUSE_B_01_Test
+- id: WWI_WAREHOUSE_B_02
+  section: "WAREHOUSE"
+  tier: Basic
+  title: "The chiller stock items, by name"
+  sql: src/test/sql-exercises/_Warehouse/01_basic.sql
+  test: _Warehouse_Exercises_01_Basic_PersistenceIT.WWI_WAREHOUSE_B_02_Test
+- id: WWI_WAREHOUSE_I_01
+  section: "WAREHOUSE"
+  tier: Intermediate
+  title: "The stock items of each stock group"
+  sql: src/test/sql-exercises/_Warehouse/02_intermediate.sql
+  test: _Warehouse_Exercises_02_Intermediate_PersistenceIT.WWI_WAREHOUSE_I_01_Test
+- id: WWI_WAREHOUSE_I_02
+  section: "WAREHOUSE"
+  tier: Intermediate
+  title: "The stock items by country of manufacture, from the CustomFields JSON"
+  sql: src/test/sql-exercises/_Warehouse/02_intermediate.sql
+  native-only: true
+- id: WWI_WAREHOUSE_A_01
+  section: "WAREHOUSE"
+  tier: Advanced
+  title: "The cold-room readings of a period, from the history"
+  sql: src/test/sql-exercises/_Warehouse/03_advanced.sql
+  native-only: true

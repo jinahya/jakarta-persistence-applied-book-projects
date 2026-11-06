@@ -1,0 +1,179 @@
+# Registry of the exercises in EXERCISES.asciidoc and the <section>/<NN>_<level>.sql files beside it.
+#
+# An id is AW_<SECTION>_<TIER>_<NN>: the section is the schema the exercise is filed under, though it may read the
+# tables of other schemas too; the tier is B for Basic, I for Intermediate and A for Advanced; and the number is within
+# that section and tier. A database of several schemas takes its sections from the schemas, not from the tables.
+#
+# Ids are permanent. A new exercise takes the next unused number of its section and tier; an exercise that moves or
+# changes tier keeps its id; an id of a removed exercise is marked `retired: true` and never reused. EXERCISES.asciidoc
+# carries each id as the anchor and the prefix of the exercise's heading, and the .sql file repeats it in the marker
+# above the statement.
+#
+# `sql` is the file that answers the exercise in SQL; `test` is the integration test, and its nested class, that
+# answers it in JPQL and with the Criteria API. `native-only: true` marks an exercise only SQL can answer; its `test`,
+# if it has one, sends the SQL as a native query.
+
+# ---- humanresources
+
+- id: AW_HUMANRESOURCES_B_01
+  section: "HUMANRESOURCES"
+  tier: Basic
+  title: "The current employees of each department"
+  sql: src/test/sql-exercises/_HumanResources/01_basic.sql
+  test: _HumanResources_Exercises_01_Basic_PersistenceIT.AW_HUMANRESOURCES_B_01_Test
+- id: AW_HUMANRESOURCES_B_02
+  section: "HUMANRESOURCES"
+  tier: Basic
+  title: "The employees at each level of the organization"
+  sql: src/test/sql-exercises/_HumanResources/01_basic.sql
+  test: _HumanResources_Exercises_01_Basic_PersistenceIT.AW_HUMANRESOURCES_B_02_Test
+- id: AW_HUMANRESOURCES_I_01
+  section: "HUMANRESOURCES"
+  tier: Intermediate
+  title: "The ten highest current hourly rates"
+  sql: src/test/sql-exercises/_HumanResources/02_intermediate.sql
+  test: _HumanResources_Exercises_02_Intermediate_PersistenceIT.AW_HUMANRESOURCES_I_01_Test
+- id: AW_HUMANRESOURCES_I_02
+  section: "HUMANRESOURCES"
+  tier: Intermediate
+  title: "The direct reports of a manager, by hierarchyid"
+  sql: src/test/sql-exercises/_HumanResources/02_intermediate.sql
+  test: _HumanResources_Exercises_02_Intermediate_PersistenceIT.AW_HUMANRESOURCES_I_02_Test
+  native-only: true
+- id: AW_HUMANRESOURCES_A_01
+  section: "HUMANRESOURCES"
+  tier: Advanced
+  title: "The chain of managers of an employee, by hierarchyid"
+  sql: src/test/sql-exercises/_HumanResources/03_advanced.sql
+  test: _HumanResources_Exercises_03_Advanced_PersistenceIT.AW_HUMANRESOURCES_A_01_Test
+  native-only: true
+
+# ---- person
+
+- id: AW_PERSON_B_01
+  section: "PERSON"
+  tier: Basic
+  title: "The persons of each type"
+  sql: src/test/sql-exercises/_Person/01_basic.sql
+  test: _Person_Exercises_01_Basic_PersistenceIT.AW_PERSON_B_01_Test
+- id: AW_PERSON_I_01
+  section: "PERSON"
+  tier: Intermediate
+  title: "The five countries with the most addresses"
+  sql: src/test/sql-exercises/_Person/02_intermediate.sql
+  test: _Person_Exercises_02_Intermediate_PersistenceIT.AW_PERSON_I_01_Test
+- id: AW_PERSON_A_01
+  section: "PERSON"
+  tier: Advanced
+  title: "The individual customers of each yearly income band"
+  sql: src/test/sql-exercises/_Person/03_advanced.sql
+  test: _Person_Exercises_03_Advanced_PersistenceIT.AW_PERSON_A_01_Test
+
+# ---- production
+
+- id: AW_PRODUCTION_B_01
+  section: "PRODUCTION"
+  tier: Basic
+  title: "The products on sale of each category, and their list prices"
+  sql: src/test/sql-exercises/_Production/01_basic.sql
+  test: _Production_Exercises_01_Basic_PersistenceIT.AW_PRODUCTION_B_01_Test
+- id: AW_PRODUCTION_I_01
+  section: "PRODUCTION"
+  tier: Intermediate
+  title: "The products whose stock is less than half their safety stock level"
+  sql: src/test/sql-exercises/_Production/02_intermediate.sql
+  test: _Production_Exercises_02_Intermediate_PersistenceIT.AW_PRODUCTION_I_01_Test
+- id: AW_PRODUCTION_I_02
+  section: "PRODUCTION"
+  tier: Intermediate
+  title: "The five scrap reasons with the most scrapped quantity"
+  sql: src/test/sql-exercises/_Production/02_intermediate.sql
+  test: _Production_Exercises_02_Intermediate_PersistenceIT.AW_PRODUCTION_I_02_Test
+- id: AW_PRODUCTION_A_01
+  section: "PRODUCTION"
+  tier: Advanced
+  title: "The parts of a product, by its bill of materials"
+  sql: src/test/sql-exercises/_Production/03_advanced.sql
+  test: _Production_Exercises_03_Advanced_PersistenceIT.AW_PRODUCTION_A_01_Test
+  native-only: true
+- id: AW_PRODUCTION_A_02
+  section: "PRODUCTION"
+  tier: Advanced
+  title: "The documents under a folder, and the products of each"
+  sql: src/test/sql-exercises/_Production/03_advanced.sql
+  test: _Production_Exercises_03_Advanced_PersistenceIT.AW_PRODUCTION_A_02_Test
+  native-only: true
+
+# ---- purchasing
+
+- id: AW_PURCHASING_B_01
+  section: "PURCHASING"
+  tier: Basic
+  title: "The vendors of a product, the cheapest first"
+  sql: src/test/sql-exercises/_Purchasing/01_basic.sql
+  test: _Purchasing_Exercises_01_Basic_PersistenceIT.AW_PURCHASING_B_01_Test
+- id: AW_PURCHASING_I_01
+  section: "PURCHASING"
+  tier: Intermediate
+  title: "The five vendors the company spent the most with"
+  sql: src/test/sql-exercises/_Purchasing/02_intermediate.sql
+  test: _Purchasing_Exercises_02_Intermediate_PersistenceIT.AW_PURCHASING_I_01_Test
+- id: AW_PURCHASING_I_02
+  section: "PURCHASING"
+  tier: Intermediate
+  title: "The five vendors whose goods were rejected the most"
+  sql: src/test/sql-exercises/_Purchasing/02_intermediate.sql
+  test: _Purchasing_Exercises_02_Intermediate_PersistenceIT.AW_PURCHASING_I_02_Test
+
+# ---- sales
+
+- id: AW_SALES_B_01
+  section: "SALES"
+  tier: Basic
+  title: "An order, by its order number"
+  sql: src/test/sql-exercises/_Sales/01_basic.sql
+  test: _Sales_Exercises_01_Basic_PersistenceIT.AW_SALES_B_01_Test
+- id: AW_SALES_B_02
+  section: "SALES"
+  tier: Basic
+  title: "The customers, the persons and the stores among them"
+  sql: src/test/sql-exercises/_Sales/01_basic.sql
+  test: _Sales_Exercises_01_Basic_PersistenceIT.AW_SALES_B_02_Test
+- id: AW_SALES_I_01
+  section: "SALES"
+  tier: Intermediate
+  title: "The orders of each territory"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  test: _Sales_Exercises_02_Intermediate_PersistenceIT.AW_SALES_I_01_Test
+- id: AW_SALES_I_02
+  section: "SALES"
+  tier: Intermediate
+  title: "The five products which brought in the most"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  test: _Sales_Exercises_02_Intermediate_PersistenceIT.AW_SALES_I_02_Test
+- id: AW_SALES_I_03
+  section: "SALES"
+  tier: Intermediate
+  title: "The discount each special offer gave"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  test: _Sales_Exercises_02_Intermediate_PersistenceIT.AW_SALES_I_03_Test
+- id: AW_SALES_I_04
+  section: "SALES"
+  tier: Intermediate
+  title: "The five sales persons with the most sales this year"
+  sql: src/test/sql-exercises/_Sales/02_intermediate.sql
+  test: _Sales_Exercises_02_Intermediate_PersistenceIT.AW_SALES_I_04_Test
+- id: AW_SALES_A_01
+  section: "SALES"
+  tier: Advanced
+  title: "The sales of each sales person, a column per fiscal year"
+  sql: src/test/sql-exercises/_Sales/03_advanced.sql
+  test: _Sales_Exercises_03_Advanced_PersistenceIT.AW_SALES_A_01_Test
+  native-only: true
+- id: AW_SALES_A_02
+  section: "SALES"
+  tier: Advanced
+  title: "The sales persons ranked within the group of their territory"
+  sql: src/test/sql-exercises/_Sales/03_advanced.sql
+  test: _Sales_Exercises_03_Advanced_PersistenceIT.AW_SALES_A_02_Test
+  native-only: true

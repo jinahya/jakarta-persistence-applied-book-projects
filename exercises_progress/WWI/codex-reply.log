@@ -1,0 +1,45 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /Users/onacit/gitcl/github.com/jinahya/jakarta-persistence-applied-book/projects/exercises_progress/WWI
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1b0a5-e3de-7452-b2e3-9e81481d16d8
+--------
+user
+You reviewed the WideWorldImporters exercises blind (review-codex.md); Claude reviewed them too (review-claude.md).
+Every one of your items was taken; where both proposed something, one was chosen or both kept. Answer in one or two
+sentences each: `agree` or `hold` (and why). Do not run anything; read only this directory. Markdown, nothing else.
+
+1. SALES_A_02: Claude's `NOT EXISTS (SELECT then INTERSECT SELECT now)` over your three-way condition; same result.
+2. Your adds kept beside Claude's, under new ids where they collided: PURCHASING_A_02 (three most overdue orders per
+   supplier), SALES_I_06 (deals applying to a customer and an item), APPLICATION_B_03 (a country's cities),
+   WAREHOUSE_I_04 (incoming and outgoing movements).
+3. Your PURCHASING_I_01 fixture checks (orders without lines, NULL expected prices) are not added; only the tie-break.
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file (failed)
+mcp: idea/read_file (failed)
+mcp: idea/list_directory_tree started
+mcp: idea/list_directory_tree (completed)
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+mcp: idea/read_file (completed)
+codex
+1. **agree** — `NOT EXISTS (... INTERSECT ...)` gives the same NULL-safe comparison: two NULLs count as equal, while a change to or from NULL is detected. Apply it to the accompanying native query too.
+
+2. **agree** — The four additions answer distinct questions from Claude’s exercises and add useful coverage. Renumbering resolves the identifier collisions without losing that value.
+
+3. **hold** — The tie-break fixes ordering, but leaves the calculation’s assumptions unchecked: the inner join drops orders without lines, and `SUM` ignores products with NULL expected prices. Keep the fixture checks or explicitly define and implement how those cases should be handled.
+tokens used
+37,460
+1. **agree** — `NOT EXISTS (... INTERSECT ...)` gives the same NULL-safe comparison: two NULLs count as equal, while a change to or from NULL is detected. Apply it to the accompanying native query too.
+
+2. **agree** — The four additions answer distinct questions from Claude’s exercises and add useful coverage. Renumbering resolves the identifier collisions without losing that value.
+
+3. **hold** — The tie-break fixes ordering, but leaves the calculation’s assumptions unchecked: the inner join drops orders without lines, and `SUM` ignores products with NULL expected prices. Keep the fixture checks or explicitly define and implement how those cases should be handled.

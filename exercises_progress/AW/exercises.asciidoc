@@ -1,0 +1,648 @@
+= Exercises
+:toc: left
+:toclevels: 3
+:sectanchors:
+:source-highlighter: rouge
+
+Exercises for the `AdventureWorks` database: business questions that the analysts of a bicycle maker -- human
+resources, marketing, production, purchasing and sales -- would ask, each answered with a query. Every problem is
+stated as a request, followed by its solutions. The `sql` blocks are SQL Server's SQL against the installed database
+(see link:../../../../README.md[README.md]), and are the ones in `src/test/sql-exercises`, a directory per schema; a parameter is a
+T-SQL variable, `@name`, declared with the value the tests use. The `jpaql` blocks are Jakarta Persistence 3.2 query
+language against this module's entities. The `_<Schema>_Exercises_<NN>_<Level>_PersistenceIT` classes, in
+`src/test/java-exercises`, run every one of them, and its Criteria API counterpart, and check the rows the SQL returns.
+
+The problems are grouped by the schema whose question they answer, and some of them read the other schemas too. Each
+section goes from Basic through Intermediate to Advanced. An id is `AW_<SCHEMA>_<TIER>_<NN>`, numbered within its
+schema and tier, and `EXERCISES.yaml` registers every one; an id is never renumbered or reused.
+
+A few things about the mappings shape the JPQL below:
+
+* A foreign key is mapped twice: as an association on the entity, and as a read-only attribute on its mapped
+  superclass. Where the column is part of the primary key, the attribute writes it and the association is the
+  read-only one. Either can be read in a query: `pv.productId`, or `pv.product`.
+* `SalesOrderDetail` references `SpecialOfferProduct` by a composite foreign key, `(SpecialOfferID, ProductID)`. The
+  answers reach a sold product as `d.specialOfferProduct.product`, and a special offer as
+  `d.specialOfferProduct.specialOffer`.
+* Computed columns -- `SalesOrderNumber`, `TotalDue`, `LineTotal`, `OrganizationLevel` -- are read-only attributes, and
+  can be selected, compared and summed like any other.
+* `hierarchyid` (`OrganizationNode`, `DocumentNode`) is a `byte[]`, and `xml` (`Demographics`) a `String`. Their
+  methods, `GetAncestor`, `IsDescendantOf`, `ToString`, `value`, are SQL Server's; the problems which need them, and
+  those which need a recursive common table expression, `PIVOT` or a window function, are SQL only. Jakarta
+  Persistence sends them as native queries.
+* `ProductDocument` is not an entity: its key includes a `hierarchyid`. A problem reading it is SQL only.
+
+== HumanResources
+
+=== Basic
+
+[[AW_HUMANRESOURCES_B_01]]
+==== AW_HUMANRESOURCES_B_01: The current employees of each department
+
+HR plans next year's budget. Show how many employees each department has now, the largest first.
+
+[source,sql]
+----
+SELECT d.Name, d.GroupName, COUNT(*) AS Employees
+FROM HumanResources.EmployeeDepartmentHistory h
+         JOIN HumanResources.Department d ON d.DepartmentID = h.DepartmentID
+WHERE h.EndDate IS NULL
+GROUP BY d.DepartmentID, d.Name, d.GroupName
+ORDER BY Employees DESC, d.Name
+;
+----
+
+[source,jpaql]
+----
+SELECT d.name, d.groupName, COUNT(h)
+FROM HumanResourcesEmployeeDepartmentHistory h
+         JOIN h.department d
+WHERE h.endDate IS NULL
+GROUP BY d.id_, d.name, d.groupName
+ORDER BY COUNT(h) DESC, d.name
+----
+
+[[AW_HUMANRESOURCES_B_02]]
+==== AW_HUMANRESOURCES_B_02: The employees at each level of the organization
+
+HR draws the organization chart. Show how many employees are at each level of the organization.
+
+[source,sql]
+----
+SELECT e.OrganizationLevel, COUNT(*) AS Employees
+FROM HumanResources.Employee e
+GROUP BY e.OrganizationLevel
+ORDER BY e.OrganizationLevel
+;
+----
+
+[source,jpaql]
+----
+SELECT e.organizationLevel, COUNT(e)
+FROM HumanResourcesEmployee e
+GROUP BY e.organizationLevel
+ORDER BY e.organizationLevel
+----
+
+=== Intermediate
+
+[[AW_HUMANRESOURCES_I_01]]
+==== AW_HUMANRESOURCES_I_01: The ten highest current hourly rates
+
+Payroll reviews the highest pay. Show the ten employees with the highest current hourly rate, the rate of each one's latest change.
+
+[source,sql]
+----
+SELECT TOP (10) p.FirstName, p.LastName, e.JobTitle, ph.Rate, CAST(ph.RateChangeDate AS date) AS RateChangeDate
+FROM HumanResources.EmployeePayHistory ph
+         JOIN HumanResources.Employee e ON e.BusinessEntityID = ph.BusinessEntityID
+         JOIN Person.Person p ON p.BusinessEntityID = e.BusinessEntityID
+WHERE ph.RateChangeDate = (SELECT MAX(ph2.RateChangeDate)
+                           FROM HumanResources.EmployeePayHistory ph2
+                           WHERE ph2.BusinessEntityID = ph.BusinessEntityID)
+ORDER BY ph.Rate DESC, e.BusinessEntityID
+;
+----
+
+[source,jpaql]
+----
+SELECT p.firstName, p.lastName, e.jobTitle, ph.rate, ph.rateChangeDate
+FROM HumanResourcesEmployeePayHistory ph
+         JOIN ph.businessEntity e
+         JOIN e.businessEntity p
+WHERE ph.rateChangeDate = (SELECT MAX(ph2.rateChangeDate)
+                           FROM HumanResourcesEmployeePayHistory ph2
+                           WHERE ph2.businessEntityId = ph.businessEntityId)
+ORDER BY ph.rate DESC, e.businessEntityId
+----
+
+[[AW_HUMANRESOURCES_I_02]]
+==== AW_HUMANRESOURCES_I_02: The direct reports of a manager, by hierarchyid
+
+A manager asks who reports to them directly. Show the direct reports of an employee, by the organization chart.
+
+[source,sql]
+----
+DECLARE @managerId int = 25;
+SELECT e.OrganizationNode.ToString() AS Node, e.JobTitle, p.FirstName, p.LastName
+FROM HumanResources.Employee e
+         JOIN Person.Person p ON p.BusinessEntityID = e.BusinessEntityID
+WHERE e.OrganizationNode.GetAncestor(1) = (SELECT m.OrganizationNode
+                                           FROM HumanResources.Employee m
+                                           WHERE m.BusinessEntityID = @managerId)
+ORDER BY e.OrganizationNode
+;
+----
+
+SQL only: answered with a native query, the SQL above, in `_HumanResources_Exercises_02_Intermediate_PersistenceIT`.
+
+=== Advanced
+
+[[AW_HUMANRESOURCES_A_01]]
+==== AW_HUMANRESOURCES_A_01: The chain of managers of an employee, by hierarchyid
+
+An employee asks who is above them. Show the chain of managers of an employee, from the top down to the employee.
+
+[source,sql]
+----
+DECLARE @employeeId int = 100;
+SELECT m.OrganizationNode.ToString() AS Node, m.OrganizationLevel, m.JobTitle, p.FirstName, p.LastName
+FROM HumanResources.Employee e
+         JOIN HumanResources.Employee m ON e.OrganizationNode.IsDescendantOf(m.OrganizationNode) = 1
+         JOIN Person.Person p ON p.BusinessEntityID = m.BusinessEntityID
+WHERE e.BusinessEntityID = @employeeId
+ORDER BY m.OrganizationLevel
+;
+----
+
+SQL only: answered with a native query, the SQL above, in `_HumanResources_Exercises_03_Advanced_PersistenceIT`.
+
+== Person
+
+=== Basic
+
+[[AW_PERSON_B_01]]
+==== AW_PERSON_B_01: The persons of each type
+
+The data steward checks who the database holds. Show how many persons there are of each type, the most first.
+
+[source,sql]
+----
+SELECT p.PersonType, COUNT(*) AS Persons
+FROM Person.Person p
+GROUP BY p.PersonType
+ORDER BY Persons DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT p.personType, COUNT(p)
+FROM PersonPerson p
+GROUP BY p.personType
+ORDER BY COUNT(p) DESC
+----
+
+=== Intermediate
+
+[[AW_PERSON_I_01]]
+==== AW_PERSON_I_01: The five countries with the most addresses
+
+Marketing picks the countries for a mailing. Show the five countries with the most addresses.
+
+[source,sql]
+----
+SELECT TOP (5) c.CountryRegionCode, c.Name, COUNT(*) AS Addresses
+FROM Person.Address a
+         JOIN Person.StateProvince s ON s.StateProvinceID = a.StateProvinceID
+         JOIN Person.CountryRegion c ON c.CountryRegionCode = s.CountryRegionCode
+GROUP BY c.CountryRegionCode, c.Name
+ORDER BY Addresses DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT c.countryRegionCode, c.name, COUNT(a)
+FROM PersonAddress a
+         JOIN a.stateProvince s
+         JOIN s.countryRegion c
+GROUP BY c.countryRegionCode, c.name
+ORDER BY COUNT(a) DESC
+----
+
+=== Advanced
+
+[[AW_PERSON_A_01]]
+==== AW_PERSON_A_01: The individual customers of each yearly income band
+
+Marketing segments the individual customers. Show how many of them answered each yearly income band of the survey stored in their Demographics document.
+
+[source,sql]
+----
+WITH XMLNAMESPACES (DEFAULT 'http://schemas.microsoft.com/sqlserver/2004/07/adventure-works/IndividualSurvey')
+SELECT i.YearlyIncome, COUNT(*) AS Persons
+FROM (SELECT p.Demographics.value('(/IndividualSurvey/YearlyIncome)[1]', 'nvarchar(30)') AS YearlyIncome
+      FROM Person.Person p
+      WHERE p.PersonType = 'IN') AS i
+GROUP BY i.YearlyIncome
+ORDER BY i.YearlyIncome
+;
+----
+
+[source,jpaql]
+----
+SELECT v.yearlyIncome, COUNT(v)
+FROM SalesPersonDemographicsView v
+         JOIN PersonPerson p ON p.businessEntityId = v.businessEntityId
+WHERE p.personType = :personType
+GROUP BY v.yearlyIncome
+ORDER BY v.yearlyIncome
+----
+
+== Production
+
+=== Basic
+
+[[AW_PRODUCTION_B_01]]
+==== AW_PRODUCTION_B_01: The products on sale of each category, and their list prices
+
+The catalog manager reviews the range. Show, for each category, how many products are on sale, and their lowest and highest list prices.
+
+[source,sql]
+----
+SELECT c.Name AS Category, COUNT(*) AS Products, MIN(p.ListPrice) AS MinListPrice, MAX(p.ListPrice) AS MaxListPrice
+FROM Production.Product p
+         JOIN Production.ProductSubcategory s ON s.ProductSubcategoryID = p.ProductSubcategoryID
+         JOIN Production.ProductCategory c ON c.ProductCategoryID = s.ProductCategoryID
+WHERE p.SellEndDate IS NULL
+GROUP BY c.ProductCategoryID, c.Name
+ORDER BY c.Name
+;
+----
+
+[source,jpaql]
+----
+SELECT c.name, COUNT(p), MIN(p.listPrice), MAX(p.listPrice)
+FROM ProductionProduct p
+         JOIN p.productSubcategory s
+         JOIN s.productCategory c
+WHERE p.sellEndDate IS NULL
+GROUP BY c.productCategoryId, c.name
+ORDER BY c.name
+----
+
+=== Intermediate
+
+[[AW_PRODUCTION_I_01]]
+==== AW_PRODUCTION_I_01: The products whose stock is less than half their safety stock level
+
+The warehouse refills the shelves. Show the products whose stock, over every location, is less than half their safety stock level, the lowest stock first.
+
+[source,sql]
+----
+SELECT p.ProductID, p.Name, p.SafetyStockLevel, SUM(i.Quantity) AS Quantity
+FROM Production.ProductInventory i
+         JOIN Production.Product p ON p.ProductID = i.ProductID
+GROUP BY p.ProductID, p.Name, p.SafetyStockLevel
+HAVING SUM(i.Quantity) * 2 < p.SafetyStockLevel
+ORDER BY Quantity, p.ProductID
+;
+----
+
+[source,jpaql]
+----
+SELECT p.productId, p.name, p.safetyStockLevel, SUM(i.quantity)
+FROM ProductionProductInventory i
+         JOIN i.product p
+GROUP BY p.productId, p.name, p.safetyStockLevel
+HAVING SUM(i.quantity) * 2 < p.safetyStockLevel
+ORDER BY SUM(i.quantity), p.productId
+----
+
+[[AW_PRODUCTION_I_02]]
+==== AW_PRODUCTION_I_02: The five scrap reasons with the most scrapped quantity
+
+The plant manager looks for the costliest failures. Show the five scrap reasons with the most scrapped quantity, and how many work orders each one stopped.
+
+[source,sql]
+----
+SELECT TOP (5) r.Name, COUNT(*) AS WorkOrders, SUM(w.ScrappedQty) AS ScrappedQty
+FROM Production.WorkOrder w
+         JOIN Production.ScrapReason r ON r.ScrapReasonID = w.ScrapReasonID
+GROUP BY r.ScrapReasonID, r.Name
+ORDER BY ScrappedQty DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT r.name, COUNT(w), SUM(w.scrappedQty)
+FROM ProductionWorkOrder w
+         JOIN w.scrapReason r
+GROUP BY r.scrapReasonId, r.name
+ORDER BY SUM(w.scrappedQty) DESC
+----
+
+=== Advanced
+
+[[AW_PRODUCTION_A_01]]
+==== AW_PRODUCTION_A_01: The parts of a product, by its bill of materials
+
+Production plans an assembly. Show every part of a product, down to the raw materials, from its current bill of materials, with the quantity each assembly takes and the level it is at.
+
+[source,sql]
+----
+DECLARE @productId int = 818;
+WITH Parts (AssemblyID, ComponentID, PerAssemblyQty, BomLevel) AS (
+    SELECT b.ProductAssemblyID, b.ComponentID, b.PerAssemblyQty, 1
+    FROM Production.BillOfMaterials b
+    WHERE b.ProductAssemblyID = @productId
+      AND b.EndDate IS NULL
+    UNION ALL
+    SELECT b.ProductAssemblyID, b.ComponentID, b.PerAssemblyQty, p.BomLevel + 1
+    FROM Production.BillOfMaterials b
+             JOIN Parts p ON p.ComponentID = b.ProductAssemblyID
+    WHERE b.EndDate IS NULL
+)
+SELECT p.AssemblyID, p.ComponentID, c.Name, p.PerAssemblyQty, p.BomLevel
+FROM Parts p
+         JOIN Production.Product c ON c.ProductID = p.ComponentID
+ORDER BY p.BomLevel, p.AssemblyID, p.ComponentID
+;
+----
+
+SQL only: answered with a native query, the SQL above, in `_Production_Exercises_03_Advanced_PersistenceIT`.
+
+[[AW_PRODUCTION_A_02]]
+==== AW_PRODUCTION_A_02: The documents under a folder, and the products of each
+
+Document control audits a folder. Show the documents under a folder of the document tree, with how many products each one is attached to.
+
+[source,sql]
+----
+DECLARE @folder hierarchyid = hierarchyid::Parse('/3/');
+SELECT d.DocumentNode.ToString() AS Node, d.Title, COUNT(pd.ProductID) AS Products
+FROM Production.Document d
+         LEFT JOIN Production.ProductDocument pd ON pd.DocumentNode = d.DocumentNode
+WHERE d.DocumentNode.IsDescendantOf(@folder) = 1
+  AND d.FolderFlag = 0
+GROUP BY d.DocumentNode, d.Title
+ORDER BY d.DocumentNode
+;
+----
+
+SQL only: answered with a native query, the SQL above, in `_Production_Exercises_03_Advanced_PersistenceIT`.
+
+== Purchasing
+
+=== Basic
+
+[[AW_PURCHASING_B_01]]
+==== AW_PURCHASING_B_01: The vendors of a product, the cheapest first
+
+A buyer orders a part. Show the vendors who supply a product, the cheapest first.
+
+[source,sql]
+----
+DECLARE @productId int = 322;
+SELECT v.Name, pv.StandardPrice, pv.AverageLeadTime, pv.MinOrderQty
+FROM Purchasing.ProductVendor pv
+         JOIN Purchasing.Vendor v ON v.BusinessEntityID = pv.BusinessEntityID
+WHERE pv.ProductID = @productId
+ORDER BY pv.StandardPrice, v.Name
+;
+----
+
+[source,jpaql]
+----
+SELECT pv
+FROM PurchasingProductVendor pv
+         JOIN pv.businessEntity v
+WHERE pv.productId = :productId
+ORDER BY pv.standardPrice, v.name
+----
+
+=== Intermediate
+
+[[AW_PURCHASING_I_01]]
+==== AW_PURCHASING_I_01: The five vendors the company spent the most with
+
+The purchasing manager prepares the vendor reviews. Show the five vendors the company spent the most with, and how many purchase orders each one had.
+
+[source,sql]
+----
+SELECT TOP (5) v.AccountNumber, v.Name, COUNT(*) AS Orders, SUM(h.TotalDue) AS TotalDue
+FROM Purchasing.PurchaseOrderHeader h
+         JOIN Purchasing.Vendor v ON v.BusinessEntityID = h.VendorID
+GROUP BY v.BusinessEntityID, v.AccountNumber, v.Name
+ORDER BY TotalDue DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT v.accountNumber, v.name, COUNT(h), SUM(h.totalDue)
+FROM PurchasingPurchaseOrderHeader h
+         JOIN h.vendor v
+GROUP BY v.businessEntityId, v.accountNumber, v.name
+ORDER BY SUM(h.totalDue) DESC
+----
+
+[[AW_PURCHASING_I_02]]
+==== AW_PURCHASING_I_02: The five vendors whose goods were rejected the most
+
+Quality assurance looks for unreliable vendors. Show the five vendors whose received goods were rejected the most, by the share of the quantity received.
+
+[source,sql]
+----
+SELECT TOP (5) v.Name,
+               SUM(d.ReceivedQty)                                                AS ReceivedQty,
+               SUM(d.RejectedQty)                                                AS RejectedQty,
+               CAST(SUM(d.RejectedQty) * 100 / SUM(d.ReceivedQty) AS decimal(5, 2)) AS RejectedPercent
+FROM Purchasing.PurchaseOrderDetail d
+         JOIN Purchasing.PurchaseOrderHeader h ON h.PurchaseOrderID = d.PurchaseOrderID
+         JOIN Purchasing.Vendor v ON v.BusinessEntityID = h.VendorID
+GROUP BY v.BusinessEntityID, v.Name
+ORDER BY SUM(d.RejectedQty) / SUM(d.ReceivedQty) DESC, v.Name
+;
+----
+
+[source,jpaql]
+----
+SELECT v.name, SUM(d.receivedQty), SUM(d.rejectedQty),
+       SUM(d.rejectedQty) / SUM(d.receivedQty) AS rejected
+FROM PurchasingPurchaseOrderDetail d
+         JOIN d.purchaseOrder h
+         JOIN h.vendor v
+GROUP BY v.businessEntityId, v.name
+ORDER BY rejected DESC, v.name
+----
+
+== Sales
+
+=== Basic
+
+[[AW_SALES_B_01]]
+==== AW_SALES_B_01: An order, by its order number
+
+A customer calls with an order number. Show the order, with its amounts.
+
+[source,sql]
+----
+DECLARE @salesOrderNumber nvarchar(25) = N'SO43659';
+SELECT h.SalesOrderID, h.SalesOrderNumber, h.SubTotal, h.TaxAmt, h.Freight, h.TotalDue
+FROM Sales.SalesOrderHeader h
+WHERE h.SalesOrderNumber = @salesOrderNumber
+;
+----
+
+[source,jpaql]
+----
+SELECT h
+FROM SalesSalesOrderHeader h
+WHERE h.salesOrderNumber = :salesOrderNumber
+----
+
+[[AW_SALES_B_02]]
+==== AW_SALES_B_02: The customers, the persons and the stores among them
+
+Sales counts its customers. Show how many customers there are, how many of them are persons, and how many are stores.
+
+[source,sql]
+----
+SELECT COUNT(*) AS Customers, COUNT(c.PersonID) AS WithPerson, COUNT(c.StoreID) AS WithStore
+FROM Sales.Customer c
+;
+----
+
+[source,jpaql]
+----
+SELECT COUNT(c), COUNT(c.personId), COUNT(c.storeId)
+FROM SalesCustomer c
+----
+
+=== Intermediate
+
+[[AW_SALES_I_01]]
+==== AW_SALES_I_01: The orders of each territory
+
+The sales director compares the territories. Show, for each territory, its group, how many orders it had and how much they came to, the largest first.
+
+[source,sql]
+----
+SELECT t.Name, t.[Group], COUNT(*) AS Orders, SUM(h.TotalDue) AS TotalDue
+FROM Sales.SalesOrderHeader h
+         JOIN Sales.SalesTerritory t ON t.TerritoryID = h.TerritoryID
+GROUP BY t.TerritoryID, t.Name, t.[Group]
+ORDER BY TotalDue DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT t.name, t.group, COUNT(h), SUM(h.totalDue)
+FROM SalesSalesOrderHeader h
+         JOIN h.territory t
+GROUP BY t.territoryId, t.name, t.group
+ORDER BY SUM(h.totalDue) DESC
+----
+
+[[AW_SALES_I_02]]
+==== AW_SALES_I_02: The five products which brought in the most
+
+The product manager looks for the best sellers. Show the five products that brought in the most, with the quantity sold.
+
+[source,sql]
+----
+SELECT TOP (5) p.ProductNumber, p.Name, SUM(d.OrderQty) AS OrderQty, SUM(d.LineTotal) AS LineTotal
+FROM Sales.SalesOrderDetail d
+         JOIN Production.Product p ON p.ProductID = d.ProductID
+GROUP BY p.ProductID, p.ProductNumber, p.Name
+ORDER BY LineTotal DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT p.productNumber, p.name, SUM(d.orderQty), SUM(d.lineTotal)
+FROM SalesSalesOrderDetail d
+         JOIN d.specialOfferProduct sop
+         JOIN sop.product p
+GROUP BY p.productId, p.productNumber, p.name
+ORDER BY SUM(d.lineTotal) DESC
+----
+
+[[AW_SALES_I_03]]
+==== AW_SALES_I_03: The discount each special offer gave
+
+Finance weighs the promotions. Show, for each special offer that was applied, how many order lines took it and how much discount it gave, the most first.
+
+[source,sql]
+----
+SELECT o.SpecialOfferID, o.Description, o.DiscountPct, COUNT(*) AS Lines,
+       SUM(d.UnitPrice * d.UnitPriceDiscount * d.OrderQty) AS Discount
+FROM Sales.SalesOrderDetail d
+         JOIN Sales.SpecialOffer o ON o.SpecialOfferID = d.SpecialOfferID
+WHERE d.UnitPriceDiscount > 0
+GROUP BY o.SpecialOfferID, o.Description, o.DiscountPct
+ORDER BY Discount DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT o.specialOfferId, o.description, o.discountPct, COUNT(d),
+       SUM(d.unitPrice * d.unitPriceDiscount * d.orderQty) AS discount
+FROM SalesSalesOrderDetail d
+         JOIN d.specialOfferProduct sop
+         JOIN sop.specialOffer o
+WHERE d.unitPriceDiscount > 0
+GROUP BY o.specialOfferId, o.description, o.discountPct
+ORDER BY discount DESC
+----
+
+[[AW_SALES_I_04]]
+==== AW_SALES_I_04: The five sales persons with the most sales this year
+
+The sales director names the top sellers of the year. Show the five sales persons with the most sales this year, with their names and territories.
+
+[source,sql]
+----
+SELECT TOP (5) p.FirstName, p.LastName, t.Name AS Territory, sp.SalesYTD
+FROM Sales.SalesPerson sp
+         JOIN HumanResources.Employee e ON e.BusinessEntityID = sp.BusinessEntityID
+         JOIN Person.Person p ON p.BusinessEntityID = e.BusinessEntityID
+         LEFT JOIN Sales.SalesTerritory t ON t.TerritoryID = sp.TerritoryID
+ORDER BY sp.SalesYTD DESC
+;
+----
+
+[source,jpaql]
+----
+SELECT p.firstName, p.lastName, t.name, sp.salesYtd
+FROM SalesSalesPerson sp
+         JOIN sp.businessEntity e
+         JOIN e.businessEntity p
+         LEFT JOIN sp.territory t
+ORDER BY sp.salesYtd DESC
+----
+
+=== Advanced
+
+[[AW_SALES_A_01]]
+==== AW_SALES_A_01: The sales of each sales person, a column per fiscal year
+
+The sales director compares the sales persons over the years. Show each sales person's sales, a column per fiscal year; Adventure Works' fiscal year starts on the 1st of July.
+
+[source,sql]
+----
+SELECT pvt.LastName, pvt.[2022], pvt.[2023], pvt.[2024], pvt.[2025]
+FROM (SELECT p.LastName, h.SubTotal, YEAR(DATEADD(MONTH, 6, h.OrderDate)) AS FiscalYear
+      FROM Sales.SalesOrderHeader h
+               JOIN Person.Person p ON p.BusinessEntityID = h.SalesPersonID) AS s
+         PIVOT (SUM(s.SubTotal) FOR s.FiscalYear IN ([2022], [2023], [2024], [2025])) AS pvt
+ORDER BY pvt.[2025] DESC
+;
+----
+
+SQL only: answered with a native query, the SQL above, in `_Sales_Exercises_03_Advanced_PersistenceIT`.
+
+[[AW_SALES_A_02]]
+==== AW_SALES_A_02: The sales persons ranked within the group of their territory
+
+The sales director ranks the sales persons of each territory group. Show every sales person with a territory, ranked by this year's sales within the group of their territory.
+
+[source,sql]
+----
+SELECT t.[Group], t.Name AS Territory, p.LastName, sp.SalesYTD,
+       RANK() OVER (PARTITION BY t.[Group] ORDER BY sp.SalesYTD DESC) AS GroupRank
+FROM Sales.SalesPerson sp
+         JOIN Person.Person p ON p.BusinessEntityID = sp.BusinessEntityID
+         JOIN Sales.SalesTerritory t ON t.TerritoryID = sp.TerritoryID
+ORDER BY t.[Group], GroupRank
+;
+----
+
+SQL only: answered with a native query, the SQL above, in `_Sales_Exercises_03_Advanced_PersistenceIT`.
+

@@ -1,0 +1,49 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /Users/onacit/gitcl/github.com/jinahya/jakarta-persistence-applied-book/projects/exercises_progress/AW
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1b0a3-f52d-77d0-8a3e-1c11825881e9
+--------
+user
+You reviewed the AdventureWorks exercises blind (review-codex.md); Claude reviewed them too (review-claude.md). Where
+the decisions differ from your proposals, answer in one or two sentences each: `agree` or `hold` (and why). Do not run
+anything; read only this directory. Markdown, nothing else, numbered as below.
+
+1. SALES_A_01: your version (every sales person, 0 for no sales, the fiscal-year bounds, COALESCE) with Claude's point:
+   SalesPersonID goes through the PIVOT, so two sales persons of one last name stay apart, instead of a check that
+   last names are distinct.
+2. PURCHASING_I_01: Claude's (approved and complete orders only, Status 2 and 4, as "spent") over yours (all statuses,
+   the request reworded to "order amounts").
+3. PURCHASING_A_01: Claude's (yearly spend per vendor against the previous year, LAG, statuses 2 and 4) over yours
+   (monthly running totals of 2025).
+4. PERSON_B_02 and HUMANRESOURCES_I_03: both reviewers' adds kept, under separate ids (Claude's address types and
+   multi-department employees; your contacts and roles as PERSON_B_03, shift lengths as HUMANRESOURCES_I_04).
+codex
+I’ll read the two reviews in this directory and give a brief `agree` or `hold` for each decision.
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+mcp: idea/read_file (completed)
+codex
+1. **agree** — Carry `sp.BusinessEntityID` as `SalesPersonID` through the PIVOT to preserve identity without requiring unique last names; use it as the final tie-breaker too.
+
+2. **agree** — Restricting to statuses 2 and 4 gives a useful, explicit definition of “spent” that excludes pending and rejected orders, though it measures order value rather than actual payments.
+
+3. **agree** — Yearly aggregation with `LAG` is a suitable Advanced exercise; specify “previous year with qualifying orders,” because gaps mean the preceding row may not be the preceding calendar year.
+
+4. **agree** — The additions cover distinct relationships and operations, so retaining both under the proposed separate IDs broadens coverage without duplication.
+tokens used
+39,048
+1. **agree** — Carry `sp.BusinessEntityID` as `SalesPersonID` through the PIVOT to preserve identity without requiring unique last names; use it as the final tie-breaker too.
+
+2. **agree** — Restricting to statuses 2 and 4 gives a useful, explicit definition of “spent” that excludes pending and rejected orders, though it measures order value rather than actual payments.
+
+3. **agree** — Yearly aggregation with `LAG` is a suitable Advanced exercise; specify “previous year with qualifying orders,” because gaps mean the preceding row may not be the preceding calendar year.
+
+4. **agree** — The additions cover distinct relationships and operations, so retaining both under the proposed separate IDs broadens coverage without duplication.

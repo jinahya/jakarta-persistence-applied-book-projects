@@ -71,7 +71,7 @@ def test_file(id_):
 
 # ---------------------------------------------------------------------------------------------------------- asciidoc
 def adoc_block(t, id_):
-    m = re.search(rf'(?ms)^\[\[{id_}\]\]\n.*?(?=^\[\[[A-Z0-9_]+\]\]\n|^==?=? |\Z)', t)
+    m = re.search(rf'(?ms)^\[\[{id_}\]\]\n.*?(?=^\[\[[A-Z0-9_]+\]\]\n|^={{2,4}} (?![A-Z][A-Z0-9_]*_[BIA]_\d+:)|\Z)', t)
     if not m:
         sys.exit(f'{id_}: not in EXERCISES.asciidoc')
     return m
@@ -84,7 +84,7 @@ def adoc_parse(block):
     after the request, followed by other listings and notes. Whatever is not the title, the request, the SQL or its
     output is kept as it is."""
     lines = block.split('\n')
-    m = re.match(r'==== \S+: (.*)$', lines[1])
+    m = re.match(r'(=+) \S+: (.*)$', lines[1])
     if not m:
         sys.exit('cannot parse block:\n' + block[:400])
     i = 3
@@ -100,7 +100,7 @@ def adoc_parse(block):
         sys.exit('cannot find the [source,sql] listing:\n' + block[:400])
     e = next(k for k in range(s + 2, len(lines)) if lines[k] == '----')
     caption = re.match(r'\.`([^`]+)`', lines[i])[1] if lines[i].startswith('.`') else None
-    return {'title': m[1], 'request': req, 'caption': caption, 'sql': '\n'.join(lines[s + 2:e]),
+    return {'title': m[2], 'level': m[1], 'request': req, 'caption': caption, 'sql': '\n'.join(lines[s + 2:e]),
             'lines': lines, 'req_end': req_start + len(req), 'sql_start': s + 2, 'sql_end': e,
             'collapsible': any(l.startswith('[%collapsible') for l in lines[:s])}
 
@@ -134,7 +134,7 @@ def with_jpaql(rest, jpaql, sql_changed):
 def adoc_fix(block, title, request, sql, rerun, jpaql=None):
     p = adoc_parse(block)
     lines = p['lines']
-    head = [lines[0], f'==== {lines[0][2:-2]}: {title}', ''] + request + lines[p['req_end']:p['sql_start']]
+    head = [lines[0], f"{p['level']} {lines[0][2:-2]}: {title}", ''] + request + lines[p['req_end']:p['sql_start']]
     tail = '\n'.join(lines[p['sql_end']:])  # from the closing ---- on
     close, rest = tail.split('\n', 1) if '\n' in tail else (tail, '')
     if rerun:
@@ -153,7 +153,7 @@ def adoc_new(id_, title, request, sql, like, caption, rerun, jpaql=None):
         body = f'[source,sql]\n----\n{sql.strip()}\n----\n{out}'
         if jpaql:
             body += f'\n[source,jpaql]\n----\n{jpaql.strip()}\n----\n'
-    return f'[[{id_}]]\n==== {id_}: {title}\n\n' + '\n'.join(request) + '\n\n' + body + '\n'
+    return f"[[{id_}]]\n{like['level']} {id_}: {title}\n\n" + '\n'.join(request) + '\n\n' + body + '\n'
 
 
 # --------------------------------------------------------------------------------------------------------------- sql
@@ -276,6 +276,20 @@ def new_test_class(sibling_file, cls, sql_rel):
             f'class {cls} {{\n}}\n')
 
 
+def ensure_imports(t):
+    """The JUnit imports an added nested class needs, where the class does not import them yet."""
+    for name in ('DisplayName', 'Nested'):
+        imp = f'import org.junit.jupiter.api.{name};'
+        if f'@{name}' in t and imp not in t:
+            junit = list(re.finditer(r'(?m)^import org\.junit\.jupiter\.api\.[\w.]+;$', t))
+            if junit:
+                t = t[:junit[0].start()] + imp + '\n' + t[junit[0].start():]
+            else:
+                first = re.search(r'(?m)^import ', t)
+                t = t[:first.start()] + imp + '\n' + t[first.start():]
+    return t
+
+
 # ------------------------------------------------------------------------------------------------------------- apply
 log = []
 # removes last: a remove may empty a tier that an add continues
@@ -368,6 +382,7 @@ for c in [x for x in D['changes'] if x['op'] != 'remove'] + [x for x in D['chang
         comment = comment_for(c, c['request'], c['title'], s['comments'], adoc_parse(adoc_block(read(ADOC), after)[0])['title'])
         above = [f'-- {NOT_YET_RUN}'] if c.get('rerun') and lay['above'] else []
         under = [f'-- {NOT_YET_RUN}'] if c.get('rerun') and lay['under'] and not lay['above'] else []
+        under += [l for l in s['under'] if l.strip() and not is_output(l)]  # a batch separator such as GO
         block = sql_render(id_, c['title'], comment, above, c['sql'], under, lay['title'], lay['gap'], ruler_width(src))
         if first:
             write(sp, st.rstrip('\n') + '\n' * 3 + block)
@@ -414,8 +429,11 @@ for c in [x for x in D['changes'] if x['op'] != 'remove'] + [x for x in D['chang
         sys.exit(f'unknown op {op}')
 
 for p, t in files.items():
-    if p.endswith('.sql'):
-        t = t.rstrip() + '\n'
+    if p.endswith('.sql'):  # the file's own ending, one newline for a new file
+        end = re.search(r'\n*\Z', open(p).read())[0] if os.path.exists(p) else '\n'
+        t = t.rstrip() + (end or '\n')
+    if p.endswith('.java'):
+        t = ensure_imports(t)
     if not DRY:
         open(p, 'w').write(t)
 print('\n'.join(log))

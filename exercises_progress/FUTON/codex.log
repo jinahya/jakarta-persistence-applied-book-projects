@@ -1,0 +1,971 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /Users/onacit/gitcl/github.com/jinahya/jakarta-persistence-applied-book/projects/exercises_progress/FUTON
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1b098-3e0b-7d93-84dd-ca31c944d61b
+--------
+user
+You are reviewing the SQL exercises of one schema of a sample database, for a book on Jakarta Persistence. Work only
+from the files in this directory:
+
+- `exercises.asciidoc` — the current exercises of this unit: each has an id, a title, the request it answers, and the
+  SQL that answers it. Output blocks were removed.
+- `exercises.yaml` — the registry of the same exercises, retired ones too (`retired: true`).
+- `conventions.md` — the module's rules for exercises and SQL.
+- `ddl/` — the database's own DDL, as its source publishes it. This is the truth about tables, columns, keys and types.
+
+Do not run anything. Do not start a database, a container, or any program; do not look outside this directory. Read
+the files and think.
+
+Your task: propose what should change, so that the exercises of this unit are correct, useful and well spread.
+
+- **fix**: an exercise whose SQL does not answer its request, or is wrong for the DDL (a column or table that does not
+  exist, a wrong join, a wrong type assumption, NULL handling, an ambiguous or unstable ORDER BY, paging not in the
+  optimal form the database permits), or whose request is unclear. A fix keeps the id only if the request stays the
+  same question; otherwise it is a remove plus an add.
+- **add**: a question a real user of this data would ask that no exercise covers yet: a table, a column, a key, a join
+  path, or a SQL feature of the level that is missing. Prefer what the DDL makes interesting (foreign keys, constraints,
+  hierarchies, dates, nullable columns, views).
+- **remove**: an exercise that duplicates another, asks nothing a user would ask, or cannot be answered from the DDL.
+
+Levels and sections: take them from the exercises as they are; the module decides what each level holds (an
+Intermediate exercise may use a window function, for one). Never move an exercise to another tier or section: the id
+names both. Keep every level of every section populated, and put an add where the existing exercises of the module
+would put it.
+
+Assumptions: where the data holds a fact the DDL does not enforce (a value unique within a group, a column never
+empty), the exercises may rely on it; propose a check that guards the fact rather than a workaround in every exercise.
+Keep the module's own conventions over a stricter reading (how it counts centuries, how it takes a name as a person).
+
+Ids: `<PREFIX>_<SECTION>_<B|I|A>_<NN>`. Never reuse an id, retired ones included. A new exercise takes the next unused
+`NN` of its section and tier.
+
+Write your answer as Markdown, and nothing else, in this shape, one block per item:
+
+```
+### <fix|add|remove> <ID>
+- section: <SECTION>   tier: <Basic|Intermediate|Advanced>
+- title: <short title>
+- why: <one or two sentences>
+- request: <the request, as the user would say it>      (fix and add only)
+- sql:                                                  (fix and add only)
+    <the SQL, in the database's dialect, formatted like the existing ones>
+```
+
+Start with the fixes, then the adds, then the removes. If an exercise needs no change, do not mention it. Be concrete
+and brief; at most 15 items, the most valuable first.
+codex
+I’ll read the exercises, registry, conventions, and DDL in this directory and review them without executing SQL or starting any programs.
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+mcp: idea/read_file (completed)
+mcp: idea/read_file (completed)
+mcp: idea/list_directory_tree started
+mcp: idea/list_directory_tree (completed)
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+mcp: idea/read_file (completed)
+mcp: idea/read_file (completed)
+mcp: idea/read_file (completed)
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+codex
+The DDL shows a definite inventory issue: the build-capacity query drops components with no stock row. I’m also checking ordering, nullable values, and the uncovered production and sales relationships.
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+mcp: idea/read_file started
+mcp: idea/read_file (completed)
+codex
+The review is complete. The proposals retain the existing DBO levels, correct the query mismatches, and add coverage for production, receipts, returns, quotations, and transaction history. They also include checks for the BOM assumptions, so those checks can guard the exercises that rely on them.
+codex
+### fix FUTON_DBO_A_03
+
+- section: DBO   tier: Advanced
+- title: how many futons the available components can build
+- why: Inner joins discard components without inventory, overstating capacity. Missing stock must contribute zero, and negative availability cannot imply negative production.
+- request: How many of each finished futon can WH-MAIN build from its direct components, ignoring scrap, taking the smallest whole-number capacity across its components? Show NULL when no active bill of materials exists.
+- sql:
+
+    ```sql
+    SELECT p.ItemCode,
+           p.ItemName,
+           MIN(FLOOR(CASE
+                         WHEN v.QuantityAvailable > 0 THEN v.QuantityAvailable
+                         ELSE 0
+                     END / b.Quantity)) AS Buildable
+    FROM Items p
+             JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID
+             LEFT JOIN BillOfMaterials b
+                       ON b.ParentItemID = p.ItemID AND b.IsActive = 1
+             LEFT JOIN Inventory v
+                       ON v.ItemID = b.ComponentItemID
+                           AND v.WarehouseID = (SELECT w.WarehouseID
+                                                FROM Warehouse w
+                                                WHERE w.WarehouseCode = 'WH-MAIN')
+    WHERE t.TypeCode = 'FG'
+    GROUP BY p.ItemID, p.ItemCode, p.ItemName
+    ORDER BY Buildable DESC, p.ItemCode
+    ;
+    ```
+
+### fix FUTON_DBO_A_01
+
+- section: DBO   tier: Advanced
+- title: the raw materials ten futons need
+- why: A terminal component is not necessarily a raw material. Filter by RAW and report zero availability when inventory is absent; guard the BOM assumptions with the proposed checks.
+- request: What raw materials do ten FG-FUT-003 futons require through every active BOM level, including each level's scrap allowance, and how much is available across all warehouses?
+- sql:
+
+    ```sql
+    WITH Explosion AS (SELECT b.ComponentItemID,
+                              CAST(10 * b.Quantity * (1 + b.ScrapRate / 100)
+                                  AS DECIMAL(28, 8)) AS Quantity
+                       FROM BillOfMaterials b
+                                JOIN Items p ON p.ItemID = b.ParentItemID
+                       WHERE p.ItemCode = 'FG-FUT-003'
+                         AND b.IsActive = 1
+                       UNION ALL
+                       SELECT b.ComponentItemID,
+                              CAST(e.Quantity * b.Quantity * (1 + b.ScrapRate / 100)
+                                  AS DECIMAL(28, 8))
+                       FROM Explosion e
+                                JOIN BillOfMaterials b
+                                     ON b.ParentItemID = e.ComponentItemID
+                       WHERE b.IsActive = 1)
+    SELECT i.ItemCode,
+           i.ItemName,
+           CAST(SUM(e.Quantity) AS DECIMAL(18, 4)) AS Quantity,
+           u.UnitCode,
+           COALESCE((SELECT SUM(v.QuantityAvailable)
+                     FROM Inventory v
+                     WHERE v.ItemID = i.ItemID), 0) AS Available
+    FROM Explosion e
+             JOIN Items i ON i.ItemID = e.ComponentItemID
+             JOIN ItemType t ON t.ItemTypeID = i.ItemTypeID
+             JOIN UnitOfMeasure u ON u.UnitID = i.UnitID
+    WHERE t.TypeCode = 'RAW'
+    GROUP BY i.ItemID, i.ItemCode, i.ItemName, u.UnitCode
+    ORDER BY i.ItemCode
+    OPTION (MAXRECURSION 0)
+    ;
+    ```
+
+### fix FUTON_DBO_I_02
+
+- section: DBO   tier: Intermediate
+- title: each finished futon's direct material cost and margin
+- why: Starting from BOM rows omits finished goods without active components. Include every finished good and distinguish a missing BOM from a calculated cost.
+- request: What is each finished futon's direct material cost, including scrap, and what remains of its list price? Show NULL cost and margin when it has no active BOM.
+- sql:
+
+    ```sql
+    SELECT p.ItemCode,
+           p.ItemName,
+           CAST(SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost)
+               AS DECIMAL(18, 4)) AS MaterialCost,
+           p.ListPrice,
+           CAST(p.ListPrice
+                    - SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost)
+               AS DECIMAL(18, 4)) AS Margin
+    FROM Items p
+             JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID
+             LEFT JOIN BillOfMaterials b
+                       ON b.ParentItemID = p.ItemID AND b.IsActive = 1
+             LEFT JOIN Items c ON c.ItemID = b.ComponentItemID
+    WHERE t.TypeCode = 'FG'
+    GROUP BY p.ItemID, p.ItemCode, p.ItemName, p.ListPrice
+    ORDER BY p.ItemCode
+    ;
+    ```
+
+### fix FUTON_DBO_I_04
+
+- section: DBO   tier: Intermediate
+- title: rejection percentage on incoming inspections
+- why: A PO reference alone does not identify an incoming inspection. The denominator can also be zero; represent an undefined percentage as NULL.
+- request: For each supplier with incoming inspections referencing its purchase orders, what percentage of the inspected quantity was rejected, worst first? Show NULL when the inspected total is zero.
+- sql:
+
+    ```sql
+    SELECT s.SupplierCode,
+           s.SupplierName,
+           SUM(q.QuantityInspected) AS Inspected,
+           SUM(q.QuantityRejected) AS Rejected,
+           CAST(SUM(q.QuantityRejected) * 100
+                    / NULLIF(SUM(q.QuantityInspected), 0)
+               AS DECIMAL(9, 2)) AS RejectedPercent
+    FROM PurchaseOrder po
+             JOIN Supplier s ON s.SupplierID = po.SupplierID
+             JOIN QualityInspection q
+                  ON q.ReferenceType = 'PO'
+                      AND q.ReferenceNumber = po.PONumber
+                      AND q.InspectionType = 'Incoming'
+    GROUP BY s.SupplierID, s.SupplierCode, s.SupplierName
+    ORDER BY RejectedPercent DESC, s.SupplierCode
+    ;
+    ```
+
+### fix FUTON_DBO_I_03
+
+- section: DBO   tier: Intermediate
+- title: the five stocks with the lowest reorder ratios
+- why: Inventory is unique by item and warehouse, so ItemCode alone cannot resolve ties. “Nearest” is also misleading for a ratio ordered from smallest upward.
+- request: Which five item-and-warehouse stocks have the lowest available-quantity-to-reorder-point ratios, considering only positive reorder points? Break ties by item code and warehouse code.
+- sql:
+
+    ```sql
+    SELECT TOP (5) i.ItemCode,
+                   i.ItemName,
+                   w.WarehouseCode,
+                   v.QuantityAvailable,
+                   i.ReorderPoint,
+                   CAST(v.QuantityAvailable / i.ReorderPoint AS DECIMAL(18, 2)) AS Ratio
+    FROM Inventory v
+             JOIN Items i ON i.ItemID = v.ItemID
+             JOIN Warehouse w ON w.WarehouseID = v.WarehouseID
+    WHERE i.ReorderPoint > 0
+    ORDER BY v.QuantityAvailable / i.ReorderPoint, i.ItemCode, w.WarehouseCode
+    ;
+    ```
+
+### fix FUTON_DBO_I_05
+
+- section: DBO   tier: Intermediate
+- title: orders and net amount for every sales channel
+- why: The inner join excludes channels without orders, and equal totals have unstable ordering. Preserve channels and count matched orders.
+- request: For every sales channel, how many orders and how much recorded net amount are there, largest amount first? Show zero for channels without orders and count orders whose net amount is NULL separately.
+- sql:
+
+    ```sql
+    SELECT ch.ChannelCode,
+           ch.ChannelName,
+           COUNT(so.SalesOrderID) AS Orders,
+           COALESCE(SUM(so.NetAmount), 0) AS NetAmount,
+           COUNT(so.SalesOrderID) - COUNT(so.NetAmount) AS UnknownNetAmounts
+    FROM SalesChannel ch
+             LEFT JOIN SalesOrder so ON so.SalesChannelID = ch.SalesChannelID
+    GROUP BY ch.SalesChannelID, ch.ChannelCode, ch.ChannelName
+    ORDER BY NetAmount DESC, ch.ChannelCode
+    ;
+    ```
+
+### fix FUTON_DBO_B_05
+
+- section: DBO   tier: Basic
+- title: orders awaiting delivery
+- why: The request leaves cancelled orders ambiguous, and SQL Server places missing delivery dates before known dates. Make the delivery queue and missing-date placement explicit.
+- request: Which orders are awaiting delivery, excluding cancelled orders, earliest requested delivery first and undated orders last?
+- sql:
+
+    ```sql
+    SELECT so.OrderNumber, c.CustomerName, so.Status,
+           so.RequestedDeliveryDate, so.NetAmount
+    FROM SalesOrder so
+             JOIN Customer c ON c.CustomerID = so.CustomerID
+    WHERE so.Status NOT IN ('Delivered', 'Cancelled')
+    ORDER BY CASE WHEN so.RequestedDeliveryDate IS NULL THEN 1 ELSE 0 END,
+             so.RequestedDeliveryDate, so.OrderNumber
+    ;
+    ```
+
+### add FUTON_DBO_I_07
+
+- section: DBO   tier: Intermediate
+- title: BOM links that violate planning assumptions
+- why: The DDL does not enforce positive quantities, known scrap rates, consistent units, unique active parent/component pairs, or raw materials being leaves. This check guards assumptions used by the existing counts, costs, and recursive quantities.
+- request: Which active BOM links have nonpositive quantities, missing or negative scrap rates, units different from their component's stock unit, repeated parent/component pairs, or raw-material parents?
+- sql:
+
+    ```sql
+    SELECT b.BOMID,
+           p.ItemCode AS ParentCode,
+           c.ItemCode AS ComponentCode,
+           b.Quantity,
+           b.ScrapRate,
+           bu.UnitCode AS BOMUnit,
+           cu.UnitCode AS StockUnit
+    FROM BillOfMaterials b
+             JOIN Items p ON p.ItemID = b.ParentItemID
+             JOIN ItemType pt ON pt.ItemTypeID = p.ItemTypeID
+             JOIN Items c ON c.ItemID = b.ComponentItemID
+             JOIN UnitOfMeasure bu ON bu.UnitID = b.UnitID
+             JOIN UnitOfMeasure cu ON cu.UnitID = c.UnitID
+    WHERE b.IsActive = 1
+      AND (b.Quantity <= 0
+        OR b.ScrapRate IS NULL
+        OR b.ScrapRate < 0
+        OR b.UnitID <> c.UnitID
+        OR pt.TypeCode = 'RAW'
+        OR EXISTS (SELECT 1
+                   FROM BillOfMaterials other
+                   WHERE other.ParentItemID = b.ParentItemID
+                     AND other.ComponentItemID = b.ComponentItemID
+                     AND other.IsActive = 1
+                     AND other.BOMID <> b.BOMID))
+    ORDER BY p.ItemCode, c.ItemCode, b.BOMID
+    ;
+    ```
+
+### add FUTON_DBO_A_05
+
+- section: DBO   tier: Advanced
+- title: items participating in BOM cycles
+- why: CHK_BOM_NotSelf prevents only direct self-reference. A cycle check guards both existing recursive exercises before unrestricted recursion is used.
+- request: Which items participate in a cycle of active BOM links?
+- sql:
+
+    ```sql
+    WITH Walk AS (SELECT b.ParentItemID AS StartItemID,
+                         b.ComponentItemID AS CurrentItemID,
+                         CAST('/' + CAST(b.ParentItemID AS VARCHAR(11))
+                                  + '/' + CAST(b.ComponentItemID AS VARCHAR(11))
+                                  + '/' AS VARCHAR(MAX)) AS ItemPath,
+                         0 AS IsCycle
+                  FROM BillOfMaterials b
+                  WHERE b.IsActive = 1
+                  UNION ALL
+                  SELECT w.StartItemID,
+                         b.ComponentItemID,
+                         CAST(w.ItemPath + CAST(b.ComponentItemID AS VARCHAR(11))
+                                  + '/' AS VARCHAR(MAX)),
+                         CASE WHEN CHARINDEX('/'
+                                                 + CAST(b.ComponentItemID AS VARCHAR(11))
+                                                 + '/', w.ItemPath) > 0
+                                  THEN 1 ELSE 0 END
+                  FROM Walk w
+                           JOIN BillOfMaterials b
+                                ON b.ParentItemID = w.CurrentItemID
+                  WHERE b.IsActive = 1
+                    AND w.IsCycle = 0)
+    SELECT DISTINCT i.ItemCode, i.ItemName
+    FROM Walk w
+             JOIN Items i ON i.ItemID = w.StartItemID
+    WHERE w.IsCycle = 1
+      AND w.CurrentItemID = w.StartItemID
+    ORDER BY i.ItemCode
+    OPTION (MAXRECURSION 0)
+    ;
+    ```
+
+### add FUTON_DBO_B_06
+
+- section: DBO   tier: Basic
+- title: the open production schedule
+- why: Production orders and their nullable work-center assignment are uncovered. An outer join preserves work awaiting assignment.
+- request: Show planned, released, and in-progress production orders with their item, warehouse, work center, priority, and completion deadline; put known deadlines first, earliest first.
+- sql:
+
+    ```sql
+    SELECT po.WorkOrderNumber, i.ItemCode, w.WarehouseCode,
+           wc.WorkCenterCode, po.Status, po.Priority, po.PlannedCompletionDate
+    FROM ProductionOrder po
+             JOIN Items i ON i.ItemID = po.ItemID
+             JOIN Warehouse w ON w.WarehouseID = po.WarehouseID
+             LEFT JOIN WorkCenter wc ON wc.WorkCenterID = po.WorkCenterID
+    WHERE po.Status IN ('Planned', 'Released', 'InProgress')
+    ORDER BY CASE WHEN po.PlannedCompletionDate IS NULL THEN 1 ELSE 0 END,
+             po.PlannedCompletionDate,
+             CASE WHEN po.Priority IS NULL THEN 1 ELSE 0 END,
+             po.Priority, po.WorkOrderNumber
+    ;
+    ```
+
+### add FUTON_DBO_I_08
+
+- section: DBO   tier: Intermediate
+- title: production materials still awaiting issue
+- why: ProductionOrderMaterial supplies a separate, uncovered requirements path. Compare each order's remaining material requirement with its warehouse stock without multiplying inventory rows.
+- request: For open production orders, show each material still awaiting issue and its availability in the order's warehouse. Treat missing inventory as zero and report materials with unknown issued quantities separately.
+- sql:
+
+    ```sql
+    WITH Materials AS (SELECT m.ProductionOrderID,
+                              m.ItemID,
+                              SUM(m.RequiredQuantity - m.IssuedQuantity) AS Remaining,
+                              SUM(CASE WHEN m.IssuedQuantity IS NULL
+                                           THEN 1 ELSE 0 END) AS UnknownIssued
+                       FROM ProductionOrderMaterial m
+                       GROUP BY m.ProductionOrderID, m.ItemID)
+    SELECT po.WorkOrderNumber,
+           i.ItemCode,
+           w.WarehouseCode,
+           CASE WHEN m.UnknownIssued = 0 THEN m.Remaining END AS Remaining,
+           COALESCE(v.QuantityAvailable, 0) AS Available,
+           m.UnknownIssued
+    FROM Materials m
+             JOIN ProductionOrder po ON po.ProductionOrderID = m.ProductionOrderID
+             JOIN Items i ON i.ItemID = m.ItemID
+             JOIN Warehouse w ON w.WarehouseID = po.WarehouseID
+             LEFT JOIN Inventory v
+                       ON v.ItemID = m.ItemID AND v.WarehouseID = po.WarehouseID
+    WHERE po.Status IN ('Planned', 'Released', 'InProgress')
+      AND (m.Remaining > 0 OR m.UnknownIssued > 0)
+    ORDER BY po.WorkOrderNumber, i.ItemCode
+    ;
+    ```
+
+### add FUTON_DBO_I_09
+
+- section: DBO   tier: Intermediate
+- title: purchase lines still awaiting receipt
+- why: PurchaseOrderDetail and partial receipts are uncovered. Nullable QuantityReceived needs an explicit unknown state, and LineNumber is not a declared unique key.
+- request: Which noncancelled purchase-order lines have quantities still outstanding or an unknown received quantity? Show the supplier, receiving warehouse, and expected delivery date.
+- sql:
+
+    ```sql
+    SELECT po.PONumber,
+           d.LineNumber,
+           d.PODetailID,
+           s.SupplierCode,
+           w.WarehouseCode,
+           i.ItemCode,
+           d.Quantity,
+           d.QuantityReceived,
+           d.Quantity - d.QuantityReceived AS Outstanding,
+           po.ExpectedDeliveryDate
+    FROM PurchaseOrder po
+             JOIN PurchaseOrderDetail d ON d.PurchaseOrderID = po.PurchaseOrderID
+             JOIN Supplier s ON s.SupplierID = po.SupplierID
+             JOIN Warehouse w ON w.WarehouseID = po.WarehouseID
+             JOIN Items i ON i.ItemID = d.ItemID
+    WHERE po.Status <> 'Cancelled'
+      AND (d.QuantityReceived < d.Quantity OR d.QuantityReceived IS NULL)
+    ORDER BY CASE WHEN po.ExpectedDeliveryDate IS NULL THEN 1 ELSE 0 END,
+             po.ExpectedDeliveryDate, po.PONumber, d.LineNumber, d.PODetailID
+    ;
+    ```
+
+### add FUTON_DBO_I_10
+
+- section: DBO   tier: Intermediate
+- title: returned quantities and refunds by reason and item
+- why: Returns, reasons, and the link back to an original sales line are uncovered. Summing detail refunds avoids repeating a header refund for every returned item.
+- request: For received or refunded returns, show returned quantity and line refunds by reason and item, with the number of original sales lines affected.
+- sql:
+
+    ```sql
+    SELECT rr.ReasonCode,
+           rr.ReasonDescription,
+           i.ItemCode,
+           i.ItemName,
+           COUNT(DISTINCT d.SODetailID) AS SalesLines,
+           SUM(d.QuantityReturned) AS QuantityReturned,
+           SUM(d.RefundAmount) AS RefundAmount
+    FROM SalesReturn r
+             JOIN ReturnReason rr ON rr.ReturnReasonID = r.ReturnReasonID
+             JOIN SalesReturnDetail d ON d.ReturnID = r.ReturnID
+             JOIN Items i ON i.ItemID = d.ItemID
+    WHERE r.Status IN ('Received', 'Refunded')
+    GROUP BY rr.ReturnReasonID, rr.ReasonCode, rr.ReasonDescription,
+             i.ItemID, i.ItemCode, i.ItemName
+    ORDER BY RefundAmount DESC, rr.ReasonCode, i.ItemCode
+    ;
+    ```
+
+### add FUTON_DBO_B_07
+
+- section: DBO   tier: Basic
+- title: accepted quotations and their resulting orders
+- why: This covers the nullable quotation-to-order foreign key and optional sales representative and territory assignments.
+- request: Show accepted quotations, their customers, assigned representatives and representatives' territories, and resulting order numbers; include quotations still awaiting conversion.
+- sql:
+
+    ```sql
+    SELECT q.QuoteNumber,
+           c.CustomerCode,
+           sr.EmployeeCode,
+           st.TerritoryCode,
+           q.QuoteDate,
+           so.OrderNumber,
+           so.OrderDate
+    FROM SalesQuote q
+             JOIN Customer c ON c.CustomerID = q.CustomerID
+             LEFT JOIN SalesRep sr ON sr.SalesRepID = q.SalesRepID
+             LEFT JOIN SalesTerritory st ON st.TerritoryID = sr.TerritoryID
+             LEFT JOIN SalesOrder so ON so.SalesOrderID = q.ConvertedToOrderID
+    WHERE q.Status = 'Accepted'
+    ORDER BY q.QuoteDate, q.QuoteNumber
+    ;
+    ```
+
+### add FUTON_DBO_B_08
+
+- section: DBO   tier: Basic
+- title: an item's monthly inventory transaction history
+- why: InventoryTransaction and TransactionType are uncovered. A half-open date range correctly includes all DATETIME2 values in the month, with the primary key resolving equal timestamps.
+- request: Show the November 2026 inventory transactions for RM-FILL-001, with warehouse, transaction type, signed quantity, recorded unit cost, and reference, in chronological order.
+- sql:
+
+    ```sql
+    SELECT it.TransactionID,
+           it.TransactionDate,
+           w.WarehouseCode,
+           tt.TypeCode,
+           it.Quantity,
+           it.UnitCost,
+           it.ReferenceType,
+           it.ReferenceNumber
+    FROM InventoryTransaction it
+             JOIN Items i ON i.ItemID = it.ItemID
+             JOIN Warehouse w ON w.WarehouseID = it.WarehouseID
+             JOIN TransactionType tt ON tt.TransactionTypeID = it.TransactionTypeID
+    WHERE i.ItemCode = 'RM-FILL-001'
+      AND it.TransactionDate >= '20261101'
+      AND it.TransactionDate < '20261201'
+    ORDER BY it.TransactionDate, it.TransactionID
+    ;
+    ```
+tokens used
+75,827
+### fix FUTON_DBO_A_03
+
+- section: DBO   tier: Advanced
+- title: how many futons the available components can build
+- why: Inner joins discard components without inventory, overstating capacity. Missing stock must contribute zero, and negative availability cannot imply negative production.
+- request: How many of each finished futon can WH-MAIN build from its direct components, ignoring scrap, taking the smallest whole-number capacity across its components? Show NULL when no active bill of materials exists.
+- sql:
+
+    ```sql
+    SELECT p.ItemCode,
+           p.ItemName,
+           MIN(FLOOR(CASE
+                         WHEN v.QuantityAvailable > 0 THEN v.QuantityAvailable
+                         ELSE 0
+                     END / b.Quantity)) AS Buildable
+    FROM Items p
+             JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID
+             LEFT JOIN BillOfMaterials b
+                       ON b.ParentItemID = p.ItemID AND b.IsActive = 1
+             LEFT JOIN Inventory v
+                       ON v.ItemID = b.ComponentItemID
+                           AND v.WarehouseID = (SELECT w.WarehouseID
+                                                FROM Warehouse w
+                                                WHERE w.WarehouseCode = 'WH-MAIN')
+    WHERE t.TypeCode = 'FG'
+    GROUP BY p.ItemID, p.ItemCode, p.ItemName
+    ORDER BY Buildable DESC, p.ItemCode
+    ;
+    ```
+
+### fix FUTON_DBO_A_01
+
+- section: DBO   tier: Advanced
+- title: the raw materials ten futons need
+- why: A terminal component is not necessarily a raw material. Filter by RAW and report zero availability when inventory is absent; guard the BOM assumptions with the proposed checks.
+- request: What raw materials do ten FG-FUT-003 futons require through every active BOM level, including each level's scrap allowance, and how much is available across all warehouses?
+- sql:
+
+    ```sql
+    WITH Explosion AS (SELECT b.ComponentItemID,
+                              CAST(10 * b.Quantity * (1 + b.ScrapRate / 100)
+                                  AS DECIMAL(28, 8)) AS Quantity
+                       FROM BillOfMaterials b
+                                JOIN Items p ON p.ItemID = b.ParentItemID
+                       WHERE p.ItemCode = 'FG-FUT-003'
+                         AND b.IsActive = 1
+                       UNION ALL
+                       SELECT b.ComponentItemID,
+                              CAST(e.Quantity * b.Quantity * (1 + b.ScrapRate / 100)
+                                  AS DECIMAL(28, 8))
+                       FROM Explosion e
+                                JOIN BillOfMaterials b
+                                     ON b.ParentItemID = e.ComponentItemID
+                       WHERE b.IsActive = 1)
+    SELECT i.ItemCode,
+           i.ItemName,
+           CAST(SUM(e.Quantity) AS DECIMAL(18, 4)) AS Quantity,
+           u.UnitCode,
+           COALESCE((SELECT SUM(v.QuantityAvailable)
+                     FROM Inventory v
+                     WHERE v.ItemID = i.ItemID), 0) AS Available
+    FROM Explosion e
+             JOIN Items i ON i.ItemID = e.ComponentItemID
+             JOIN ItemType t ON t.ItemTypeID = i.ItemTypeID
+             JOIN UnitOfMeasure u ON u.UnitID = i.UnitID
+    WHERE t.TypeCode = 'RAW'
+    GROUP BY i.ItemID, i.ItemCode, i.ItemName, u.UnitCode
+    ORDER BY i.ItemCode
+    OPTION (MAXRECURSION 0)
+    ;
+    ```
+
+### fix FUTON_DBO_I_02
+
+- section: DBO   tier: Intermediate
+- title: each finished futon's direct material cost and margin
+- why: Starting from BOM rows omits finished goods without active components. Include every finished good and distinguish a missing BOM from a calculated cost.
+- request: What is each finished futon's direct material cost, including scrap, and what remains of its list price? Show NULL cost and margin when it has no active BOM.
+- sql:
+
+    ```sql
+    SELECT p.ItemCode,
+           p.ItemName,
+           CAST(SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost)
+               AS DECIMAL(18, 4)) AS MaterialCost,
+           p.ListPrice,
+           CAST(p.ListPrice
+                    - SUM(b.Quantity * (1 + b.ScrapRate / 100) * c.StandardCost)
+               AS DECIMAL(18, 4)) AS Margin
+    FROM Items p
+             JOIN ItemType t ON t.ItemTypeID = p.ItemTypeID
+             LEFT JOIN BillOfMaterials b
+                       ON b.ParentItemID = p.ItemID AND b.IsActive = 1
+             LEFT JOIN Items c ON c.ItemID = b.ComponentItemID
+    WHERE t.TypeCode = 'FG'
+    GROUP BY p.ItemID, p.ItemCode, p.ItemName, p.ListPrice
+    ORDER BY p.ItemCode
+    ;
+    ```
+
+### fix FUTON_DBO_I_04
+
+- section: DBO   tier: Intermediate
+- title: rejection percentage on incoming inspections
+- why: A PO reference alone does not identify an incoming inspection. The denominator can also be zero; represent an undefined percentage as NULL.
+- request: For each supplier with incoming inspections referencing its purchase orders, what percentage of the inspected quantity was rejected, worst first? Show NULL when the inspected total is zero.
+- sql:
+
+    ```sql
+    SELECT s.SupplierCode,
+           s.SupplierName,
+           SUM(q.QuantityInspected) AS Inspected,
+           SUM(q.QuantityRejected) AS Rejected,
+           CAST(SUM(q.QuantityRejected) * 100
+                    / NULLIF(SUM(q.QuantityInspected), 0)
+               AS DECIMAL(9, 2)) AS RejectedPercent
+    FROM PurchaseOrder po
+             JOIN Supplier s ON s.SupplierID = po.SupplierID
+             JOIN QualityInspection q
+                  ON q.ReferenceType = 'PO'
+                      AND q.ReferenceNumber = po.PONumber
+                      AND q.InspectionType = 'Incoming'
+    GROUP BY s.SupplierID, s.SupplierCode, s.SupplierName
+    ORDER BY RejectedPercent DESC, s.SupplierCode
+    ;
+    ```
+
+### fix FUTON_DBO_I_03
+
+- section: DBO   tier: Intermediate
+- title: the five stocks with the lowest reorder ratios
+- why: Inventory is unique by item and warehouse, so ItemCode alone cannot resolve ties. “Nearest” is also misleading for a ratio ordered from smallest upward.
+- request: Which five item-and-warehouse stocks have the lowest available-quantity-to-reorder-point ratios, considering only positive reorder points? Break ties by item code and warehouse code.
+- sql:
+
+    ```sql
+    SELECT TOP (5) i.ItemCode,
+                   i.ItemName,
+                   w.WarehouseCode,
+                   v.QuantityAvailable,
+                   i.ReorderPoint,
+                   CAST(v.QuantityAvailable / i.ReorderPoint AS DECIMAL(18, 2)) AS Ratio
+    FROM Inventory v
+             JOIN Items i ON i.ItemID = v.ItemID
+             JOIN Warehouse w ON w.WarehouseID = v.WarehouseID
+    WHERE i.ReorderPoint > 0
+    ORDER BY v.QuantityAvailable / i.ReorderPoint, i.ItemCode, w.WarehouseCode
+    ;
+    ```
+
+### fix FUTON_DBO_I_05
+
+- section: DBO   tier: Intermediate
+- title: orders and net amount for every sales channel
+- why: The inner join excludes channels without orders, and equal totals have unstable ordering. Preserve channels and count matched orders.
+- request: For every sales channel, how many orders and how much recorded net amount are there, largest amount first? Show zero for channels without orders and count orders whose net amount is NULL separately.
+- sql:
+
+    ```sql
+    SELECT ch.ChannelCode,
+           ch.ChannelName,
+           COUNT(so.SalesOrderID) AS Orders,
+           COALESCE(SUM(so.NetAmount), 0) AS NetAmount,
+           COUNT(so.SalesOrderID) - COUNT(so.NetAmount) AS UnknownNetAmounts
+    FROM SalesChannel ch
+             LEFT JOIN SalesOrder so ON so.SalesChannelID = ch.SalesChannelID
+    GROUP BY ch.SalesChannelID, ch.ChannelCode, ch.ChannelName
+    ORDER BY NetAmount DESC, ch.ChannelCode
+    ;
+    ```
+
+### fix FUTON_DBO_B_05
+
+- section: DBO   tier: Basic
+- title: orders awaiting delivery
+- why: The request leaves cancelled orders ambiguous, and SQL Server places missing delivery dates before known dates. Make the delivery queue and missing-date placement explicit.
+- request: Which orders are awaiting delivery, excluding cancelled orders, earliest requested delivery first and undated orders last?
+- sql:
+
+    ```sql
+    SELECT so.OrderNumber, c.CustomerName, so.Status,
+           so.RequestedDeliveryDate, so.NetAmount
+    FROM SalesOrder so
+             JOIN Customer c ON c.CustomerID = so.CustomerID
+    WHERE so.Status NOT IN ('Delivered', 'Cancelled')
+    ORDER BY CASE WHEN so.RequestedDeliveryDate IS NULL THEN 1 ELSE 0 END,
+             so.RequestedDeliveryDate, so.OrderNumber
+    ;
+    ```
+
+### add FUTON_DBO_I_07
+
+- section: DBO   tier: Intermediate
+- title: BOM links that violate planning assumptions
+- why: The DDL does not enforce positive quantities, known scrap rates, consistent units, unique active parent/component pairs, or raw materials being leaves. This check guards assumptions used by the existing counts, costs, and recursive quantities.
+- request: Which active BOM links have nonpositive quantities, missing or negative scrap rates, units different from their component's stock unit, repeated parent/component pairs, or raw-material parents?
+- sql:
+
+    ```sql
+    SELECT b.BOMID,
+           p.ItemCode AS ParentCode,
+           c.ItemCode AS ComponentCode,
+           b.Quantity,
+           b.ScrapRate,
+           bu.UnitCode AS BOMUnit,
+           cu.UnitCode AS StockUnit
+    FROM BillOfMaterials b
+             JOIN Items p ON p.ItemID = b.ParentItemID
+             JOIN ItemType pt ON pt.ItemTypeID = p.ItemTypeID
+             JOIN Items c ON c.ItemID = b.ComponentItemID
+             JOIN UnitOfMeasure bu ON bu.UnitID = b.UnitID
+             JOIN UnitOfMeasure cu ON cu.UnitID = c.UnitID
+    WHERE b.IsActive = 1
+      AND (b.Quantity <= 0
+        OR b.ScrapRate IS NULL
+        OR b.ScrapRate < 0
+        OR b.UnitID <> c.UnitID
+        OR pt.TypeCode = 'RAW'
+        OR EXISTS (SELECT 1
+                   FROM BillOfMaterials other
+                   WHERE other.ParentItemID = b.ParentItemID
+                     AND other.ComponentItemID = b.ComponentItemID
+                     AND other.IsActive = 1
+                     AND other.BOMID <> b.BOMID))
+    ORDER BY p.ItemCode, c.ItemCode, b.BOMID
+    ;
+    ```
+
+### add FUTON_DBO_A_05
+
+- section: DBO   tier: Advanced
+- title: items participating in BOM cycles
+- why: CHK_BOM_NotSelf prevents only direct self-reference. A cycle check guards both existing recursive exercises before unrestricted recursion is used.
+- request: Which items participate in a cycle of active BOM links?
+- sql:
+
+    ```sql
+    WITH Walk AS (SELECT b.ParentItemID AS StartItemID,
+                         b.ComponentItemID AS CurrentItemID,
+                         CAST('/' + CAST(b.ParentItemID AS VARCHAR(11))
+                                  + '/' + CAST(b.ComponentItemID AS VARCHAR(11))
+                                  + '/' AS VARCHAR(MAX)) AS ItemPath,
+                         0 AS IsCycle
+                  FROM BillOfMaterials b
+                  WHERE b.IsActive = 1
+                  UNION ALL
+                  SELECT w.StartItemID,
+                         b.ComponentItemID,
+                         CAST(w.ItemPath + CAST(b.ComponentItemID AS VARCHAR(11))
+                                  + '/' AS VARCHAR(MAX)),
+                         CASE WHEN CHARINDEX('/'
+                                                 + CAST(b.ComponentItemID AS VARCHAR(11))
+                                                 + '/', w.ItemPath) > 0
+                                  THEN 1 ELSE 0 END
+                  FROM Walk w
+                           JOIN BillOfMaterials b
+                                ON b.ParentItemID = w.CurrentItemID
+                  WHERE b.IsActive = 1
+                    AND w.IsCycle = 0)
+    SELECT DISTINCT i.ItemCode, i.ItemName
+    FROM Walk w
+             JOIN Items i ON i.ItemID = w.StartItemID
+    WHERE w.IsCycle = 1
+      AND w.CurrentItemID = w.StartItemID
+    ORDER BY i.ItemCode
+    OPTION (MAXRECURSION 0)
+    ;
+    ```
+
+### add FUTON_DBO_B_06
+
+- section: DBO   tier: Basic
+- title: the open production schedule
+- why: Production orders and their nullable work-center assignment are uncovered. An outer join preserves work awaiting assignment.
+- request: Show planned, released, and in-progress production orders with their item, warehouse, work center, priority, and completion deadline; put known deadlines first, earliest first.
+- sql:
+
+    ```sql
+    SELECT po.WorkOrderNumber, i.ItemCode, w.WarehouseCode,
+           wc.WorkCenterCode, po.Status, po.Priority, po.PlannedCompletionDate
+    FROM ProductionOrder po
+             JOIN Items i ON i.ItemID = po.ItemID
+             JOIN Warehouse w ON w.WarehouseID = po.WarehouseID
+             LEFT JOIN WorkCenter wc ON wc.WorkCenterID = po.WorkCenterID
+    WHERE po.Status IN ('Planned', 'Released', 'InProgress')
+    ORDER BY CASE WHEN po.PlannedCompletionDate IS NULL THEN 1 ELSE 0 END,
+             po.PlannedCompletionDate,
+             CASE WHEN po.Priority IS NULL THEN 1 ELSE 0 END,
+             po.Priority, po.WorkOrderNumber
+    ;
+    ```
+
+### add FUTON_DBO_I_08
+
+- section: DBO   tier: Intermediate
+- title: production materials still awaiting issue
+- why: ProductionOrderMaterial supplies a separate, uncovered requirements path. Compare each order's remaining material requirement with its warehouse stock without multiplying inventory rows.
+- request: For open production orders, show each material still awaiting issue and its availability in the order's warehouse. Treat missing inventory as zero and report materials with unknown issued quantities separately.
+- sql:
+
+    ```sql
+    WITH Materials AS (SELECT m.ProductionOrderID,
+                              m.ItemID,
+                              SUM(m.RequiredQuantity - m.IssuedQuantity) AS Remaining,
+                              SUM(CASE WHEN m.IssuedQuantity IS NULL
+                                           THEN 1 ELSE 0 END) AS UnknownIssued
+                       FROM ProductionOrderMaterial m
+                       GROUP BY m.ProductionOrderID, m.ItemID)
+    SELECT po.WorkOrderNumber,
+           i.ItemCode,
+           w.WarehouseCode,
+           CASE WHEN m.UnknownIssued = 0 THEN m.Remaining END AS Remaining,
+           COALESCE(v.QuantityAvailable, 0) AS Available,
+           m.UnknownIssued
+    FROM Materials m
+             JOIN ProductionOrder po ON po.ProductionOrderID = m.ProductionOrderID
+             JOIN Items i ON i.ItemID = m.ItemID
+             JOIN Warehouse w ON w.WarehouseID = po.WarehouseID
+             LEFT JOIN Inventory v
+                       ON v.ItemID = m.ItemID AND v.WarehouseID = po.WarehouseID
+    WHERE po.Status IN ('Planned', 'Released', 'InProgress')
+      AND (m.Remaining > 0 OR m.UnknownIssued > 0)
+    ORDER BY po.WorkOrderNumber, i.ItemCode
+    ;
+    ```
+
+### add FUTON_DBO_I_09
+
+- section: DBO   tier: Intermediate
+- title: purchase lines still awaiting receipt
+- why: PurchaseOrderDetail and partial receipts are uncovered. Nullable QuantityReceived needs an explicit unknown state, and LineNumber is not a declared unique key.
+- request: Which noncancelled purchase-order lines have quantities still outstanding or an unknown received quantity? Show the supplier, receiving warehouse, and expected delivery date.
+- sql:
+
+    ```sql
+    SELECT po.PONumber,
+           d.LineNumber,
+           d.PODetailID,
+           s.SupplierCode,
+           w.WarehouseCode,
+           i.ItemCode,
+           d.Quantity,
+           d.QuantityReceived,
+           d.Quantity - d.QuantityReceived AS Outstanding,
+           po.ExpectedDeliveryDate
+    FROM PurchaseOrder po
+             JOIN PurchaseOrderDetail d ON d.PurchaseOrderID = po.PurchaseOrderID
+             JOIN Supplier s ON s.SupplierID = po.SupplierID
+             JOIN Warehouse w ON w.WarehouseID = po.WarehouseID
+             JOIN Items i ON i.ItemID = d.ItemID
+    WHERE po.Status <> 'Cancelled'
+      AND (d.QuantityReceived < d.Quantity OR d.QuantityReceived IS NULL)
+    ORDER BY CASE WHEN po.ExpectedDeliveryDate IS NULL THEN 1 ELSE 0 END,
+             po.ExpectedDeliveryDate, po.PONumber, d.LineNumber, d.PODetailID
+    ;
+    ```
+
+### add FUTON_DBO_I_10
+
+- section: DBO   tier: Intermediate
+- title: returned quantities and refunds by reason and item
+- why: Returns, reasons, and the link back to an original sales line are uncovered. Summing detail refunds avoids repeating a header refund for every returned item.
+- request: For received or refunded returns, show returned quantity and line refunds by reason and item, with the number of original sales lines affected.
+- sql:
+
+    ```sql
+    SELECT rr.ReasonCode,
+           rr.ReasonDescription,
+           i.ItemCode,
+           i.ItemName,
+           COUNT(DISTINCT d.SODetailID) AS SalesLines,
+           SUM(d.QuantityReturned) AS QuantityReturned,
+           SUM(d.RefundAmount) AS RefundAmount
+    FROM SalesReturn r
+             JOIN ReturnReason rr ON rr.ReturnReasonID = r.ReturnReasonID
+             JOIN SalesReturnDetail d ON d.ReturnID = r.ReturnID
+             JOIN Items i ON i.ItemID = d.ItemID
+    WHERE r.Status IN ('Received', 'Refunded')
+    GROUP BY rr.ReturnReasonID, rr.ReasonCode, rr.ReasonDescription,
+             i.ItemID, i.ItemCode, i.ItemName
+    ORDER BY RefundAmount DESC, rr.ReasonCode, i.ItemCode
+    ;
+    ```
+
+### add FUTON_DBO_B_07
+
+- section: DBO   tier: Basic
+- title: accepted quotations and their resulting orders
+- why: This covers the nullable quotation-to-order foreign key and optional sales representative and territory assignments.
+- request: Show accepted quotations, their customers, assigned representatives and representatives' territories, and resulting order numbers; include quotations still awaiting conversion.
+- sql:
+
+    ```sql
+    SELECT q.QuoteNumber,
+           c.CustomerCode,
+           sr.EmployeeCode,
+           st.TerritoryCode,
+           q.QuoteDate,
+           so.OrderNumber,
+           so.OrderDate
+    FROM SalesQuote q
+             JOIN Customer c ON c.CustomerID = q.CustomerID
+             LEFT JOIN SalesRep sr ON sr.SalesRepID = q.SalesRepID
+             LEFT JOIN SalesTerritory st ON st.TerritoryID = sr.TerritoryID
+             LEFT JOIN SalesOrder so ON so.SalesOrderID = q.ConvertedToOrderID
+    WHERE q.Status = 'Accepted'
+    ORDER BY q.QuoteDate, q.QuoteNumber
+    ;
+    ```
+
+### add FUTON_DBO_B_08
+
+- section: DBO   tier: Basic
+- title: an item's monthly inventory transaction history
+- why: InventoryTransaction and TransactionType are uncovered. A half-open date range correctly includes all DATETIME2 values in the month, with the primary key resolving equal timestamps.
+- request: Show the November 2026 inventory transactions for RM-FILL-001, with warehouse, transaction type, signed quantity, recorded unit cost, and reference, in chronological order.
+- sql:
+
+    ```sql
+    SELECT it.TransactionID,
+           it.TransactionDate,
+           w.WarehouseCode,
+           tt.TypeCode,
+           it.Quantity,
+           it.UnitCost,
+           it.ReferenceType,
+           it.ReferenceNumber
+    FROM InventoryTransaction it
+             JOIN Items i ON i.ItemID = it.ItemID
+             JOIN Warehouse w ON w.WarehouseID = it.WarehouseID
+             JOIN TransactionType tt ON tt.TransactionTypeID = it.TransactionTypeID
+    WHERE i.ItemCode = 'RM-FILL-001'
+      AND it.TransactionDate >= '20261101'
+      AND it.TransactionDate < '20261201'
+    ORDER BY it.TransactionDate, it.TransactionID
+    ;
+    ```
