@@ -1,0 +1,255 @@
+{
+ "module": "oracle-sample-schemas-persistence/oracle-sample-schemas-persistence-hr",
+ "changes": [
+  {
+   "op": "fix",
+   "id": "HR_EMPLOYEES_A_01",
+   "_src": "both",
+   "_why": "the RANK form kept the employee with no department as a partition, unlike the correlated form; DESC put a NULL salary first; no tie order",
+   "rerun": true,
+   "request": [
+    "Each department head is told who their best-paid employee is; ties are all reported, ordered by `EMPLOYEE_ID`.",
+    "An employee with no department is left out, as the correlated solution leaves them out; `NULLS LAST` keeps a salary not recorded from ranking first, which Oracle's `DESC` would do."
+   ],
+   "sql": "SELECT DEPARTMENT_ID, EMPLOYEE_ID, LAST_NAME, SALARY\nFROM (SELECT e.*, RANK() OVER (PARTITION BY DEPARTMENT_ID ORDER BY SALARY DESC NULLS LAST) AS RNK\n      FROM EMPLOYEES e\n      WHERE DEPARTMENT_ID IS NOT NULL)\nWHERE RNK = 1\nORDER BY DEPARTMENT_ID ASC, EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_EMPLOYEES_A_02",
+   "_src": "both",
+   "_why": "DESC put a NULL salary first, at DENSE_RANK 1; three salaries, not three people; no tie order",
+   "rerun": true,
+   "request": [
+    "Ahead of the bonus round, each department head wants the three highest salaries of the department and everyone who earns one of them, ties included.",
+    "`NULLS LAST` keeps a salary not recorded from ranking first; the people of one rank are ordered by `EMPLOYEE_ID`."
+   ],
+   "sql": "SELECT DEPARTMENT_ID, EMPLOYEE_ID, LAST_NAME, SALARY, RNK\nFROM (SELECT e.*, DENSE_RANK() OVER (PARTITION BY DEPARTMENT_ID ORDER BY SALARY DESC NULLS LAST) AS RNK\n      FROM EMPLOYEES e\n      WHERE DEPARTMENT_ID IS NOT NULL)\nWHERE RNK <= 3\nORDER BY DEPARTMENT_ID ASC, RNK ASC, EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_EMP_DETAILS_VIEW_A_01",
+   "_src": "Claude",
+   "_why": "the view passes SALARY through as nullable, and DESC put a NULL first; LAST_NAME does not break a tie of two people of one name",
+   "rerun": true,
+   "request": [
+    "Each regional director is told who the best-paid people in their region are: the three highest salaries, ties included, ordered by last name and `EMPLOYEE_ID`.",
+    "`NULLS LAST` keeps a salary not recorded from ranking first."
+   ],
+   "sql": "SELECT REGION_NAME, EMPLOYEE_ID, LAST_NAME, JOB_TITLE, SALARY, RNK\nFROM (SELECT v.*, DENSE_RANK() OVER (PARTITION BY REGION_NAME ORDER BY SALARY DESC NULLS LAST) AS RNK\n      FROM EMP_DETAILS_VIEW v)\nWHERE RNK <= 3\nORDER BY REGION_NAME ASC, RNK ASC, LAST_NAME ASC, EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_EMPLOYEES_B_06",
+   "_src": "both",
+   "_why": "HIRE_DATE is a DATE, which has a time; BETWEEN missed a hire later on the last day, which the note admitted; no tie order",
+   "rerun": false,
+   "request": [
+    "HR is preparing the probation review for everyone hired in a given period, the from and to dates both included, the earliest hires first; people hired on one day are ordered by `EMPLOYEE_ID`.",
+    "A `DATE` has a time of day, so the period runs from `TRUNC(:fromDate)` up to, not including, the day after `:toDate`."
+   ],
+   "sql": "SELECT *\nFROM EMPLOYEES\nWHERE HIRE_DATE >= TRUNC(:fromDate)\n  AND HIRE_DATE < TRUNC(:toDate) + 1\nORDER BY HIRE_DATE ASC, EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_JOB_HISTORY_B_02",
+   "_src": "both",
+   "_why": "the update_job_history trigger writes END_DATE as SYSDATE, with a time; BETWEEN missed a position closed later on the last day",
+   "rerun": false,
+   "request": [
+    "For an audit, HR wants every earlier position that ended within a given period, the from and to dates both included, the earliest endings first.",
+    "The schema's trigger writes `END_DATE` as `SYSDATE`, which has a time of day, so the period runs up to, not including, the day after `:toDate`."
+   ],
+   "sql": "SELECT EMPLOYEE_ID, START_DATE, END_DATE, JOB_ID, DEPARTMENT_ID\nFROM JOB_HISTORY\nWHERE END_DATE >= TRUNC(:fromDate)\n  AND END_DATE < TRUNC(:toDate) + 1\nORDER BY END_DATE ASC, EMPLOYEE_ID ASC, START_DATE ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_JOB_HISTORY_I_03",
+   "_src": "Claude",
+   "_why": "END_DATE from SYSDATE has a time, so END_DATE - START_DATE + 1 became a fraction of a day; TRUNC gives whole days",
+   "rerun": true,
+   "request": [
+    "Workforce planning wants to know how long people stay in a job before they move on: per job, the number of earlier positions and the shortest, average and longest of them in whole days, the longest average first.",
+    "`TRUNC` takes each date to its day, since the trigger writes `END_DATE` with a time."
+   ],
+   "sql": "SELECT JOB_ID,\n       COUNT(*)                                            AS POSITIONS,\n       MIN(TRUNC(END_DATE) - TRUNC(START_DATE) + 1)        AS SHORTEST_DAYS,\n       ROUND(AVG(TRUNC(END_DATE) - TRUNC(START_DATE) + 1)) AS AVERAGE_DAYS,\n       MAX(TRUNC(END_DATE) - TRUNC(START_DATE) + 1)        AS LONGEST_DAYS\nFROM JOB_HISTORY\nGROUP BY JOB_ID\nORDER BY AVERAGE_DAYS DESC, JOB_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_EMPLOYEES_I_03",
+   "_src": "Claude",
+   "_why": "ELSE counted a salary not recorded as High, as SAKILA_FILM_I_03 counted a NULL length as long; no ORDER BY",
+   "rerun": true,
+   "request": [
+    "HR reports headcount in three pay grades: under 5,000, 5,000 up to 10,000, and 10,000 or more, with the employees whose salary is not recorded in a fourth, `Not recorded`.",
+    "Show the grades from the lowest to the highest, `Not recorded` last."
+   ],
+   "sql": "SELECT CASE\n           WHEN SALARY IS NULL THEN 'Not recorded'\n           WHEN SALARY < 5000 THEN 'Low'\n           WHEN SALARY < 10000 THEN 'Medium'\n           ELSE 'High'\n           END  AS GRADE,\n       COUNT(*) AS HEADCOUNT\nFROM EMPLOYEES\nGROUP BY CASE\n             WHEN SALARY IS NULL THEN 'Not recorded'\n             WHEN SALARY < 5000 THEN 'Low'\n             WHEN SALARY < 10000 THEN 'Medium'\n             ELSE 'High'\n             END\nORDER BY MIN(SALARY) ASC NULLS LAST"
+  },
+  {
+   "op": "fix",
+   "id": "HR_SCHEMA_A_02",
+   "_src": "both",
+   "_why": "HIRE_DATE was shown as the start of the current job (Codex), and the current job could sort before an earlier one of the same date (Claude); the current job starts the day after the last END_DATE, or on HIRE_DATE with no history",
+   "rerun": false,
+   "request": [
+    "An employee asks HR for their record: every position they have held, the current one included, in date order.",
+    "The trigger writes an earlier position's end when the job changes, so the current position starts the day after the last `END_DATE` of the history, or on `HIRE_DATE` if there is none; the current one, with no end, comes last on a tie."
+   ],
+   "sql": "SELECT h.START_DATE, h.END_DATE, h.JOB_ID, j.JOB_TITLE, h.DEPARTMENT_ID\nFROM JOB_HISTORY h\n         JOIN JOBS j ON j.JOB_ID = h.JOB_ID\nWHERE h.EMPLOYEE_ID = :employeeId\nUNION ALL\nSELECT COALESCE((SELECT TRUNC(MAX(h2.END_DATE)) + 1 FROM JOB_HISTORY h2 WHERE h2.EMPLOYEE_ID = e.EMPLOYEE_ID), e.HIRE_DATE),\n       NULL,\n       e.JOB_ID,\n       j.JOB_TITLE,\n       e.DEPARTMENT_ID\nFROM EMPLOYEES e\n         JOIN JOBS j ON j.JOB_ID = e.JOB_ID\nWHERE e.EMPLOYEE_ID = :employeeId\nORDER BY 1 ASC, 2 ASC NULLS LAST"
+  },
+  {
+   "op": "fix",
+   "id": "HR_SCHEMA_A_05",
+   "_src": "both",
+   "_why": "d.*, e.* gave DEPARTMENT_ID and MANAGER_ID twice under one name (Claude); people of one surname were in no order (Codex)",
+   "rerun": false,
+   "request": [
+    "The intranet's site page shows, for one location, each department and its staff, the empty departments included, the staff by last name, first name and `EMPLOYEE_ID`.",
+    "Loading the departments and then each one's employees is the N+1 problem; the page needs a single query, with each column named once."
+   ],
+   "sql": "SELECT d.DEPARTMENT_ID, d.DEPARTMENT_NAME, e.EMPLOYEE_ID, e.FIRST_NAME, e.LAST_NAME, e.JOB_ID\nFROM DEPARTMENTS d\n         LEFT JOIN EMPLOYEES e ON e.DEPARTMENT_ID = d.DEPARTMENT_ID\nWHERE d.LOCATION_ID = :locationId\nORDER BY d.DEPARTMENT_ID ASC, e.LAST_NAME ASC, e.FIRST_NAME ASC NULLS FIRST, e.EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_EMPLOYEES_I_01",
+   "_src": "Claude",
+   "_why": "salaries repeat, so SALARY DESC alone left an unstable order",
+   "rerun": true,
+   "request": [
+    "The board asks who earns more than the company-wide average salary, the highest first; people with the same salary are ordered by `EMPLOYEE_ID`."
+   ],
+   "sql": "SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, SALARY\nFROM EMPLOYEES\nWHERE SALARY > (SELECT AVG(SALARY) FROM EMPLOYEES)\nORDER BY SALARY DESC, EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_SCHEMA_A_04",
+   "_src": "Claude",
+   "_why": "no ORDER BY; MINUS sorts on many plans, but nothing promises it",
+   "rerun": true,
+   "request": [
+    "Facilities is reviewing the property list: which locations host no department at all, by `LOCATION_ID`?",
+    "`MINUS` takes away the rows of the second query; it promises no order, so the query states one."
+   ],
+   "sql": "SELECT LOCATION_ID\nFROM LOCATIONS\nMINUS\nSELECT LOCATION_ID\nFROM DEPARTMENTS\nORDER BY 1 ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_SCHEMA_I_03",
+   "_src": "Codex",
+   "_why": "the inner join left out an empty department, which a threshold of 0 asks for; no tie order",
+   "rerun": false,
+   "request": [
+    "List the departments with at least `:minHeadcount` employees, a number of `0` or more, the largest first; departments of one size are ordered by `DEPARTMENT_ID`.",
+    "An outer join keeps an empty department, which a threshold of `0` includes."
+   ],
+   "sql": "SELECT d.DEPARTMENT_ID, d.DEPARTMENT_NAME, COUNT(e.EMPLOYEE_ID) AS HEADCOUNT\nFROM DEPARTMENTS d\n         LEFT JOIN EMPLOYEES e ON e.DEPARTMENT_ID = d.DEPARTMENT_ID\nGROUP BY d.DEPARTMENT_ID, d.DEPARTMENT_NAME\nHAVING COUNT(e.EMPLOYEE_ID) >= :minHeadcount\nORDER BY HEADCOUNT DESC, d.DEPARTMENT_ID ASC"
+  },
+  {
+   "op": "fix",
+   "id": "HR_SCHEMA_I_06",
+   "_src": "Codex",
+   "_why": "'the top tenth of the band' and '90% of the maximum' are two thresholds; the stated one kept, the order by the unrounded share",
+   "rerun": true,
+   "request": [
+    "HR lists the employees paid at least 90% of their job's maximum salary, as due for a promotion conversation, the highest share first; `EMPLOYEE_ID` breaks a tie."
+   ],
+   "sql": "SELECT e.EMPLOYEE_ID, e.FIRST_NAME, e.LAST_NAME, e.JOB_ID, e.SALARY, j.MAX_SALARY\nFROM EMPLOYEES e\n         JOIN JOBS j ON j.JOB_ID = e.JOB_ID\nWHERE e.SALARY >= j.MAX_SALARY * 0.9\nORDER BY e.SALARY / NULLIF(j.MAX_SALARY, 0) DESC NULLS LAST, e.EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "add",
+   "id": "HR_EMPLOYEES_B_09",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "CHECK (salary > 0) lets a salary be NULL; the rankings assume every employee has one",
+   "rerun": true,
+   "title": "Salaries not recorded",
+   "request": [
+    "`CHECK (salary > 0)` lets a salary be NULL, while the exercises that rank salaries assume every employee has one.",
+    "Payroll wants the employees whose salary is not recorded, by `EMPLOYEE_ID`; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, JOB_ID\nFROM EMPLOYEES\nWHERE SALARY IS NULL\nORDER BY EMPLOYEE_ID ASC"
+  },
+  {
+   "op": "add",
+   "id": "HR_EMPLOYEES_B_10",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "no exercise takes only the top n rows, Oracle's FETCH FIRST (setMaxResults in JPQL)",
+   "rerun": false,
+   "title": "The newest hires",
+   "request": [
+    "The onboarding team wants the `:n` most recently hired employees, the newest first; people hired on one day are ordered by `EMPLOYEE_ID`, the highest first.",
+    "`FETCH FIRST :n ROWS ONLY` takes the first rows, with no offset for the first page."
+   ],
+   "sql": "SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, JOB_ID, HIRE_DATE\nFROM EMPLOYEES\nORDER BY HIRE_DATE DESC, EMPLOYEE_ID DESC\nFETCH FIRST :n ROWS ONLY"
+  },
+  {
+   "op": "add",
+   "id": "HR_JOBS_B_04",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "nothing makes a salary band complete, positive or in order, which the ratio and career exercises assume",
+   "rerun": true,
+   "title": "Salary bands needing repair",
+   "request": [
+    "Nothing in the schema makes a job's salary band complete, positive, or its minimum below its maximum, which the exercises on bands assume.",
+    "Find the jobs with a bound missing, a bound not above `0`, or a minimum above the maximum, by `JOB_ID`; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT JOB_ID, JOB_TITLE, MIN_SALARY, MAX_SALARY\nFROM JOBS\nWHERE MIN_SALARY IS NULL\n   OR MAX_SALARY IS NULL\n   OR MIN_SALARY <= 0\n   OR MAX_SALARY <= 0\n   OR MIN_SALARY > MAX_SALARY\nORDER BY JOB_ID ASC"
+  },
+  {
+   "op": "add",
+   "id": "HR_SCHEMA_I_11",
+   "after": "last",
+   "_src": "both",
+   "_why": "DEPARTMENTS.MANAGER_ID and the manager's own DEPARTMENT_ID are two independent links, and nothing ties them",
+   "rerun": true,
+   "title": "Managers outside their department",
+   "request": [
+    "An auditor wants every department whose manager on record is not a member of that department, or of none, with the department the manager does belong to."
+   ],
+   "sql": "SELECT d.DEPARTMENT_ID, d.DEPARTMENT_NAME, m.EMPLOYEE_ID, m.LAST_NAME, m.DEPARTMENT_ID AS MANAGER_DEPARTMENT_ID\nFROM DEPARTMENTS d\n         JOIN EMPLOYEES m ON m.EMPLOYEE_ID = d.MANAGER_ID\nWHERE m.DEPARTMENT_ID IS NULL\n   OR m.DEPARTMENT_ID <> d.DEPARTMENT_ID\nORDER BY d.DEPARTMENT_ID ASC"
+  },
+  {
+   "op": "add",
+   "id": "HR_SCHEMA_I_12",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "the country and location counts leave out a country with no site; the anti-join from countries to locations",
+   "rerun": true,
+   "title": "Countries without a company site",
+   "request": [
+    "Which countries of the catalogue have no company site, by name?"
+   ],
+   "sql": "SELECT c.COUNTRY_ID, c.COUNTRY_NAME\nFROM COUNTRIES c\nWHERE NOT EXISTS (SELECT 1 FROM LOCATIONS l WHERE l.COUNTRY_ID = c.COUNTRY_ID)\nORDER BY c.COUNTRY_NAME ASC, c.COUNTRY_ID ASC"
+  },
+  {
+   "op": "add",
+   "id": "HR_SCHEMA_A_07",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "string aggregation, LISTAGG ... WITHIN GROUP, is missing from the set",
+   "rerun": true,
+   "title": "Each department's staff on one line",
+   "request": [
+    "The intranet's department index shows each department with its headcount and its staff's last names on one line, alphabetically.",
+    "`LISTAGG ... WITHIN GROUP (ORDER BY ...)` joins the names in order."
+   ],
+   "sql": "SELECT d.DEPARTMENT_ID,\n       d.DEPARTMENT_NAME,\n       COUNT(*)                                                                          AS HEADCOUNT,\n       LISTAGG(e.LAST_NAME, ', ') WITHIN GROUP (ORDER BY e.LAST_NAME, e.EMPLOYEE_ID) AS STAFF\nFROM DEPARTMENTS d\n         JOIN EMPLOYEES e ON e.DEPARTMENT_ID = d.DEPARTMENT_ID\nGROUP BY d.DEPARTMENT_ID, d.DEPARTMENT_NAME\nORDER BY d.DEPARTMENT_ID ASC"
+  },
+  {
+   "op": "add",
+   "id": "HR_EMP_DETAILS_VIEW_A_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "the per-country payroll has no subtotals, and GROUP BY ROLLUP and GROUPING appear nowhere",
+   "rerun": true,
+   "title": "Payroll with subtotals",
+   "request": [
+    "Finance wants the monthly salary cost per country, with a subtotal for each region and a grand total.",
+    "`GROUP BY ROLLUP` adds the subtotal rows, and `GROUPING` tells them from the others."
+   ],
+   "sql": "SELECT REGION_NAME,\n       COUNTRY_NAME,\n       COUNT(*)                               AS HEADCOUNT,\n       SUM(SALARY)                            AS MONTHLY_COST,\n       GROUPING_ID(REGION_NAME, COUNTRY_NAME) AS SUBTOTAL_LEVEL\nFROM EMP_DETAILS_VIEW\nGROUP BY ROLLUP (REGION_NAME, COUNTRY_NAME)\nORDER BY GROUPING(REGION_NAME) ASC, REGION_NAME ASC, GROUPING(COUNTRY_NAME) ASC, COUNTRY_NAME ASC"
+  }
+ ]
+}

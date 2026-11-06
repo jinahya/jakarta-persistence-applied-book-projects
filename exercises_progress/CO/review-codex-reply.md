@@ -1,0 +1,5 @@
+1. **SCHEMA_A_13 — agree.** Filtering `COMPLETE` in the outer join preserves every store while aligning revenue with CO_SCHEMA_I_02; the stable running total and `NULLIF` address ties and a zero chain total.
+
+2. **PRODUCTS_B_04 — hold.** The broader selection is useful, but `image_last_updated NULLS FIRST` cannot guarantee “never-pictured first”: the nullable timestamp does not establish whether a picture exists or ever existed. Define that priority explicitly and order by image absence, then timestamp, name, and product id.
+
+3. **CUSTOMER_ORDER_PRODUCTS_B_01 — agree.** Delimiter padding cannot recover products omitted by `LISTAGG` truncation, so recall matching belongs on `order_items.product_id` in SCHEMA_B_04. CUSTOMER_ORDER_PRODUCTS_B_02 appropriately uses the view for totals and display summaries.

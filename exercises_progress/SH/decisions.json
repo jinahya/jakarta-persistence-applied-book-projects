@@ -1,0 +1,255 @@
+{
+ "module": "oracle-sample-schemas-persistence/oracle-sample-schemas-persistence-sh",
+ "changes": [
+  {
+   "op": "fix",
+   "id": "SH_CAL_MONTH_SALES_MV_A_01",
+   "_src": "both",
+   "_why": "the running total ran over the whole range, across a year's end; Codex's, which totals within the calendar year before the range filters, so a range starting mid-year still counts from January",
+   "rerun": false,
+   "request": [
+    "Finance wants each month's revenue between `:fromMonth` and `:toMonth`, with the calendar year's revenue to date next to it.",
+    "The window is partitioned by the year and taken before the months are filtered, so a range that starts in the middle of a year still counts from January."
+   ],
+   "sql": "SELECT CALENDAR_MONTH_DESC, DOLLARS, RUNNING_TOTAL\nFROM (SELECT CALENDAR_MONTH_DESC,\n             DOLLARS,\n             SUM(DOLLARS) OVER (PARTITION BY SUBSTR(CALENDAR_MONTH_DESC, 1, 4) ORDER BY CALENDAR_MONTH_DESC) AS RUNNING_TOTAL\n      FROM CAL_MONTH_SALES_MV)\nWHERE CALENDAR_MONTH_DESC BETWEEN :fromMonth AND :toMonth\nORDER BY CALENDAR_MONTH_DESC"
+  },
+  {
+   "op": "fix",
+   "id": "SH_PROFITS_I_01",
+   "_src": "both",
+   "_why": "a revenue summing to 0 divided by zero; ties at the tenth place made the cut unstable",
+   "rerun": false,
+   "request": [
+    "Finance wants the ten products with the lowest margin ratio between `:fromDay` and `:toDay`, with the revenue and margin behind it; a product whose revenue sums to `0` has no ratio and is left out, and `PROD_ID` breaks a tie."
+   ],
+   "sql": "SELECT PROD_ID,\n       SUM(AMOUNT_SOLD)                                            AS REVENUE,\n       SUM(AMOUNT_SOLD - TOTAL_COST)                               AS MARGIN,\n       SUM(AMOUNT_SOLD - TOTAL_COST) / NULLIF(SUM(AMOUNT_SOLD), 0) AS MARGIN_RATIO\nFROM PROFITS\nWHERE TIME_ID BETWEEN :fromDay AND :toDay\nGROUP BY PROD_ID\nHAVING SUM(AMOUNT_SOLD) <> 0\nORDER BY MARGIN_RATIO, PROD_ID\nFETCH FIRST 10 ROWS ONLY"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SALES_I_01",
+   "_src": "both",
+   "_why": "FETCH FIRST 10 with no tie-break left the tenth customer to the database",
+   "rerun": false,
+   "request": [
+    "The loyalty programme wants the ten customers who spent the most between `:fromDay` and `:toDay`, with the number of sales lines and units behind it; `CUST_ID` breaks a tie."
+   ],
+   "sql": "SELECT CUST_ID, COUNT(*) AS LINES, SUM(QUANTITY_SOLD) AS UNITS, SUM(AMOUNT_SOLD) AS SPENT\nFROM SALES\nWHERE TIME_ID BETWEEN :fromDay AND :toDay\nGROUP BY CUST_ID\nORDER BY SPENT DESC, CUST_ID\nFETCH FIRST 10 ROWS ONLY"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SCHEMA_I_02",
+   "_src": "both",
+   "_why": "the note admitted ties at the tenth place were cut arbitrarily",
+   "rerun": false,
+   "request": [
+    "Merchandising wants the ten products that sold the most units in `:year`, with the revenue they brought in; `PROD_ID` breaks a tie, and `WITH TIES` would keep them all instead."
+   ],
+   "sql": "SELECT p.PROD_ID, p.PROD_NAME, SUM(s.QUANTITY_SOLD) AS UNITS, SUM(s.AMOUNT_SOLD) AS REVENUE\nFROM SALES s\n         JOIN PRODUCTS p ON p.PROD_ID = s.PROD_ID\n         JOIN TIMES t ON t.TIME_ID = s.TIME_ID\nWHERE t.CALENDAR_YEAR = :year\nGROUP BY p.PROD_ID, p.PROD_NAME\nORDER BY UNITS DESC, p.PROD_ID\nFETCH FIRST 10 ROWS ONLY"
+  },
+  {
+   "op": "fix",
+   "id": "SH_CUSTOMERS_B_04",
+   "_src": "both",
+   "_why": "Oracle's DESC put a NULL credit limit first, the very problem the exercise is about; no unique tie-break",
+   "rerun": false,
+   "request": [
+    "The credit team wants the customers of `:city` ordered by income band, the unknown bands at the end, and within a band by credit limit, the highest first and the unknown limits last; `CUST_ID` breaks a tie."
+   ],
+   "sql": "SELECT CUST_ID, CUST_LAST_NAME, CUST_INCOME_LEVEL, CUST_CREDIT_LIMIT\nFROM CUSTOMERS\nWHERE CUST_CITY = :city\nORDER BY CUST_INCOME_LEVEL ASC NULLS LAST, CUST_CREDIT_LIMIT DESC NULLS LAST, CUST_ID"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SCHEMA_A_05",
+   "_src": "Codex",
+   "_why": "the inner join to COSTS silently dropped the sales with no cost; the margin is unknown where the cost is incomplete, not computed from what remains",
+   "rerun": false,
+   "request": [
+    "Finance wants revenue, cost, gross margin and margin ratio by category for `:year`, with the number of sales lines that have no cost; a category with such lines has its cost and margin unknown, not computed from the rest."
+   ],
+   "sql": "SELECT p.PROD_CATEGORY,\n       SUM(s.AMOUNT_SOLD)                                                                     AS REVENUE,\n       COUNT(*) - COUNT(c.UNIT_COST)                                                          AS UNCOSTED_LINES,\n       CASE WHEN COUNT(*) = COUNT(c.UNIT_COST) THEN SUM(s.QUANTITY_SOLD * c.UNIT_COST) END    AS COST,\n       CASE WHEN COUNT(*) = COUNT(c.UNIT_COST)\n            THEN SUM(s.AMOUNT_SOLD - s.QUANTITY_SOLD * c.UNIT_COST) END                       AS MARGIN,\n       CASE WHEN COUNT(*) = COUNT(c.UNIT_COST)\n            THEN SUM(s.AMOUNT_SOLD - s.QUANTITY_SOLD * c.UNIT_COST) / NULLIF(SUM(s.AMOUNT_SOLD), 0) END AS MARGIN_RATIO\nFROM SALES s\n         JOIN PRODUCTS p ON p.PROD_ID = s.PROD_ID\n         JOIN TIMES t ON t.TIME_ID = s.TIME_ID\n         LEFT JOIN COSTS c ON c.PROD_ID = s.PROD_ID\n    AND c.TIME_ID = s.TIME_ID\n    AND c.CHANNEL_ID = s.CHANNEL_ID\n    AND c.PROMO_ID = s.PROMO_ID\nWHERE t.CALENDAR_YEAR = :year\nGROUP BY p.PROD_CATEGORY\nORDER BY MARGIN DESC NULLS LAST, p.PROD_CATEGORY"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SCHEMA_I_09",
+   "_src": "Codex",
+   "_why": "neither quantities nor list prices are constrained above 0, so both divisions need a guard; undefined ratios last, PROD_ID breaking a tie",
+   "rerun": false,
+   "request": [
+    "Merchandising compares each selling product's average realised unit price in `:year` with its list price; a price or a ratio that cannot be computed is NULL, and comes last; `PROD_ID` breaks a tie."
+   ],
+   "sql": "SELECT p.PROD_ID,\n       p.PROD_NAME,\n       p.PROD_LIST_PRICE,\n       SUM(s.AMOUNT_SOLD) / NULLIF(SUM(s.QUANTITY_SOLD), 0)                                 AS REALISED_PRICE,\n       SUM(s.AMOUNT_SOLD) / NULLIF(SUM(s.QUANTITY_SOLD), 0) / NULLIF(p.PROD_LIST_PRICE, 0) AS REALISED_RATIO\nFROM SALES s\n         JOIN PRODUCTS p ON p.PROD_ID = s.PROD_ID\n         JOIN TIMES t ON t.TIME_ID = s.TIME_ID\nWHERE t.CALENDAR_YEAR = :year\nGROUP BY p.PROD_ID, p.PROD_NAME, p.PROD_LIST_PRICE\nORDER BY REALISED_RATIO NULLS LAST, p.PROD_ID"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SCHEMA_A_04",
+   "_src": "Codex",
+   "_why": "RANK() <= 3 can return more than three products; ROW_NUMBER, PROD_ID breaking a tie, answers 'three'",
+   "rerun": false,
+   "request": [
+    "Merchandising wants, per category, the three selling products with the highest revenue in `:year`; `PROD_ID` breaks a tie, so a category shows three at most."
+   ],
+   "sql": "SELECT PROD_CATEGORY, PROD_ID, PROD_NAME, REVENUE, RNK\nFROM (SELECT p.PROD_CATEGORY,\n             p.PROD_ID,\n             p.PROD_NAME,\n             SUM(s.AMOUNT_SOLD)                                                                   AS REVENUE,\n             ROW_NUMBER() OVER (PARTITION BY p.PROD_CATEGORY ORDER BY SUM(s.AMOUNT_SOLD) DESC, p.PROD_ID) AS RNK\n      FROM SALES s\n               JOIN PRODUCTS p ON p.PROD_ID = s.PROD_ID\n               JOIN TIMES t ON t.TIME_ID = s.TIME_ID\n      WHERE t.CALENDAR_YEAR = :year\n      GROUP BY p.PROD_CATEGORY, p.PROD_ID, p.PROD_NAME)\nWHERE RNK <= 3\nORDER BY PROD_CATEGORY, RNK"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SCHEMA_A_10",
+   "_src": "Codex",
+   "_why": "filtering :year before the window lost the November and December before it, and a month with no sale vanished",
+   "rerun": false,
+   "request": [
+    "Finance wants every month of `:year`, its revenue, and the average over it and the two months before it, a month without sales counting as `0`; the average is NULL where the calendar has no three months before.",
+    "The months before January are taken into the window and filtered out of the result afterwards."
+   ],
+   "sql": "WITH BOUNDS AS (SELECT TO_DATE(:year || '-01-01', 'YYYY-MM-DD') AS YEAR_START FROM DUAL),\n     MONTHLY AS (SELECT TRUNC(t.TIME_ID, 'MM') AS MONTH_START, COALESCE(SUM(s.AMOUNT_SOLD), 0) AS REVENUE\n                 FROM TIMES t\n                          CROSS JOIN BOUNDS b\n                          LEFT JOIN SALES s ON s.TIME_ID = t.TIME_ID\n                 WHERE t.TIME_ID >= ADD_MONTHS(b.YEAR_START, -2)\n                   AND t.TIME_ID < ADD_MONTHS(b.YEAR_START, 12)\n                 GROUP BY TRUNC(t.TIME_ID, 'MM')),\n     AVERAGED AS (SELECT MONTH_START,\n                         REVENUE,\n                         CASE\n                             WHEN COUNT(*) OVER (ORDER BY MONTH_START ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) = 3\n                                 THEN ROUND(AVG(REVENUE) OVER (ORDER BY MONTH_START ROWS BETWEEN 2 PRECEDING AND CURRENT ROW), 2)\n                             END AS MOVING_AVERAGE\n                  FROM MONTHLY)\nSELECT TO_CHAR(a.MONTH_START, 'YYYY-MM') AS CALENDAR_MONTH_DESC, a.REVENUE, a.MOVING_AVERAGE\nFROM AVERAGED a\n         CROSS JOIN BOUNDS b\nWHERE a.MONTH_START >= b.YEAR_START\nORDER BY a.MONTH_START"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SCHEMA_A_11",
+   "_src": "Codex",
+   "_why": "the inner joins left out a country with no sale, though the request asks for every country; a region's total may be 0",
+   "rerun": false,
+   "request": [
+    "Sales wants every country's revenue in `:year`, `0` for a country without a sale, and its share of its region's revenue, NULL where the region sold nothing."
+   ],
+   "sql": "WITH COUNTRY_REVENUE AS (SELECT cu.COUNTRY_ID, SUM(s.AMOUNT_SOLD) AS REVENUE\n                         FROM SALES s\n                                  JOIN CUSTOMERS cu ON cu.CUST_ID = s.CUST_ID\n                                  JOIN TIMES t ON t.TIME_ID = s.TIME_ID\n                         WHERE t.CALENDAR_YEAR = :year\n                         GROUP BY cu.COUNTRY_ID),\n     SHARES AS (SELECT co.COUNTRY_REGION,\n                       co.COUNTRY_REGION_ID,\n                       co.COUNTRY_ID,\n                       co.COUNTRY_NAME,\n                       COALESCE(r.REVENUE, 0)                                                                    AS REVENUE,\n                       100 * COALESCE(r.REVENUE, 0)\n                           / NULLIF(SUM(COALESCE(r.REVENUE, 0)) OVER (PARTITION BY co.COUNTRY_REGION_ID), 0) AS SHARE_PCT\n                FROM COUNTRIES co\n                         LEFT JOIN COUNTRY_REVENUE r ON r.COUNTRY_ID = co.COUNTRY_ID)\nSELECT COUNTRY_REGION, COUNTRY_NAME, REVENUE, ROUND(SHARE_PCT, 2) AS SHARE_PCT\nFROM SHARES\nORDER BY COUNTRY_REGION, COUNTRY_REGION_ID, SHARE_PCT DESC NULLS LAST, COUNTRY_ID"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SUPPLEMENTARY_DEMOGRAPHICS_A_01",
+   "_src": "Claude",
+   "_why": "OCCUPATION is nullable, so the customers with none showed as an occupation of their own; no tie-break",
+   "rerun": true,
+   "request": [
+    "The loyalty programme wants the occupations whose affinity-card take-up rate is above the rate across all customers, the highest first; the customers with no occupation recorded are not an occupation, and `OCCUPATION` breaks a tie.",
+    "SH_SUPPLEMENTARY_DEMOGRAPHICS_I_02 checks that every card indicator is `0` or `1`, which the averages assume."
+   ],
+   "sql": "SELECT OCCUPATION, COUNT(*) AS CUSTOMERS, AVG(AFFINITY_CARD) AS TAKE_UP\nFROM SUPPLEMENTARY_DEMOGRAPHICS\nWHERE OCCUPATION IS NOT NULL\nGROUP BY OCCUPATION\nHAVING AVG(AFFINITY_CARD) > (SELECT AVG(AFFINITY_CARD) FROM SUPPLEMENTARY_DEMOGRAPHICS)\nORDER BY TAKE_UP DESC, OCCUPATION"
+  },
+  {
+   "op": "fix",
+   "id": "SH_SALES_B_01",
+   "_src": "Claude",
+   "_why": "a sales line is identified by five keys; the order left the promotion's rows of one product and customer unordered",
+   "rerun": false,
+   "sql": "SELECT PROD_ID, CUST_ID, PROMO_ID, QUANTITY_SOLD, AMOUNT_SOLD\nFROM SALES\nWHERE TIME_ID = :day\n  AND CHANNEL_ID = :channelId\nORDER BY AMOUNT_SOLD DESC, PROD_ID, CUST_ID, PROMO_ID"
+  },
+  {
+   "op": "fix",
+   "id": "SH_COSTS_B_01",
+   "_src": "Claude",
+   "_why": "a cost record is keyed by product, day, channel and promotion; the order left channel and promotion unordered",
+   "rerun": false,
+   "sql": "SELECT TIME_ID, PROD_ID, CHANNEL_ID, PROMO_ID, UNIT_COST, UNIT_PRICE\nFROM COSTS\nWHERE TIME_ID BETWEEN :fromDay AND :toDay\n  AND UNIT_PRICE < UNIT_COST\nORDER BY TIME_ID, PROD_ID, CHANNEL_ID, PROMO_ID"
+  },
+  {
+   "op": "fix",
+   "id": "SH_PROFITS_B_01",
+   "_src": "Claude",
+   "_why": "a row of the view is one sales line, five keys; channel and promotion were left unordered",
+   "rerun": false,
+   "sql": "SELECT TIME_ID, PROD_ID, CUST_ID, CHANNEL_ID, PROMO_ID, QUANTITY_SOLD, AMOUNT_SOLD, TOTAL_COST\nFROM PROFITS\nWHERE TIME_ID BETWEEN :fromDay AND :toDay\n  AND AMOUNT_SOLD < TOTAL_COST\nORDER BY TIME_ID, PROD_ID, CUST_ID, CHANNEL_ID, PROMO_ID"
+  },
+  {
+   "op": "fix",
+   "id": "SH_CUSTOMERS_B_02",
+   "_src": "Claude",
+   "_why": "the order within a surname was unstable, unlike the module's other customer lists",
+   "rerun": false,
+   "sql": "SELECT CUST_ID, CUST_FIRST_NAME, CUST_LAST_NAME, CUST_STREET_ADDRESS, CUST_POSTAL_CODE, CUST_INCOME_LEVEL\nFROM CUSTOMERS\nWHERE CUST_CITY = :city\n  AND CUST_INCOME_LEVEL IN ('A: Below 30,000', 'B: 30,000 - 49,999')\nORDER BY CUST_INCOME_LEVEL, CUST_LAST_NAME, CUST_FIRST_NAME, CUST_ID"
+  },
+  {
+   "op": "add",
+   "id": "SH_SCHEMA_A_12",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "the DDL enforces neither SALES' five-column key nor COSTS' four-column one, which the joins to COSTS assume",
+   "rerun": true,
+   "title": "Duplicate sales and cost keys",
+   "request": [
+    "The schema enforces neither the five keys of a sales line nor the four of a cost record, and a join to `COSTS` multiplies the revenue if one repeats.",
+    "List the keys of `SALES` and of `COSTS` found more than once; the check passes when nothing comes back."
+   ],
+   "sql": "SELECT 'SALES' AS SOURCE_TABLE, PROD_ID, TIME_ID, CHANNEL_ID, PROMO_ID, CUST_ID, COUNT(*) AS RECORDS\nFROM SALES\nGROUP BY PROD_ID, TIME_ID, CHANNEL_ID, PROMO_ID, CUST_ID\nHAVING COUNT(*) > 1\nUNION ALL\nSELECT 'COSTS', PROD_ID, TIME_ID, CHANNEL_ID, PROMO_ID, NULL, COUNT(*)\nFROM COSTS\nGROUP BY PROD_ID, TIME_ID, CHANNEL_ID, PROMO_ID\nHAVING COUNT(*) > 1\nORDER BY 1, 2, 3, 4, 5, 6"
+  },
+  {
+   "op": "add",
+   "id": "SH_SUPPLEMENTARY_DEMOGRAPHICS_I_02",
+   "after": "last",
+   "_src": "both",
+   "_why": "the take-up averages assume every AFFINITY_CARD is 0 or 1, which the nullable NUMBER does not promise",
+   "rerun": true,
+   "title": "Affinity-card indicators that are not 0 or 1",
+   "request": [
+    "The take-up rates average `AFFINITY_CARD`, which is right only if every indicator is `0` or `1`; the column is a nullable `NUMBER`.",
+    "Count the records whose indicator is missing, and those whose indicator is neither `0` nor `1`; the check passes when both are `0`."
+   ],
+   "sql": "SELECT COUNT(CASE WHEN AFFINITY_CARD IS NULL THEN 1 END)        AS MISSING_FLAGS,\n       COUNT(CASE WHEN AFFINITY_CARD NOT IN (0, 1) THEN 1 END) AS INVALID_FLAGS\nFROM SUPPLEMENTARY_DEMOGRAPHICS"
+  },
+  {
+   "op": "add",
+   "id": "SH_PRODUCTS_I_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "PROD_MIN_PRICE and the subcategory hierarchy are aggregated by no exercise",
+   "rerun": true,
+   "title": "Discount headroom per subcategory",
+   "request": [
+    "Pricing wants, for each product subcategory, how many products it has and how far, on average and at most, their list price can be cut before it reaches the minimum price, the largest average headroom first."
+   ],
+   "sql": "SELECT PROD_CATEGORY,\n       PROD_SUBCATEGORY_ID,\n       PROD_SUBCATEGORY,\n       COUNT(*)                                                                         AS PRODUCTS,\n       ROUND(100 * AVG((PROD_LIST_PRICE - PROD_MIN_PRICE) / NULLIF(PROD_LIST_PRICE, 0)), 2) AS AVG_HEADROOM_PCT,\n       MAX(PROD_LIST_PRICE - PROD_MIN_PRICE)                                            AS MAX_HEADROOM\nFROM PRODUCTS\nGROUP BY PROD_CATEGORY, PROD_SUBCATEGORY_ID, PROD_SUBCATEGORY\nORDER BY AVG_HEADROOM_PCT DESC NULLS LAST, PROD_SUBCATEGORY_ID"
+  },
+  {
+   "op": "add",
+   "id": "SH_PRODUCTS_I_03",
+   "after": "last",
+   "_src": "Codex",
+   "_why": "SUPPLIER_ID is read by no exercise",
+   "rerun": true,
+   "title": "Supplier coverage of the catalogue",
+   "request": [
+    "Purchasing wants, for each supplier, how many products and categories it supplies, and its lowest and highest list prices, the largest catalogue first."
+   ],
+   "sql": "SELECT SUPPLIER_ID,\n       COUNT(*)                         AS PRODUCTS,\n       COUNT(DISTINCT PROD_CATEGORY_ID) AS CATEGORIES,\n       MIN(PROD_LIST_PRICE)             AS LOWEST_PRICE,\n       MAX(PROD_LIST_PRICE)             AS HIGHEST_PRICE\nFROM PRODUCTS\nGROUP BY SUPPLIER_ID\nORDER BY PRODUCTS DESC, SUPPLIER_ID"
+  },
+  {
+   "op": "add",
+   "id": "SH_CUSTOMERS_B_05",
+   "after": "last",
+   "_src": "both",
+   "_why": "the nullable effective dates are read by no exercise; Codex's half-open rule, with Claude's city",
+   "rerun": false,
+   "title": "Customer records in effect at a time",
+   "request": [
+    "The account-management team wants the customer records of `:city` in effect at `:asOf`: a record runs from `CUST_EFF_FROM`, included, up to `CUST_EFF_TO`, not included, and a missing date means no bound on that side."
+   ],
+   "sql": "SELECT CUST_ID, CUST_FIRST_NAME, CUST_LAST_NAME, CUST_EFF_FROM, CUST_EFF_TO, CUST_VALID\nFROM CUSTOMERS\nWHERE CUST_CITY = :city\n  AND (CUST_EFF_FROM IS NULL OR CUST_EFF_FROM <= :asOf)\n  AND (CUST_EFF_TO IS NULL OR :asOf < CUST_EFF_TO)\nORDER BY CUST_LAST_NAME, CUST_FIRST_NAME, CUST_ID"
+  },
+  {
+   "op": "add",
+   "id": "SH_SCHEMA_I_11",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "PROMOTIONS exists, the DDL says, to show outer joins, yet no exercise keeps the zero rows with their counts",
+   "rerun": true,
+   "title": "Promotions that never sold",
+   "request": [
+    "The promotions team wants every promotion it has run, with the number of sales lines and the revenue booked against it, those that sold nothing included, the least productive first.",
+    "An outer join keeps a promotion with no sale, with a `COUNT` of `0`."
+   ],
+   "sql": "SELECT pr.PROMO_ID,\n       pr.PROMO_NAME,\n       pr.PROMO_CATEGORY,\n       pr.PROMO_COST,\n       COUNT(s.PROMO_ID)               AS SALES_LINES,\n       COALESCE(SUM(s.AMOUNT_SOLD), 0) AS REVENUE\nFROM PROMOTIONS pr\n         LEFT JOIN SALES s ON s.PROMO_ID = pr.PROMO_ID\nWHERE pr.PROMO_CATEGORY <> 'NO PROMOTION'\nGROUP BY pr.PROMO_ID, pr.PROMO_NAME, pr.PROMO_CATEGORY, pr.PROMO_COST\nORDER BY REVENUE, pr.PROMO_COST DESC, pr.PROMO_ID"
+  },
+  {
+   "op": "add",
+   "id": "SH_CUSTOMERS_I_02",
+   "after": "last",
+   "_src": "Claude",
+   "_why": "CUST_YEAR_OF_BIRTH and CUST_GENDER are never aggregated; a bucket by an expression with conditional counts",
+   "rerun": true,
+   "title": "Customers by decade of birth",
+   "request": [
+    "Marketing wants the customer base by decade of birth, with the number of women and men in each decade, the oldest decade first."
+   ],
+   "sql": "SELECT FLOOR(CUST_YEAR_OF_BIRTH / 10) * 10                AS DECADE,\n       COUNT(*)                                           AS CUSTOMERS,\n       SUM(CASE WHEN CUST_GENDER = 'F' THEN 1 ELSE 0 END) AS WOMEN,\n       SUM(CASE WHEN CUST_GENDER = 'M' THEN 1 ELSE 0 END) AS MEN\nFROM CUSTOMERS\nGROUP BY FLOOR(CUST_YEAR_OF_BIRTH / 10) * 10\nORDER BY DECADE"
+  }
+ ]
+}

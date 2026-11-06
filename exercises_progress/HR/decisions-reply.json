@@ -1,0 +1,16 @@
+{"module": "oracle-sample-schemas-persistence/oracle-sample-schemas-persistence-hr", "changes": [
+ {"op": "fix", "id": "HR_EMPLOYEES_A_01", "_src": "Codex (reply)", "_why": "NULLS LAST still ranks a NULL first in a department whose salaries are all NULL; the salaries not recorded are left out, as Claude first proposed", "rerun": true,
+  "request": ["Each department head is told who their best-paid employee is; ties are all reported, ordered by `EMPLOYEE_ID`.",
+              "An employee with no department, or no salary recorded, is left out, as the correlated solution leaves them out; HR_EMPLOYEES_B_09 lists the salaries not recorded."],
+  "sql": "SELECT DEPARTMENT_ID, EMPLOYEE_ID, LAST_NAME, SALARY\nFROM (SELECT e.*, RANK() OVER (PARTITION BY DEPARTMENT_ID ORDER BY SALARY DESC) AS RNK\n      FROM EMPLOYEES e\n      WHERE DEPARTMENT_ID IS NOT NULL\n        AND SALARY IS NOT NULL)\nWHERE RNK = 1\nORDER BY DEPARTMENT_ID ASC, EMPLOYEE_ID ASC"},
+ {"op": "fix", "id": "HR_EMPLOYEES_A_02", "_src": "Codex (reply)", "_why": "NULLS LAST still puts NULLs among the top three where a department has fewer than three salary levels; they are left out", "rerun": true,
+  "request": ["Ahead of the bonus round, each department head wants the three highest salaries of the department and everyone who earns one of them, ties included.",
+              "Salaries not recorded are left out, so they never take a rank; the people of one rank are ordered by `EMPLOYEE_ID`."],
+  "sql": "SELECT DEPARTMENT_ID, EMPLOYEE_ID, LAST_NAME, SALARY, RNK\nFROM (SELECT e.*, DENSE_RANK() OVER (PARTITION BY DEPARTMENT_ID ORDER BY SALARY DESC) AS RNK\n      FROM EMPLOYEES e\n      WHERE DEPARTMENT_ID IS NOT NULL\n        AND SALARY IS NOT NULL)\nWHERE RNK <= 3\nORDER BY DEPARTMENT_ID ASC, RNK ASC, EMPLOYEE_ID ASC"},
+ {"op": "fix", "id": "HR_EMP_DETAILS_VIEW_A_01", "_src": "Codex (reply)", "_why": "as HR_EMPLOYEES_A_02: the salaries not recorded are left out rather than ranked last", "rerun": true,
+  "request": ["Each regional director is told who the best-paid people in their region are: the three highest salaries, ties included, ordered by last name and `EMPLOYEE_ID`.",
+              "Salaries not recorded are left out, so they never take a rank."],
+  "sql": "SELECT REGION_NAME, EMPLOYEE_ID, LAST_NAME, JOB_TITLE, SALARY, RNK\nFROM (SELECT v.*, DENSE_RANK() OVER (PARTITION BY REGION_NAME ORDER BY SALARY DESC) AS RNK\n      FROM EMP_DETAILS_VIEW v\n      WHERE SALARY IS NOT NULL)\nWHERE RNK <= 3\nORDER BY REGION_NAME ASC, RNK ASC, LAST_NAME ASC, EMPLOYEE_ID ASC"},
+ {"op": "fix", "id": "HR_SCHEMA_A_02", "_src": "Codex (reply)", "_why": "the current position's start is inferred from the trigger, not recorded; the request says so",
+  "request": ["An employee asks HR for their record: every position they have held, the current one included, in date order.",
+              "The schema records no start for the current position, so the exercise infers one: the day after the last `END_DATE` of the history, which the trigger writes when the job changes, or `HIRE_DATE` if there is none; the current one, with no end, comes last on a tie."]}]}

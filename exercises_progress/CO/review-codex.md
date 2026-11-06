@@ -1,0 +1,306 @@
+### fix CO_STORES_A_01
+
+- section: STORES   tier: Advanced
+- title: Each store's nearest neighbour
+- why: Distance in latitude/longitude degrees can select the wrong neighbour, particularly near the poles or date line. Use great-circle distance and report all equally near neighbours.
+- request: For each store with complete coordinates, show its nearest other store with complete coordinates, including ties, and the distance in kilometres.
+- sql:
+
+    ```sql
+    WITH distances AS (
+        SELECT s.store_id, s.store_name, n.store_id AS nearest_store_id,
+               n.store_name AS nearest_store,
+               6371 * ACOS(GREATEST(-1, LEAST(1,
+                   SIN(s.latitude * ACOS(-1) / 180) * SIN(n.latitude * ACOS(-1) / 180)
+                   + COS(s.latitude * ACOS(-1) / 180) * COS(n.latitude * ACOS(-1) / 180)
+                   * COS((s.longitude - n.longitude) * ACOS(-1) / 180)))) AS km
+        FROM stores s
+                 JOIN stores n ON n.store_id <> s.store_id
+        WHERE s.latitude IS NOT NULL
+          AND s.longitude IS NOT NULL
+          AND n.latitude IS NOT NULL
+          AND n.longitude IS NOT NULL
+    )
+    SELECT store_name, nearest_store, ROUND(km, 2) AS km
+    FROM (SELECT d.*, RANK() OVER (PARTITION BY store_id ORDER BY km) AS rnk
+          FROM distances d)
+    WHERE rnk = 1
+    ORDER BY store_name, nearest_store
+    ```
+
+### fix CO_SCHEMA_A_05
+
+- section: SCHEMA   tier: Advanced
+- title: Rebalance stock between stores
+- why: Ranking rounded kilometres can choose a farther donor; equal distances and surpluses also leave the choice unstable. Clamp both ends of the `ACOS` argument and rank the unrounded distance.
+- request: With `0 <= :minStock <= :targetStock`, propose a donor independently for each stocked product below `:minStock`: choose the nearest store above `:targetStock`, preferring greater surplus and then lower store id on ties. Use donors without a calculable distance only as a fallback, and propose no more than the need or surplus.
+- sql:
+
+    ```sql
+    WITH short AS (
+        SELECT store_id, product_id, :targetStock - product_inventory AS need
+        FROM inventory
+        WHERE product_inventory < :minStock
+    ),
+    spare AS (
+        SELECT store_id, product_id, product_inventory - :targetStock AS surplus
+        FROM inventory
+        WHERE product_inventory > :targetStock
+    ),
+    pairs AS (
+        SELECT sh.store_id AS to_store_id, sp.store_id AS from_store_id,
+               sh.product_id, sh.need, sp.surplus,
+               6371 * ACOS(GREATEST(-1, LEAST(1,
+                   SIN(t.latitude * ACOS(-1) / 180) * SIN(f.latitude * ACOS(-1) / 180)
+                   + COS(t.latitude * ACOS(-1) / 180) * COS(f.latitude * ACOS(-1) / 180)
+                   * COS((t.longitude - f.longitude) * ACOS(-1) / 180)))) AS km
+        FROM short sh
+                 JOIN spare sp ON sp.product_id = sh.product_id
+                              AND sp.store_id <> sh.store_id
+                 JOIN stores t ON t.store_id = sh.store_id
+                 JOIN stores f ON f.store_id = sp.store_id
+    ),
+    ranked AS (
+        SELECT p.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY to_store_id, product_id
+                   ORDER BY km ASC NULLS LAST, surplus DESC, from_store_id
+               ) AS rn
+        FROM pairs p
+    )
+    SELECT t.store_name AS to_store, f.store_name AS from_store,
+           r.product_id, ROUND(r.km) AS km,
+           LEAST(r.need, r.surplus) AS transfer_qty
+    FROM ranked r
+             JOIN stores t ON t.store_id = r.to_store_id
+             JOIN stores f ON f.store_id = r.from_store_id
+    WHERE r.rn = 1
+    ORDER BY r.km NULLS LAST, t.store_name, r.product_id
+    ```
+
+### fix CO_SCHEMA_A_13
+
+- section: SCHEMA   tier: Advanced
+- title: Store ranking and share of sales
+- why: Inner joins omit stores without order lines, although the request asks for each store. The running total also varies between tied stores; give it a stable order and guard a zero chain total.
+- request: Show every store's order-line value across all statuses, its revenue rank, its percentage of the chain total, and a running total from highest revenue down, using store id to order equal revenues. Show zero for stores without lines and no percentage when the chain total is zero.
+- sql:
+
+    ```sql
+    WITH revenues AS (
+        SELECT s.store_id, s.store_name,
+               COALESCE(SUM(oi.unit_price * oi.quantity), 0) AS revenue
+        FROM stores s
+                 LEFT JOIN orders o ON o.store_id = s.store_id
+                 LEFT JOIN order_items oi ON oi.order_id = o.order_id
+        GROUP BY s.store_id, s.store_name
+    )
+    SELECT store_id, store_name, revenue,
+           RANK() OVER (ORDER BY revenue DESC) AS revenue_rank,
+           ROUND(100 * revenue / NULLIF(SUM(revenue) OVER (), 0), 2) AS share_pct,
+           SUM(revenue) OVER (
+               ORDER BY revenue DESC, store_id
+               ROWS UNBOUNDED PRECEDING
+           ) AS running_total
+    FROM revenues
+    ORDER BY revenue DESC, store_id
+    ```
+
+### fix CO_STORE_ORDERS_A_01
+
+- section: STORE_ORDERS   tier: Advanced
+- title: Each store's losses against its own sales and the chain's
+- why: Starting from loss rows drops stores with no cancellations or refunds. The DDL also permits zero sales totals, so division needs a zero-denominator guard.
+- request: For every store represented by a store-total row, show cancelled and refunded sales, including zero losses, and their percentages of that store's and the chain's sales across all statuses. Leave a percentage null when its denominator is zero.
+- sql:
+
+    ```sql
+    SELECT st.store_name,
+           COALESCE(SUM(d.total_sales), 0) AS lost_sales,
+           ROUND(100 * COALESCE(SUM(d.total_sales), 0)
+                     / NULLIF(MAX(st.total_sales), 0), 1) AS pct_of_store,
+           ROUND(100 * COALESCE(SUM(d.total_sales), 0)
+                     / NULLIF(MAX(g.total_sales), 0), 2) AS pct_of_chain
+    FROM store_orders st
+             LEFT JOIN store_orders d ON d.store_name = st.store_name
+                                     AND d.total IS NULL
+                                     AND d.order_status IN ('CANCELLED', 'REFUNDED')
+             CROSS JOIN (
+                 SELECT total_sales
+                 FROM store_orders
+                 WHERE total = 'GRAND TOTAL'
+             ) g
+    WHERE st.total = 'STORE TOTAL'
+    GROUP BY st.store_name
+    ORDER BY pct_of_store DESC NULLS LAST, st.store_name
+    ```
+
+### fix CO_ORDERS_A_02
+
+- section: ORDERS   tier: Advanced
+- title: Time between a customer's orders
+- why: Orders may share a timestamp, making both `LAG` calls and the displayed sequence unstable. Use the same timestamp-and-id ordering throughout.
+- request: Show each of a customer's orders beside its preceding order timestamp and the number of complete elapsed days between them. Order simultaneous orders by order id.
+- sql:
+
+    ```sql
+    SELECT order_id, order_tms, previous_order_tms,
+           EXTRACT(DAY FROM order_tms - previous_order_tms) AS days_since_previous
+    FROM (SELECT order_id, order_tms,
+                 LAG(order_tms) OVER (ORDER BY order_tms, order_id) AS previous_order_tms
+          FROM orders
+          WHERE customer_id = :customerId)
+    ORDER BY order_tms, order_id
+    ```
+
+### fix CO_CUSTOMERS_I_01
+
+- section: CUSTOMERS   tier: Intermediate
+- title: Email addresses that break the house style
+- why: Without an `@`, `SUBSTR` returns null and the comparison silently excludes the malformed address. Explicitly flag missing or empty local parts and make the result order stable.
+- request: Find customers whose email has no nonempty part before an `@`, or whose part before the first `@` differs from their lower-case full name with spaces replaced by dots.
+- sql:
+
+    ```sql
+    SELECT customer_id, full_name, email_address
+    FROM customers
+    WHERE INSTR(email_address, '@') <= 1
+       OR SUBSTR(email_address, 1, INSTR(email_address, '@') - 1)
+              <> LOWER(REPLACE(full_name, ' ', '.'))
+    ORDER BY full_name, customer_id
+    ```
+
+### fix CO_PRODUCTS_A_01
+
+- section: PRODUCTS   tier: Advanced
+- title: The ten most expensive products, ties included
+- why: The price-only ordering correctly defines membership but leaves tied output unstable. Apply a stable display order outside the `WITH TIES` query so product ids do not change which ties qualify.
+- request: Show the ten most expensive priced products, including every product tied with the tenth, ordered by descending price and then product id.
+- sql:
+
+    ```sql
+    SELECT product_id, product_name, unit_price
+    FROM (SELECT product_id, product_name, unit_price
+          FROM products
+          WHERE unit_price IS NOT NULL
+          ORDER BY unit_price DESC
+          FETCH FIRST 10 ROWS WITH TIES)
+    ORDER BY unit_price DESC, product_id
+    ```
+
+### fix CO_ORDERS_B_01
+
+- section: ORDERS   tier: Basic
+- title: A customer's order history
+- why: `ORDER_TMS` is not unique, so ordering by it alone leaves simultaneous orders unstable.
+- request: Show all of a customer's orders, most recent first, with higher order ids first when timestamps tie.
+- sql:
+
+    ```sql
+    SELECT order_id, order_tms, order_status, store_id
+    FROM orders
+    WHERE customer_id = :customerId
+    ORDER BY order_tms DESC, order_id DESC
+    ```
+
+### add CO_SCHEMA_B_04
+
+- section: SCHEMA   tier: Basic
+- title: Contact customers about a recalled product
+- why: This replaces the unreliable recall exercise with an exact product-id lookup. `ITEMS` can contain substring matches and is explicitly truncated by the view's `LISTAGG`.
+- request: Find every order containing the recalled product `:productId`, with the customer's name and email address, newest first.
+- sql:
+
+    ```sql
+    SELECT o.order_id, o.order_tms, c.full_name, c.email_address
+    FROM order_items oi
+             JOIN orders o ON o.order_id = oi.order_id
+             JOIN customers c ON c.customer_id = o.customer_id
+    WHERE oi.product_id = :productId
+    ORDER BY o.order_tms DESC, o.order_id DESC
+    ```
+
+### add CO_CUSTOMER_ORDER_PRODUCTS_B_02
+
+- section: CUSTOMER_ORDER_PRODUCTS   tier: Basic
+- title: Review a customer's completed baskets
+- why: Retiring the recall question would empty this section's Basic tier. A customer-and-status lookup uses the view's actual strengths: order totals and a display summary of products.
+- request: Show a customer's completed orders with their totals and product summaries, newest first.
+- sql:
+
+    ```sql
+    SELECT order_id, order_tms, order_total, items
+    FROM customer_order_products
+    WHERE customer_id = :customerId
+      AND order_status = 'COMPLETE'
+    ORDER BY order_tms DESC, order_id DESC
+    ```
+
+### add CO_PRODUCTS_I_03
+
+- section: PRODUCTS   tier: Intermediate
+- title: Check that product names identify products
+- why: Several views group by product name, and existing exercises treat those groups as individual products. Guard the sample-data uniqueness assumption once rather than rewriting every name-based exercise.
+- request: Find product names shared by more than one product, so we can check whether name-based sales and review reports merge different products.
+- sql:
+
+    ```sql
+    SELECT product_name, COUNT(*) AS products
+    FROM products
+    GROUP BY product_name
+    HAVING COUNT(*) > 1
+    ORDER BY product_name
+    ```
+
+### add CO_SCHEMA_I_09
+
+- section: SCHEMA   tier: Intermediate
+- title: Check for orders without lines
+- why: Existing order-total, basket-band and year-to-date exercises assume every order has lines, but the foreign key enforces only the reverse relationship. This check guards that assumption.
+- request: Find orders with no order lines, newest first, so operations can investigate incomplete order records.
+- sql:
+
+    ```sql
+    SELECT o.order_id, o.order_tms, o.order_status, o.customer_id, o.store_id
+    FROM orders o
+    WHERE NOT EXISTS (SELECT 1
+                      FROM order_items oi
+                      WHERE oi.order_id = o.order_id)
+    ORDER BY o.order_tms DESC, o.order_id DESC
+    ```
+
+### add CO_INVENTORY_B_04
+
+- section: INVENTORY   tier: Basic
+- title: Investigate negative stock
+- why: The DDL does not constrain stock to be nonnegative. This guards the assumption behind replenishment and “out of stock everywhere” calculations; retired `B_03` remains unused.
+- request: Find inventory records with negative stock, most negative first, so we can reconcile them.
+- sql:
+
+    ```sql
+    SELECT inventory_id, store_id, product_id, product_inventory
+    FROM inventory
+    WHERE product_inventory < 0
+    ORDER BY product_inventory, store_id, product_id
+    ```
+
+### add CO_PRODUCTS_B_04
+
+- section: PRODUCTS   tier: Basic
+- title: Products needing catalogue images
+- why: Product images and their metadata are currently uncovered. Testing the nullable BLOB adds a practical catalogue-readiness question without retrieving image contents.
+- request: List products that have no catalogue image, with any recorded image filename and last-update date.
+- sql:
+
+    ```sql
+    SELECT product_id, product_name, image_filename, image_last_updated
+    FROM products
+    WHERE product_image IS NULL
+    ORDER BY product_name, product_id
+    ```
+
+### remove CO_CUSTOMER_ORDER_PRODUCTS_B_01
+
+- section: CUSTOMER_ORDER_PRODUCTS   tier: Basic
+- title: Orders that included a product
+- why: Searching `ITEMS` cannot reliably identify orders containing a recalled product: names can match substrings, bind values can contain pattern characters, and the list can be truncated. Retire this id; `CO_SCHEMA_B_04` answers the recall question exactly, while `CO_CUSTOMER_ORDER_PRODUCTS_B_02` keeps this tier populated.

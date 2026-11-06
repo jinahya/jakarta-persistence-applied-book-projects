@@ -78,28 +78,82 @@ def adoc_block(t, id_):
 
 
 def adoc_parse(block):
-    m = re.match(r'(?ms)\[\[(\S+)\]\]\n==== \S+: (.*?)\n\n(.*?)\n\n\.`([^`]+)`, \S+\n\[%collapsible\]\n====\n'
-                 r'\[source,sql\]\n----\n(.*?)\n----\n(.*)^====\n(.*)$', block)
+    """The parts of an exercise's block, by line: the heading, the request, the first [source,sql] listing, and the rest.
+
+    Two layouts: a caption, [%collapsible] and ====, holding the listing (and its output); or the listing straight
+    after the request, followed by other listings and notes. Whatever is not the title, the request, the SQL or its
+    output is kept as it is."""
+    lines = block.split('\n')
+    m = re.match(r'==== \S+: (.*)$', lines[1])
     if not m:
         sys.exit('cannot parse block:\n' + block[:400])
-    # gap: what follows the closing ==== (blank lines, and a line such as "Answered by ...", kept as it is)
-    return {'title': m[2], 'request': m[3].split('\n'), 'caption': m[4], 'sql': m[5], 'tail': m[6], 'gap': '\n' + m[7]}
+    i = 3
+    req_start = i
+    while i < len(lines) and not (lines[i].startswith('.`') or lines[i].startswith('[%collapsible')
+                                  or lines[i].startswith('[source,')):
+        i += 1
+    req = lines[req_start:i]
+    while req and req[-1] == '':
+        req.pop()
+    s = next((k for k in range(i, len(lines)) if lines[k] == '[source,sql]'), None)
+    if s is None or lines[s + 1] != '----':
+        sys.exit('cannot find the [source,sql] listing:\n' + block[:400])
+    e = next(k for k in range(s + 2, len(lines)) if lines[k] == '----')
+    caption = re.match(r'\.`([^`]+)`', lines[i])[1] if lines[i].startswith('.`') else None
+    return {'title': m[1], 'request': req, 'caption': caption, 'sql': '\n'.join(lines[s + 2:e]),
+            'lines': lines, 'req_end': req_start + len(req), 'sql_start': s + 2, 'sql_end': e,
+            'collapsible': any(l.startswith('[%collapsible') for l in lines[:s])}
 
 
 def rerun_tail(tail):
-    """The tail with its output (a literal block, a 'N rows; ...' note) replaced by NOT YET RUN; other lines kept."""
-    t = re.sub(r'(?ms)^\.{4,}\n.*?^\.{4,}\n', f'// {NOT_YET_RUN}\n', tail, count=1)
-    t = re.sub(r'(?ms)^\.{4,}\n.*?^\.{4,}\n', '', t)
+    """The text after the SQL listing with its output replaced by NOT YET RUN: the first literal block, or a
+    'N rows; ...' note; with no output, the marker goes first. Other lines are kept."""
+    t = re.sub(r'(?ms)\A(\n*)\.{4,}\n.*?^\.{4,}\n', rf'\1// {NOT_YET_RUN}\n', tail, count=1)
     t = re.sub(r'(?m)^\d+ rows?[;,.].*\n', '', t)
     if NOT_YET_RUN not in t:
-        t = f'\n// {NOT_YET_RUN}\n' + t.lstrip('\n')
-    t = re.sub(r'\n{3,}', '\n\n', t)
-    return t if t.endswith('\n\n') else t.rstrip('\n') + '\n\n'
+        t = f'\n// {NOT_YET_RUN}\n' + t
+    return t
 
 
-def adoc_render(id_, title, request, caption, sql, tail, gap):
-    return (f'[[{id_}]]\n==== {id_}: {title}\n\n' + '\n'.join(request) + '\n\n'
-            f'.`{caption}`, {id_}\n[%collapsible]\n====\n[source,sql]\n----\n{sql.strip()}\n----\n{tail}===={gap}')
+JPQL_STALE = 'JPQL NOT YET UPDATED'
+
+
+def with_jpaql(rest, jpaql, sql_changed):
+    """The first [source,jpaql] listing of the text after the SQL replaced by the given JPQL; with none given and the
+    SQL changed, marked JPQL_STALE, for the agent who answers the exercise in JPQL to come back to."""
+    m = re.search(r'(?ms)^\[source,jpaql\]\n----\n(.*?)\n----\n', rest)
+    if not m:
+        return rest
+    if jpaql is not None:
+        return rest[:m.start(1)] + jpaql.strip() + rest[m.end(1):]
+    if sql_changed and JPQL_STALE not in rest:
+        return rest[:m.end()] + f'\n// {JPQL_STALE}: the SQL above changed.\n' + rest[m.end():]
+    return rest
+
+
+def adoc_fix(block, title, request, sql, rerun, jpaql=None):
+    p = adoc_parse(block)
+    lines = p['lines']
+    head = [lines[0], f'==== {lines[0][2:-2]}: {title}', ''] + request + lines[p['req_end']:p['sql_start']]
+    tail = '\n'.join(lines[p['sql_end']:])  # from the closing ---- on
+    close, rest = tail.split('\n', 1) if '\n' in tail else (tail, '')
+    if rerun:
+        rest = rerun_tail(rest)
+    rest = with_jpaql(rest, jpaql, sql.strip() != p['sql'].strip())
+    return '\n'.join(head + [sql.strip()]) + '\n' + close + '\n' + rest
+
+
+def adoc_new(id_, title, request, sql, like, caption, rerun, jpaql=None):
+    """A block for a new exercise, in the layout of 'like', the block it follows."""
+    out = f'\n// {NOT_YET_RUN}\n' if rerun else ''
+    if like['collapsible']:
+        body = (f'.`{caption}`, {id_}\n[%collapsible]\n====\n[source,sql]\n----\n{sql.strip()}\n----\n'
+                f'{out}\n====\n')
+    else:
+        body = f'[source,sql]\n----\n{sql.strip()}\n----\n{out}'
+        if jpaql:
+            body += f'\n[source,jpaql]\n----\n{jpaql.strip()}\n----\n'
+    return f'[[{id_}]]\n==== {id_}: {title}\n\n' + '\n'.join(request) + '\n\n' + body + '\n'
 
 
 # --------------------------------------------------------------------------------------------------------------- sql
@@ -224,7 +278,8 @@ def new_test_class(sibling_file, cls, sql_rel):
 
 # ------------------------------------------------------------------------------------------------------------- apply
 log = []
-for c in D['changes']:
+# removes last: a remove may empty a tier that an add continues
+for c in [x for x in D['changes'] if x['op'] != 'remove'] + [x for x in D['changes'] if x['op'] == 'remove']:
     id_, op = c['id'], c['op']
     adoc = read(ADOC)
     if op == 'fix':
@@ -233,8 +288,7 @@ for c in D['changes']:
         title = c.get('title', p['title'])
         request = c.get('request', p['request'])
         sql = c.get('sql', p['sql'])
-        tail = rerun_tail(p['tail']) if c.get('rerun') else p['tail']
-        write(ADOC, adoc[:b.start()] + adoc_render(id_, title, request, p['caption'], sql, tail, p['gap'])
+        write(ADOC, adoc[:b.start()] + adoc_fix(b[0], title, request, sql, c.get('rerun'), c.get('jpaql'))
               + adoc[b.end():])
         sp = sql_path(id_)
         st = read(sp)
@@ -295,13 +349,10 @@ for c in D['changes']:
         # EXERCISES.asciidoc
         b = adoc_block(adoc, after)
         p = adoc_parse(b[0])
-        tail = f'\n// {NOT_YET_RUN}\n\n' if c.get('rerun') else '\n'
-        blank = re.search(r'\n*$', p['gap'])[0]  # the blank lines only; "Answered by ..." belongs to the other
-        caption = p['caption'] if not first else os.path.relpath(os.path.join(MOD, sqlrel), EX)
+        caption = (p['caption'] or '') if not first else os.path.relpath(os.path.join(MOD, sqlrel), EX)
         heading = f'=== {LEVEL[tier][1]}\n\n' if first else ''
-        write(ADOC, adoc[:b.end()] + heading + adoc_render(id_, c['title'], c['request'], caption, c['sql'], tail,
-                                                           blank if len(blank) >= 2 else '\n\n')
-              + adoc[b.end():])
+        write(ADOC, adoc[:b.end()] + heading + adoc_new(id_, c['title'], c['request'], c['sql'], p, caption,
+                                                        c.get('rerun'), c.get('jpaql')) + '\n' + adoc[b.end():])
         # .sql
         sp = os.path.join(MOD, sqlrel)
         st = read(sp)

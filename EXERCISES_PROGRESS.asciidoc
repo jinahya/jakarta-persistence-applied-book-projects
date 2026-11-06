@@ -23,6 +23,9 @@ Rules
 - Where an output would be, a new or changed exercise carries `NOT YET RUN` instead: in EXERCISES.asciidoc a line
   `// NOT YET RUN` where the `....` block goes; in the .sql file a line `-- NOT YET RUN` under the statement, in a module
   whose .sql files carry output. Phase 2 replaces each with a fresh run's output.
+- Where a module states the JPQL answer in EXERCISES.asciidoc ([source,jpaql]), a fix that changes the SQL gives
+  the new JPQL as `jpaql` in its decision; apply.py marks one left without it `// JPQL NOT YET UPDATED`, to be answered
+  with the nested test class.
 - Every live exercise has its nested class in src/test/java-exercises: `@DisplayName("<ID>: <title>") @Nested class
   <ID>_Test {}`, in the `<Dir>_Exercises_<NN>_<Level>_Persistence{IT|Test}` class of its .sql file (projects/CLAUDE.md).
   A nested class that has tests stays as it is; a missing one is added empty.
@@ -71,9 +74,9 @@ then `docker compose down -v` and remove what it pulled if disk is short, before
 | 1 | HOG | heads-of-governments-persistence | HEAD, OFFICE, SCHEMA | `db/schema.sql` | done
 | 2 | SAKILA | mysql-sakila-persistence | every table and view, SCHEMA | `docker-entrypoint-initdb.d/01-sakila-schema.sql` | done
 | 3 | DEMODB | postgresql-demodb-persistence | every table and view of `bookings`, SCHEMA | `exercises_progress/_ddl/demodb-20250901-3m-schema.sql`, the DDL of https://edu.postgrespro.ru/demo-20250901-3m.sql.gz (the edition compose.yaml runs), its data left out | done
-| 4 | CO | oracle-sample-schemas-persistence-co | every table and view, SCHEMA | `db-sample-schemas/customer_orders/` | pending
-| 5 | HR | oracle-sample-schemas-persistence-hr | every table and view, SCHEMA | `db-sample-schemas/human_resources/` | pending
-| 6 | SH | oracle-sample-schemas-persistence-sh | every table and view, SCHEMA | `db-sample-schemas/sales_history/` | pending
+| 4 | CO | oracle-sample-schemas-persistence-co | every table and view, SCHEMA | `db-sample-schemas/customer_orders/` | done
+| 5 | HR | oracle-sample-schemas-persistence-hr | every table and view, SCHEMA | `db-sample-schemas/human_resources/` | done
+| 6 | SH | oracle-sample-schemas-persistence-sh | every table and view, SCHEMA | `db-sample-schemas/sales_history/` | done
 | 7 | FUTON | sqlserver-samples-persistence-futonmanufacturing | DBO | microsoft/sql-server-samples, `samples/databases/futon-manufacturing` | pending
 | 8 | AW_DBO | sqlserver-samples-persistence-adventureworks | DBO | microsoft/sql-server-samples, `samples/databases/adventure-works` | pending
 | 9 | AW_HUMANRESOURCES | sqlserver-samples-persistence-adventureworks | HUMANRESOURCES | (same) | pending
@@ -100,7 +103,7 @@ A source DDL path is relative to the project. Where the project has none, take i
 | heads-of-governments (SQLite, no container) | — | 7 (HOG) | pending
 | Sakila | `mysql-sakila-persistence/compose.yaml` | 63 (SAKILA) | pending
 | demodb | `postgresql-demodb-persistence/compose.yaml` | 47 (DEMODB) | pending
-| Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | | pending
+| Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | 14 (CO), 14 (HR), 7 (SH), and the JPQL marked | pending
 | SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | | pending
 |===
 
@@ -324,3 +327,124 @@ weekdays), SEGMENTS_I_05 (the condition belongs in SEGMENTS_A_01), the integer-r
 Process notes from this unit: apply.py reads psql's output (a header, a rule of dashes and plus signs, "(N rows)") and
 keeps a file's ruler width; nested.py gives a module's live exercises their nested classes, finding a module's
 existing classes by the .sql file in their javadoc or by their name.
+
+=== 4. CO (2026-11-06)
+
+One batch. DDL: `db-sample-schemas/customer_orders/`. 14 Codex items, 14 Claude items; Codex answered the disagreements once
+(`exercises_progress/CO/review-codex-reply.md`: 2 agree, 1 hold (PRODUCTS_B_04, applied: the missing picture ordered first by the picture itself)). Before: 71 live, 1 retired. After: 80 live,
+2 retired. The module had no exercise tests; nested.py made a class per .sql file, with an empty nested class per
+exercise. EXERCISES.asciidoc states the JPQL answer of each exercise; 11 of them are marked `JPQL NOT YET UPDATED`
+where the SQL changed.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| CO_SCHEMA_A_13 | both | fixed, request and sql | revenue counted cancelled and refunded orders, unlike CO_SCHEMA_I_02 (Claude); a store with no line was dropped and tied stores made the running total unstable (Codex)
+| CO_CUSTOMERS_I_01 | both | fixed, request and sql | an address with nothing before an @, or no @, made SUBSTR NULL, so exactly the worst ones were hidden
+| CO_ORDERS_A_02 | both | fixed, request and sql | LAG over order_tms alone: two orders at one moment could each be the other's previous; order_id breaks the tie, as CO_ORDERS_A_03 does
+| CO_SCHEMA_A_11 | Claude | fixed, request and sql | the year's start came from SYSDATE, the host's clock, and now from LOCALTIMESTAMP, the session's; around New Year they disagree
+| CO_SCHEMA_I_08 | Claude | fixed, request and sql | a cancelled or refunded order never ships, so its unassigned lines were work that does not exist
+| CO_INVENTORY_B_02 | Claude | fixed, request and sql | the note admitted the order was unstable among stores with the same stock but left it so; SELECT * brought the known product along
+| CO_STORES_I_01 | Claude | fixed, request and sql | SUBSTR(name, -4) is NULL in Oracle for a name shorter than 4 characters, while the JPQL RIGHT(name, 4) gives the whole name
+| CO_SCHEMA_A_09 | Claude | fixed, request and sql | it asked two questions, and its second, list price above every price sold at, is a narrower CO_SCHEMA_I_05
+| CO_STORES_A_01 | Codex | fixed, request and sql | a distance in degrees of latitude and longitude can pick the wrong neighbour; the great-circle distance, with ties
+| CO_SCHEMA_A_05 | Codex | fixed, request and sql | it ranked the rounded kilometres, so a farther donor could win, with no tie-break on equal distance or surplus; the ACOS argument unclamped
+| CO_STORE_ORDERS_A_01 | Codex | fixed, request and sql | starting from the loss rows dropped a store with no cancellation or refund; the totals may be 0, so the divisions need a guard
+| CO_PRODUCTS_A_01 | Codex | fixed, request and sql | the price-only order decides which ties qualify, but leaves them in any order; an outer order by product_id, outside FETCH ... WITH TIES
+| CO_ORDERS_B_01 | Codex | fixed, request and sql | order_tms is not unique; order_id breaks the tie
+| CO_SCHEMA_B_04 | Codex | added, "Contact the customers of a recalled product" | the recall question, answered exactly, by product_id through order_items
+| CO_CUSTOMER_ORDER_PRODUCTS_B_02 | Codex | added, "Review a customer's completed baskets" | keeps the view's Basic tier after CO_CUSTOMER_ORDER_PRODUCTS_B_01, with what the view is good at: a total and a summary of the products
+| CO_PRODUCTS_I_03 | Codex | added, "Product names that more than one product has" | several views group by the product's name, and the exercises take a group for a product; nothing makes the name unique
+| CO_SCHEMA_I_09 | Codex | added, "Orders without a line" | the order totals assume every order has lines; the foreign key holds only the other way
+| CO_INVENTORY_B_04 | Codex | added, "Negative stock" | nothing keeps the stock from going below 0, which the replenishment and out-of-stock exercises assume
+| CO_PRODUCTS_B_04 | both | added, "Products missing a fresh picture" | the image columns of PRODUCTS are read by no exercise; Claude's (missing or out of date) over Codex's (missing)
+| CO_ORDERS_B_04 | Claude | added, "The next page of a customer's order history" | no exercise pages past the first rows; Oracle's OFFSET ... FETCH NEXT, and a unique tie-break
+| CO_SCHEMA_A_17 | Claude | added, "Month-over-month sales" | dates are grouped but never compared across periods; LAG over an aggregate
+| CO_SCHEMA_A_18 | Claude | added, "Shipments that carry nothing" | ORDER_ITEMS.SHIPMENT_ID is read only from the line's side; a shipment no line points to is the reverse
+| CO_ORDER_ITEMS_I_02 | Claude | added, "Orders with gaps in their line numbers" | the DDL says LINE_ITEM_ID runs from 1 within an order, but does not enforce it; the receipt relies on it
+| CO_CUSTOMER_ORDER_PRODUCTS_B_01 | Codex | retired | the view's items is a LISTAGG, cut short, and a name matches inside another (Men's / Women's Jacket); no text match is exact. CO_SCHEMA_B_04 answers the recall by product_id; Claude had proposed padding the list with its delimiter
+| CO_PRODUCTS_B_04 | Codex (reply) | fixed, request and sql | a NULL image_last_updated does not tell a missing picture; order by the missing picture itself, then the date, the name and product_id
+|===
+
+`NOT YET RUN`: CO_SCHEMA_A_13, CO_CUSTOMERS_I_01, CO_SCHEMA_A_11, CO_SCHEMA_I_08, CO_STORES_I_01, CO_STORES_A_01, CO_STORE_ORDERS_A_01, CO_PRODUCTS_A_01, CO_PRODUCTS_I_03, CO_SCHEMA_I_09, CO_INVENTORY_B_04, CO_SCHEMA_A_17, CO_SCHEMA_A_18, CO_ORDER_ITEMS_I_02.
+
+=== 5. HR (2026-11-06)
+
+One batch. DDL: `db-sample-schemas/human_resources/`. 15 Codex items, 15 Claude items; Codex answered the disagreements once
+(`exercises_progress/HR/review-codex-reply.md`: 2 agree, 3 hold: the NULL salaries (applied: left out of the rankings, not ranked last), SCHEMA_A_02 (applied: the inferred start called inferred), JOBS_I_02 (kept: its note gives the JPQL reason, and JOBS_B_04 guards the bounds)). Before: 74 live, 2 retired. After: 81 live,
+2 retired. The module had no exercise tests; nested.py made a class per .sql file, with an empty nested class per
+exercise. EXERCISES.asciidoc states the JPQL answer of each exercise; 12 of them are marked `JPQL NOT YET UPDATED`
+where the SQL changed.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| HR_EMPLOYEES_A_01 | both | fixed, request and sql | the RANK form kept the employee with no department as a partition, unlike the correlated form; DESC put a NULL salary first; no tie order
+| HR_EMPLOYEES_A_02 | both | fixed, request and sql | DESC put a NULL salary first, at DENSE_RANK 1; three salaries, not three people; no tie order
+| HR_EMP_DETAILS_VIEW_A_01 | Claude | fixed, request and sql | the view passes SALARY through as nullable, and DESC put a NULL first; LAST_NAME does not break a tie of two people of one name
+| HR_EMPLOYEES_B_06 | both | fixed, request and sql | HIRE_DATE is a DATE, which has a time; BETWEEN missed a hire later on the last day, which the note admitted; no tie order
+| HR_JOB_HISTORY_B_02 | both | fixed, request and sql | the update_job_history trigger writes END_DATE as SYSDATE, with a time; BETWEEN missed a position closed later on the last day
+| HR_JOB_HISTORY_I_03 | Claude | fixed, request and sql | END_DATE from SYSDATE has a time, so END_DATE - START_DATE + 1 became a fraction of a day; TRUNC gives whole days
+| HR_EMPLOYEES_I_03 | Claude | fixed, request and sql | ELSE counted a salary not recorded as High, as SAKILA_FILM_I_03 counted a NULL length as long; no ORDER BY
+| HR_SCHEMA_A_02 | both | fixed, request and sql | HIRE_DATE was shown as the start of the current job (Codex), and the current job could sort before an earlier one of the same date (Claude); the current job starts the day after the last END_DATE, or on HIRE_DATE with no history
+| HR_SCHEMA_A_05 | both | fixed, request and sql | d.*, e.* gave DEPARTMENT_ID and MANAGER_ID twice under one name (Claude); people of one surname were in no order (Codex)
+| HR_EMPLOYEES_I_01 | Claude | fixed, request and sql | salaries repeat, so SALARY DESC alone left an unstable order
+| HR_SCHEMA_A_04 | Claude | fixed, request and sql | no ORDER BY; MINUS sorts on many plans, but nothing promises it
+| HR_SCHEMA_I_03 | Codex | fixed, request and sql | the inner join left out an empty department, which a threshold of 0 asks for; no tie order
+| HR_SCHEMA_I_06 | Codex | fixed, request and sql | 'the top tenth of the band' and '90% of the maximum' are two thresholds; the stated one kept, the order by the unrounded share
+| HR_EMPLOYEES_B_09 | Codex | added, "Salaries not recorded" | CHECK (salary > 0) lets a salary be NULL; the rankings assume every employee has one
+| HR_EMPLOYEES_B_10 | Claude | added, "The newest hires" | no exercise takes only the top n rows, Oracle's FETCH FIRST (setMaxResults in JPQL)
+| HR_JOBS_B_04 | Codex | added, "Salary bands needing repair" | nothing makes a salary band complete, positive or in order, which the ratio and career exercises assume
+| HR_SCHEMA_I_11 | both | added, "Managers outside their department" | DEPARTMENTS.MANAGER_ID and the manager's own DEPARTMENT_ID are two independent links, and nothing ties them
+| HR_SCHEMA_I_12 | Codex | added, "Countries without a company site" | the country and location counts leave out a country with no site; the anti-join from countries to locations
+| HR_SCHEMA_A_07 | Claude | added, "Each department's staff on one line" | string aggregation, LISTAGG ... WITHIN GROUP, is missing from the set
+| HR_EMP_DETAILS_VIEW_A_02 | Claude | added, "Payroll with subtotals" | the per-country payroll has no subtotals, and GROUP BY ROLLUP and GROUPING appear nowhere
+| HR_EMPLOYEES_A_01 | Codex (reply) | fixed, request and sql | NULLS LAST still ranks a NULL first in a department whose salaries are all NULL; the salaries not recorded are left out, as Claude first proposed
+| HR_EMPLOYEES_A_02 | Codex (reply) | fixed, request and sql | NULLS LAST still puts NULLs among the top three where a department has fewer than three salary levels; they are left out
+| HR_EMP_DETAILS_VIEW_A_01 | Codex (reply) | fixed, request and sql | as HR_EMPLOYEES_A_02: the salaries not recorded are left out rather than ranked last
+| HR_SCHEMA_A_02 | Codex (reply) | fixed, request | the current position's start is inferred from the trigger, not recorded; the request says so
+|===
+
+Rejected: Codex's retirement of SCHEMA_A_02 and its replacement (the current start is inferred instead, and said to be), EMPLOYEES_I_07 (EMPLOYEES_B_10 teaches FETCH FIRST), JOBS_I_02.
+
+`NOT YET RUN`: HR_EMPLOYEES_A_01, HR_EMPLOYEES_A_02, HR_EMP_DETAILS_VIEW_A_01, HR_JOB_HISTORY_I_03, HR_EMPLOYEES_I_03, HR_EMPLOYEES_I_01, HR_SCHEMA_A_04, HR_SCHEMA_I_06, HR_EMPLOYEES_B_09, HR_JOBS_B_04, HR_SCHEMA_I_11, HR_SCHEMA_I_12, HR_SCHEMA_A_07, HR_EMP_DETAILS_VIEW_A_02.
+
+=== 6. SH (2026-11-06)
+
+One batch. DDL: `db-sample-schemas/sales_history/`. 15 Codex items, 14 Claude items; Codex answered the disagreements once
+(`exercises_progress/SH/review-codex-reply.md`: 2 agree). Before: 64 live, 1 retired. After: 71 live,
+1 retired. The module had no exercise tests; nested.py made a class per .sql file, with an empty nested class per
+exercise. EXERCISES.asciidoc states the JPQL answer of each exercise; 15 of them are marked `JPQL NOT YET UPDATED`
+where the SQL changed.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| SH_CAL_MONTH_SALES_MV_A_01 | both | fixed, request and sql | the running total ran over the whole range, across a year's end; Codex's, which totals within the calendar year before the range filters, so a range starting mid-year still counts from January
+| SH_PROFITS_I_01 | both | fixed, request and sql | a revenue summing to 0 divided by zero; ties at the tenth place made the cut unstable
+| SH_SALES_I_01 | both | fixed, request and sql | FETCH FIRST 10 with no tie-break left the tenth customer to the database
+| SH_SCHEMA_I_02 | both | fixed, request and sql | the note admitted ties at the tenth place were cut arbitrarily
+| SH_CUSTOMERS_B_04 | both | fixed, request and sql | Oracle's DESC put a NULL credit limit first, the very problem the exercise is about; no unique tie-break
+| SH_SCHEMA_A_05 | Codex | fixed, request and sql | the inner join to COSTS silently dropped the sales with no cost; the margin is unknown where the cost is incomplete, not computed from what remains
+| SH_SCHEMA_I_09 | Codex | fixed, request and sql | neither quantities nor list prices are constrained above 0, so both divisions need a guard; undefined ratios last, PROD_ID breaking a tie
+| SH_SCHEMA_A_04 | Codex | fixed, request and sql | RANK() <= 3 can return more than three products; ROW_NUMBER, PROD_ID breaking a tie, answers 'three'
+| SH_SCHEMA_A_10 | Codex | fixed, request and sql | filtering :year before the window lost the November and December before it, and a month with no sale vanished
+| SH_SCHEMA_A_11 | Codex | fixed, request and sql | the inner joins left out a country with no sale, though the request asks for every country; a region's total may be 0
+| SH_SUPPLEMENTARY_DEMOGRAPHICS_A_01 | Claude | fixed, request and sql | OCCUPATION is nullable, so the customers with none showed as an occupation of their own; no tie-break
+| SH_SALES_B_01 | Claude | fixed, sql | a sales line is identified by five keys; the order left the promotion's rows of one product and customer unordered
+| SH_COSTS_B_01 | Claude | fixed, sql | a cost record is keyed by product, day, channel and promotion; the order left channel and promotion unordered
+| SH_PROFITS_B_01 | Claude | fixed, sql | a row of the view is one sales line, five keys; channel and promotion were left unordered
+| SH_CUSTOMERS_B_02 | Claude | fixed, sql | the order within a surname was unstable, unlike the module's other customer lists
+| SH_SCHEMA_A_12 | Codex | added, "Duplicate sales and cost keys" | the DDL enforces neither SALES' five-column key nor COSTS' four-column one, which the joins to COSTS assume
+| SH_SUPPLEMENTARY_DEMOGRAPHICS_I_02 | both | added, "Affinity-card indicators that are not 0 or 1" | the take-up averages assume every AFFINITY_CARD is 0 or 1, which the nullable NUMBER does not promise
+| SH_PRODUCTS_I_02 | Claude | added, "Discount headroom per subcategory" | PROD_MIN_PRICE and the subcategory hierarchy are aggregated by no exercise
+| SH_PRODUCTS_I_03 | Codex | added, "Supplier coverage of the catalogue" | SUPPLIER_ID is read by no exercise
+| SH_CUSTOMERS_B_05 | both | added, "Customer records in effect at a time" | the nullable effective dates are read by no exercise; Codex's half-open rule, with Claude's city
+| SH_SCHEMA_I_11 | Claude | added, "Promotions that never sold" | PROMOTIONS exists, the DDL says, to show outer joins, yet no exercise keeps the zero rows with their counts
+| SH_CUSTOMERS_I_02 | Claude | added, "Customers by decade of birth" | CUST_YEAR_OF_BIRTH and CUST_GENDER are never aggregated; a bucket by an expression with conditional counts
+|===
+
+`NOT YET RUN`: SH_SUPPLEMENTARY_DEMOGRAPHICS_A_01, SH_SCHEMA_A_12, SH_SUPPLEMENTARY_DEMOGRAPHICS_I_02, SH_PRODUCTS_I_02, SH_PRODUCTS_I_03, SH_SCHEMA_I_11, SH_CUSTOMERS_I_02.

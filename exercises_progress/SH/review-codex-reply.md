@@ -1,0 +1,2 @@
+1. **agree** — The half-open interval (`from` included, `to` excluded, `NULL` unbounded) gives precise boundary semantics, and Claude’s `:city` filter adds a compatible filtering condition.
+2. **agree** — Keeping discount headroom as PRODUCTS_I_02 and adding supplier coverage as PRODUCTS_I_03 preserves both distinct exercise objectives.

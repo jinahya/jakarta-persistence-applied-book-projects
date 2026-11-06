@@ -1,0 +1,5 @@
+{"module": "oracle-sample-schemas-persistence/oracle-sample-schemas-persistence-co", "changes": [
+ {"op": "fix", "id": "CO_PRODUCTS_B_04", "_src": "Codex (reply)", "_why": "a NULL image_last_updated does not tell a missing picture; order by the missing picture itself, then the date, the name and product_id",
+  "request": ["The web team wants the products that have no picture, or whose picture was last changed before `:since`: those with no picture first, then the oldest picture first; products otherwise tied are ordered by name and `product_id`."],
+  "sql": "SELECT product_id, product_name, image_filename, image_last_updated\nFROM products\nWHERE product_image IS NULL\n   OR image_last_updated < :since\nORDER BY CASE WHEN product_image IS NULL THEN 0 ELSE 1 END, image_last_updated NULLS FIRST, product_name, product_id",
+  "rerun": false}]}
