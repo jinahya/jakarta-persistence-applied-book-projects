@@ -1,0 +1,121 @@
+= SQL Server sample databases
+
+What `samples/databases` of https://github.com/microsoft/sql-server-samples[microsoft/sql-server-samples] holds, at
+`3c71696` (2026-10-29), read as candidates for a `mssql-*-persistence` project beside `mysql-sakila-persistence`,
+`postgresql-demodb-persistence` and `oracle-sample-schemas-persistence`.
+The samples are under the MIT License, copyright Microsoft.
+The counts come from grepping the install scripts; none of the samples has been loaded into a SQL Server yet.
+
+== Samples
+
+[cols="2,3,2,4,2"]
+|===
+|Sample |What |Tables |Installed by |Size
+
+|AdventureWorks
+|Classic OLTP, designed for SQL Server 2008
+|71, in 6 schemas
+|`instawdb.sql`, with 68 `BULK INSERT`+s+ from CSV files
+|91 MB
+
+|AdventureWorksDW
+|Star-schema data warehouse
+|`Dim*`, `Fact*`
+|`instawdbdw.sql`, with CSV files
+|82 MB
+
+|WideWorldImporters
+|Modern OLTP, SQL Server 2016 or later
+|54
+|An SSDT project, schema only; the data comes from the release's `.bak` files
+|30 MB, mostly C#, SSIS and Power BI
+
+|Northwind
+|Legacy, SQL Server 2000
+|13
+|`instnwnd.sql`, data included
+|1 MB
+
+|pubs
+|Legacy, SQL Server 2000
+|11
+|`instpubs.sql`, data included
+|small
+
+|Futon Manufacturing
+|New OLTP, manufacturing and sales
+|20, and 12 more in the sales extension
+|8 scripts run in order, data included
+|224 KB
+
+|Contoso DW
+|Loader for Azure SQL Data Warehouse
+|-
+|Loads from Azure Blob storage
+|-
+|===
+
+== AdventureWorks
+
+It has the widest range of mapping cases.
+
+* Keys: `IDENTITY` (107 matches), `ROWGUIDCOL` uniqueidentifiers (58), and many composite keys, as
+  `SalesOrderDetail(SalesOrderID, SalesOrderDetailID)` and `ProductVendor`.
+* Shared primary keys, a case for inheritance: `BusinessEntity` to `Person`, `Store` and `Vendor`.
+* 12 computed columns (`AS (...)`) and alias types: `Name`, `Flag`, `NameStyle`, `Phone`, `AccountNumber`,
+  `OrderNumber`.
+* Types with no standard mapping: `hierarchyid` (`Employee.OrganizationNode`, `Document.DocumentNode`), `geography`
+  (`Address.SpatialLocation`) and typed `xml` (`Person.Demographics`, ...).
+  They need provider-specific handling, or are left out of the entities.
+* The script sets `SqlSamplesSourceDataPath` to `C:\Samples\AdventureWorks\`.
+  An IT in a container has to copy the CSV files into it and override that path.
+* The README says FILESTREAM is required, but the OLTP script has no `FILESTREAM`.
+  It should run on the Linux image; not verified.
+
+== WideWorldImporters
+
+It shows the features SQL Server added since 2016.
+
+* 26 sequences; 28 tables default their keys with `NEXT VALUE FOR`, a case for `@SequenceGenerator`.
+* 17 system-versioned temporal tables, with `ValidFrom` and `ValidTo` (`GENERATED ALWAYS AS ROW START/END`) and
+  `*_Archive` history tables.
+  The entities map those columns with `insertable = false, updatable = false`.
+* `geography` in 11 tables, 3 memory-optimized tables, and JSON in `nvarchar(max)` checked by `ISJSON`.
+* The repository has no script that loads the data; it comes from restoring `WideWorldImporters-Full.bak` from the
+  GitHub release.
+
+== Northwind and pubs
+
+Both are small and well known, and dated: `image`, `ntext` and `text`, which SQL Server deprecates, `money` and
+`datetime`.
+Northwind's `"Order Details"` has a space in its name, a case for quoted identifiers.
+Otherwise they cover what Sakila already does.
+
+== Futon Manufacturing
+
+The cleanest schema: `IDENTITY` keys, `datetime2`, `bit` and a few computed columns, and no other SQL Server-specific
+type.
+Its `BillOfMaterials` relates an item to its components over several levels, a case for a self-referencing
+`@ManyToOne` and for recursive CTEs.
+Its scripts carry the data, so an IT loads it easily.
+It is new, and few readers know it.
+
+== Contoso DW
+
+It loads only into Azure SQL Data Warehouse, from Azure Blob storage, so no IT can run it.
+
+== Recommendation
+
+. AdventureWorks, for a `mssql-*-persistence` project.
+  Readers know it, and it covers composite keys, shared primary keys, `IDENTITY`, computed columns and SQL Server's
+  own types; the only setup work is the path of the CSV files.
+. WideWorldImporters, if sequences and temporal tables matter more; its data has to be restored from a `.bak` file.
+. Futon Manufacturing, if both are too heavy for the IT.
+
+Still to do:
+
+* Load AdventureWorks into a `mcr.microsoft.com/mssql/server` container and confirm the script runs without
+  FILESTREAM.
+* Draw the logical ERD of the chosen schema.
+* Decide how the entities treat the `hierarchyid`, `geography` and `xml` columns.
+

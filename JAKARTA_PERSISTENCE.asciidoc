@@ -1,0 +1,208 @@
+////
+AGENT INSTRUCTIONS (not rendered). Run them when the author mentions this file.
+
+What this file is: what the Jakarta Persistence specification says, and what the providers were measured to do, on the
+questions the book's projects ran into, so that nobody searches for the same answer twice. A fact goes in here once
+it has been read in the specification's text or measured in a project, never from memory. Each specification fact
+quotes the text and names its section; each measured fact names the project and the versions, and points at the
+README which has the full table.
+
+To add a fact: find or open the section its subject belongs to, write it as one sentence per line, at most 120
+columns, quote the specification verbatim where it is the source, and link the specification or the API document
+once per section. Keep the order of the specification's chapters where a section follows one.
+
+Ask first: removing a fact, or changing what the specification is quoted as saying.
+
+Common to every root `*.asciidoc`:
+- Read this file from disk right before editing it; another session may have changed it.
+- After editing, render it: `asciidoctor -v -o <scratch>/x.html <file>` must print nothing, and the file ends with a
+  blank line.
+- Keep the prose in English, one sentence per line, at most 120 columns; table cells may run longer.
+////
+= Jakarta Persistence
+
+What the specification says, quoted, and what the providers do, measured, on the questions the projects ran into.
+The specification is https://jakarta.ee/specifications/persistence/3.2/jakarta-persistence-spec-3.2.html[Jakarta
+Persistence 3.2]; the section numbers below are its.
+The providers are the ones link:PROJECTS_VERSIONS.asciidoc[] sets for Jakarta EE 11: Hibernate ORM 7.4 and
+EclipseLink 5.0.
+
+== Jakarta Persistence 3.2
+
+=== The entity class (2.1)
+
+An entity class "must have a public or protected constructor with no parameters, which is called by the persistence
+provider runtime", and "the entity class must be non-final".
+The section says nothing about `Serializable`.
+
+=== Basic types (2.6)
+
+The types a persistent field or property of a basic type may have include, from `java.time`, "`LocalDate`,
+`LocalTime`, `LocalDateTime`, `OffsetTime`, `OffsetDateTime`, `Instant`, or `Year`", and "any other type which
+implements `java.io.Serializable`".
+`java.lang.Object` is not among them.
+So `timestamp with time zone` maps to `OffsetDateTime`, `timestamp without time zone` to `LocalDateTime`, and a
+provider which accepts `Instant` for the former is within the list too.
+A type the list does not name, `java.time.Duration` or `List<Integer>`, say, is either a provider extension or goes
+through a converter.
+"Persistence for basic types is defined in Section 11.1.6 and Section 11.1.18"; the column type a `Year` takes has not
+been read there yet, so `heads-of-governments-persistence` maps one over an `INTEGER` column on Hibernate's word,
+measured below, not the specification's.
+
+=== Primary keys (2.4)
+
+"A simple primary key or field or property belonging to a composite primary key should have one of the following
+basic types", a list of the wrapper, string, date and numeric types; so a `character(6)` or a `text` column is a
+legitimate assigned key.
+"The application must not change the value of the primary key of an entity instance after the instance is made
+persistent"; what happens if it does is undefined.
+A composite key is declared either with `IdClass`, where "the `IdClass` annotation ... must specify the primary key
+class" and the `Id` attributes stay on the entity, or with `EmbeddedId`, where "the type of the annotated field or
+property is the primary key class".
+
+A primary key class (2.4.1) "may be a non-abstract regular Java class with a public or protected constructor with no
+parameters", or "any Java record type, in which case it need not have a constructor", and "must define `equals` and
+`hashCode` methods".
+Its access type "is determined by the access type of the entity".
+The specification does not require it to be `Serializable`; the providers' documentation does, and the projects make
+an `IdClass` `Serializable`.
+
+A derived identity (2.4.2) is one "partially derived from the identity of a second entity", and a `ManyToOne` or
+`OneToOne` which maps a primary key column may be declared with "the `MapsId` annotation, if some other attribute or
+attributes annotated `Id` or `EmbeddedId` also map the primary key".
+The alternative, which the projects use, is the reverse: the `Id` attributes are the writable mapping of the key
+columns, and the association over the same columns is read-only, `insertable = false, updatable = false`.
+
+=== Mapped superclasses (2.13.2)
+
+A mapped superclass is "a superclass that provides persistent entity state and mapping information" and is not itself
+an entity; its purpose is to "define state and mapping information that is common to multiple entity classes".
+"A class designated as a mapped superclass has no separate table defined for it."
+"Its mapping information is applied to the entities that inherit from it", and can "be overridden in such subclasses
+using the `AttributeOverride` and `AssociationOverride` annotations".
+"The persistent attributes of a mapped superclass may be mapped in the same way as the attributes of an entity
+class."
+A mapped superclass "is not queryable and must not be passed as an argument to `EntityManager` or `Query`
+operations", and cannot be the target of an association.
+
+A non-entity superclass (2.13.3) is the opposite: "the state of a non-entity superclass is not persistent", it
+"serves for inheritance of behavior only", and "any annotations on such superclasses are ignored".
+
+What follows from it, as `postgresql-demodb-persistence` does: the mapped superclass holds the schema facts, names,
+types, lengths, nullability, the check constraints as validation constraints, and the `Id` attributes; the entity
+adds what an application decides, the associations, their fetch types, their cascades, and overrides a column with
+`AttributeOverride` where the generated schema of a test database needs a type of its own.
+
+=== Entity listeners (3.6.1)
+
+"The entity listener class must have a public no-arg constructor."
+"Entity listener classes in Jakarta EE environments support dependency injection", "the persistence provider is only
+required to support CDI injection into entity listeners in Jakarta EE container environments", and "if the CDI is
+not enabled, the persistence provider must not invoke entity listeners that depend upon CDI injection".
+"The persistence provider is responsible for using the CDI SPI to create instances of the entity listener class", and
+a listener "that makes use of CDI injection may also define lifecycle callback methods annotated with the
+`PostConstruct` and `PreDestroy` annotations", invoked "after injection has taken place".
+
+=== Attribute converters (3.9)
+
+A converter class must implement `AttributeConverter` and be annotated `Converter`, or be declared in the mapping
+descriptor; the
+https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/Converter.html[`Converter`
+API document] says the same and nothing more.
+The section puts no constructor requirement on a converter class, unlike 3.6.1 on a listener.
+"Attribute converter classes in Jakarta EE environments support dependency injection", "the persistence provider is
+only required to support CDI injection into attribute converters in Jakarta EE container environments", and "if CDI
+is not enabled, the persistence provider must not invoke attribute converters that depend upon CDI injection".
+"The persistence provider is responsible for using the CDI SPI to create instances of the attribute converter class",
+"attribute converters that do not make use of CDI injection are stateless", and a converter "that makes use of CDI
+injection may also define lifecycle callback methods", `PostConstruct` and `PreDestroy`, "invoked after injection has
+taken place".
+
+What follows from it: a converter keeps a public no-arg constructor, which is what a provider without CDI instantiates
+it by, and may add an `Inject` constructor for a provider with CDI; with both, it does not "depend upon CDI
+injection" and works either way, and CDI uses the `Inject` one.
+Measured in `postgresql-demodb-persistence`, Hibernate ORM 7.4.12 and EclipseLink 5.0.2 on Java SE with Weld 6.0.3:
+both take a converter from CDI when handed a `BeanManager` through `jakarta.persistence.bean.manager`, and both
+resolve an `Inject` constructor's parameter of a plain type.
+Neither resolves an `Inject` field whose type carries the class's type variable, `AttributeConverter<E, String>` in a
+generic base: the creation path they use, an `InjectionTarget` over `createAnnotatedType`, leaves the variable
+unresolved, Weld answers `WELD-001408: Unsatisfied dependencies`, and the provider falls back to the no-arg
+constructor without a word.
+A contextual lookup, `Instance.select`, resolves the same field, which is why a CDI-only test would not have caught
+it.
+
+What a converter is handed on a read differs by provider, and is not in the specification.
+Hibernate reads the column the way the converter's database side says, `getString` for a `String` side; EclipseLink
+hands the converter the driver's raw object whatever the side says, an `Integer[]` for an `integer[]` column, a
+`PGInterval` for an `interval`.
+A converter whose database side is `String` therefore fails on EclipseLink, with a `ClassCastException` in the
+bridge method the compiler generates, before the converter runs; one whose side is `Object` cannot be written
+through on either provider, Hibernate having no JDBC type for it and EclipseLink guessing one from the attribute.
+What works on both is a base class whose database side is a type variable, so that the erased method takes an
+`Object`, and a concrete subclass which binds it to `String` without overriding the methods, so that no bridge
+casts; see `_TextConverter` in `postgresql-demodb-persistence`.
+
+=== Arithmetic and typecasts in queries (4.7.5, 4.7.8, 4.7.13)
+
+"Arithmetic operations use numeric promotion" (4.7.5), and "every numeric expression in a query is assigned a Java
+numeric type according to the following rules" (4.7.13).
+A `Year` is a basic type (2.6) but not a numeric one, so `h.died - h.born` over two `Year` attributes is outside what
+the specification defines.
+"The persistence provider is required to accept typecasts of the following forms": "any scalar expression to
+`STRING`" and "any string expression to `INTEGER`, `LONG`, `FLOAT`, or `DOUBLE`" (4.7.8).
+So `CAST(h.born AS INTEGER)` over a `Year` is not among the required forms, and `CAST(CAST(h.born AS STRING) AS
+INTEGER)` is, through a string.
+"Typecast expressions are evaluated by the database, with semantics that vary somewhat between different databases."
+
+=== `Lob` (10.6, the API document)
+
+`Lob` "specifies that the annotated persistent property or field should be persisted as a large object to a
+database-native large object (LOB) type"; "portable applications should use the `Lob` annotation when mapping to a
+database Lob type"; "the LOB type (`BLOB` or `CLOB`) is inferred from the type of the persistent field or property",
+"for string and character-based types it defaults to `CLOB`".
+So `Lob` selects the database's LOB type and is not a size hint.
+On PostgreSQL the LOB type is the large object, referred to by an `oid` column and reached through its own API, so
+`Lob` on a `String` over a `text` or `jsonb` column mismatches the type on both providers: a read calls `getClob` and
+fails, a write stores an `oid` the column is not meant to hold.
+`text` holds up to 1 GB and `jsonb` up to 268,435,455 bytes as ordinary columns, read with `getString`, and a
+`String` attribute without `Lob` is the mapping; the sources are in the README of `postgresql-demodb-persistence`.
+
+== What the specification leaves to the provider
+
+The following were measured, not read; the full tables, with versions and the JDBC URL setting each needs, are in the
+README of `postgresql-demodb-persistence`, under "Column types the providers differ on".
+
+* A PostgreSQL `integer[]`: Hibernate maps `Integer[]`, `int[]`, `List<Integer>` and `Set<Integer>` to the array
+  natively; EclipseLink maps none of them, serializing to `bytea`.
+  Portable is a `List<E>` through a converter.
+* A PostgreSQL `interval`: Hibernate maps `Duration` to it only with `hibernate.type.preferred_duration_jdbc_type`
+  set to `INTERVAL_SECOND`, and as a number otherwise; EclipseLink maps nothing to it.
+  Portable is a `Duration` through a converter, which rejects a non-zero year or month, since a `Duration` cannot
+  hold either.
+* `tstzrange`, `point` and `jsonb`: both providers read and write them as `String`; the write needs
+  `stringtype=unspecified` on the JDBC URL, as every text bound for one of these columns does.
+* `timestamp with time zone` as `OffsetDateTime`: both providers read and write it; Hibernate returns the offset
+  normalized to UTC, EclipseLink the JVM's default zone's, the same instant either way.
+* An identity column, `generated always as identity`: `GeneratedValue(IDENTITY)` on both, with no `NotNull` on the
+  attribute, which is `null` until the insert; `information_schema.columns` shows it as `is_identity`, not as a
+  default.
+* A read-only attribute over a foreign-key column, `insertable = false, updatable = false` beside an association
+  which writes it, carries no `NotNull` either: the units validate on `prePersist`, when it has no value yet, and
+  with it no row could be inserted.
+* Bean Validation on `prePersist` is the default when a validation provider is present, `validation-mode`
+  `AUTO`; the projects set `CALLBACK`.
+* EclipseLink on H2 2.x in PostgreSQL mode: its H2 platform spells an identity column as the legacy
+  `INTEGER IDENTITY` and reads a generated key with `CALL IDENTITY()`, neither of which the mode accepts; its
+  PostgreSQL platform's `SERIAL` and `select lastval()` are, so the in-memory unit names the PostgreSQL platform.
+* A `Year` over an SQLite `INTEGER` column, with no converter, measured in `heads-of-governments-persistence` with
+  Hibernate ORM 7.4.13 only, the project being Hibernate-only: Hibernate reads it, accepts `CAST(h.born AS INTEGER)`
+  and `h.died - h.born` over two `Year` attributes, and refuses an `Integer` minus a `Year`, "Operand of - is of type
+  'java.time.Year' which is not a numeric type".
+* A `LocalDate` through an `AttributeConverter<LocalDate, String>`, measured the same way: Hibernate types the
+  attribute in a query by the converter's database side, so `SUBSTRING(h.termStart, 1, 4)` is accepted and the
+  Criteria API's `extract(LocalDateField.YEAR, ...)` is refused, "Parameter 2 of function 'extract()' has type
+  'TEMPORAL', but argument is of type 'java.lang.String' mapped to 'VARCHAR'".
+* Hibernate writes an identifier's columns whatever their `insertable` says, so an entity which maps a column twice,
+  once in an `EmbeddedId` and once as an inherited attribute, makes the identifier the writable side and overrides the
+  inherited attribute to read-only.
+

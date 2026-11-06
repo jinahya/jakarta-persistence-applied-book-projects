@@ -1,0 +1,170 @@
+////
+AGENT INSTRUCTIONS (not rendered). Run them when the author mentions this file.
+This file lives in projects/; the paths in it are relative to the book's repository, of which projects/ is a
+submodule, and where _alignment.py and the skills run.
+
+What this file is: the names and meanings of the submodules' Maven profiles, scripts and Docker Compose files. It is a
+standard, not a checklist: never add a profile or a script to a module only because another module has it.
+
+To refresh "Modules" and "Open":
+1. Per module: the <profile><id>s in pom.xml (and what each binds: plugins, dependencies, activeByDefault), the
+   `_*.sh` files at its root (read each one's command), compose.yaml, and whether it has mvnw.
+2. Rewrite the Modules table from that.
+3. Open lists only names or behaviour that break the standard above, plus stale references to a script's name
+   (grep the module's README.md, CLAUDE.md and src/test/resources).
+
+To add a profile or a script a module needs: use the name and the shape above (a script cds to its directory, execs
+./mvnw and passes "$@" on), make it executable (chmod +x), then refresh Modules.
+
+To rename to the standard: rename with git mv inside the submodule, fix every reference to the old name, refresh this
+file.
+
+Ask first: renaming a script or a profile that already exists; adding a profile that changes what a default build does.
+
+Common to every PROJECTS_*.asciidoc:
+- Read this file from disk right before editing it; another session may have changed it.
+- Data comes from disk and the network, never from memory: the submodules under projects/ (each its own git repo),
+  the book under src/main/asciidoc/, and Maven Central (https://repo1.maven.org/maven2/<group/as/path>/<artifact>/
+  maven-metadata.xml, <release>).
+- Generate tables with a script over the real data, then check what you wrote: counts, ids, every path resolving.
+  Replace a whole table by its `|===` ... `|===` pair; a pattern stopping at the first `|===` leaves the old rows
+  behind.
+- After editing, render it: `asciidoctor -v -o <scratch>/x.html <file>` must print nothing, and the file ends with a
+  blank line.
+- Keep the prose in English, one sentence per line, at most 120 columns; table cells may run longer.
+- Submodule changes stay uncommitted unless the author asks. Never hard-revert uncommitted work (git checkout --,
+  git restore, git reset --hard); copy it to a scratch directory, or git stash, first.
+- Report what changed and what is left under Open; ask the author before anything under "Ask first".
+////
+= Projects build
+
+The Maven profiles, the shell scripts and the Docker Compose files of the submodules under `projects/`.
+This is a standard, not a checklist: a submodule has only the profiles and scripts it needs, and those it has go by the
+names, and do what, this file says.
+See link:PROJECTS_STRUCTURE.asciidoc[] for the modules and link:PROJECTS_VERSIONS.asciidoc[] for what a generation
+profile builds against.
+
+== Maven profiles
+
+[cols="3m,8,4",options="header"]
+|===
+| Profile | What it does | Where it applies
+
+| failsafe
+| Binds `maven-failsafe-plugin` (`integration-test`, `verify`), so `verify` runs the `*IT` classes.
+Off by default: an integration test may need a database a plain build does not have.
+| a module with integration tests
+
+| jakarta-ee-<N>
+| Builds against Jakarta EE `<N>`: its `jakarta.jakartaee-bom` and the provider versions of that generation, as
+link:PROJECTS_VERSIONS.asciidoc[] sets them.
+The current generation's is `activeByDefault`.
+| a module on one provider, or none
+
+| jakarta-ee-<N>-<provider>
+| The same, on one persistence provider: `hibernate-orm` or `eclipselink`.
+The current generation's `hibernate-orm` is `activeByDefault`.
+| a module that runs on more than one provider
+|===
+
+A module with generation profiles has either `jakarta-ee-<N>` or `jakarta-ee-<N>-<provider>` ones, never both.
+A new generation adds its profiles next to the old ones, and moves `activeByDefault` to them.
+`_alignment.py` resolves a module once per such profile.
+
+== Scripts
+
+Every script sits at the root of its module, starts with `_`, runs from its own directory whatever the caller's, and
+passes its arguments on to the command it runs:
+
+[source,sh]
+----
+cd "$(dirname "$0")" || exit 1
+exec ./mvnw <profiles> <goals> "$@"
+----
+
+=== Maven
+
+`_mvn_<profile>_<goal>.sh`, where `<profile>` is the generation profile with `-` as `_`
+(`jakarta_ee_11`, `jakarta_ee_11_hibernate_orm`), left out, with its `_`, for a module that has none.
+
+[cols="4m,6m,6",options="header"]
+|===
+| Script | Runs | For
+
+| _mvn_<profile>_test.sh
+| ./mvnw -P<profile> clean test
+| the unit tests
+
+| _mvn_<profile>_verify.sh
+| ./mvnw -Pfailsafe,<profile> clean verify
+| the unit and the integration tests
+
+| _mvn_<profile>_verify_notests.sh
+| ./mvnw -Pfailsafe,<profile> clean verify -DskipTests -DskipITs
+| the build alone
+|===
+
+A module with `jakarta-ee-<N>-<provider>` profiles has the three scripts once per provider.
+
+=== Docker Compose
+
+A database the integration tests need runs from a `compose.yaml` at the root of the module that owns it, with the
+files it initialises the database from beside it (`docker-entrypoint-initdb.d/`).
+`_compose.sh` brings it up from an empty data directory (`down -v`, then `up -d`), follows its log, and takes
+it down again, with its data, on Ctrl-C.
+It runs `docker compose`, or `docker-compose` where the plugin is missing.
+
+Only the owning module has them.
+Another module of the domain uses the owner's, from the sibling checkout:
+
+[source,sh]
+----
+../mysql-sakila-persistence/_compose.sh
+----
+
+== Modules
+
+What each module has today.
+
+[cols="4m,4m,2,5,2",options="header"]
+|===
+| Module | Generation profiles | `failsafe` | Scripts | Compose
+
+| heads-of-governments-persistence
+| jakarta-ee-11
+| yes
+| `_mvn_jakarta_ee_11_{test,verify,verify_notests}.sh` +
+`_mvn_effective_poms.sh`
+| —
+
+| mysql-sakila-persistence
+| jakarta-ee-11-hibernate-orm +
+jakarta-ee-11-eclipselink
+| yes
+| `_mvn_jakarta_ee_11_{test,verify,verify_notests}_{hibernate_orm,eclipselink}.sh`
+| owner
+
+| mysql-sakila-jakarta-data
+| —
+| yes
+| `_mvn_{test,verify,verify_notests}.sh`
+| uses `mysql-sakila-persistence`'s
+
+| mysql-sakila-spring-data
+| —
+| no
+| —
+| uses `mysql-sakila-persistence`'s
+|===
+
+[[open]]
+== Open
+
+Where what is there does not follow the names above yet; as gathered on 2026-10-23.
+
+* The provider scripts of `mysql-sakila-persistence` put the provider after the goal
+  (`_mvn_jakarta_ee_11_test_hibernate_orm.sh`); the pattern above puts it in `<profile>`, before the goal
+  (`_mvn_jakarta_ee_11_hibernate_orm_test.sh`). One of the two is to give way.
+* `heads-of-governments-persistence`'s `_mvn_effective_poms.sh` runs `mvn`, not `./mvnw`, without the `cd`, and its
+  name has a `.`; under the pattern above it would be `_mvn_<profile>_effective_pom.sh`.
+

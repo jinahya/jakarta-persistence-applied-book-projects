@@ -1,0 +1,192 @@
+////
+AGENT INSTRUCTIONS (not rendered). Run them when the author mentions this file.
+This file lives in projects/; the paths in it are relative to the book's repository, of which projects/ is a
+submodule, and where _alignment.py and the skills run.
+
+What this file is: the version every submodule is to be on, per Jakarta EE generation, read by _alignment.py, which
+writes the alignment section of README.asciidoc.
+
+Table rows are parsed by _alignment.py: `| <group>:<artifact> | <version> | ...`. Keep that shape; the Spring table
+has a `Jakarta EE` column before the link. Every row ends with a Maven Central link,
+https://central.sonatype.com/artifact/<group>/<artifact>/versions[Maven Central].
+
+Where an artifact goes:
+- Every generation: the test stack (JUnit, Mockito, weld-junit).
+- Libraries: everything else not tied to a generation (jinahya-*, Podam, AssertJ, Lombok, logging, JDBC drivers, ...).
+- Jakarta EE <N>: the BOM, Jakarta Persistence, the providers, and implementations of a Jakarta specification
+  (Hibernate Validator, Expressly).
+- Spring: Spring Framework, Spring Boot, and what is built against them (mybatis-spring), with the generation.
+
+To check for newer versions:
+1. For each row, read <release> from Maven Central's maven-metadata.xml. Skip milestones, RCs, alphas and betas, unless
+   a Decision says otherwise (AssertJ 4.0.0-M1).
+2. Spring Boot: open https://docs.spring.io/spring-boot/appendix/dependency-versions/coordinates.html (or the
+   spring-boot-dependencies-<version>.pom) and read the Jakarta Persistence and Hibernate ORM it manages; the Spring
+   rows take that generation, and their versions are the ones that Boot manages.
+3. Update the version cells; add a dated line under Decisions for any choice that is not "latest release".
+4. Run `python3 _alignment.py` (offline, read-only on the submodules; it needs their dependencies in ~/.m2) and then
+   `python3 _alignment.py --readme` to rewrite README.asciidoc's alignment section. Report what is off the baseline.
+
+To apply the versions to the submodules (when the author asks to update them):
+1. Back up every projects/*/pom.xml and projects/data/*/pom.xml to a scratch directory first; a pom may carry uncommitted work.
+2. In each pom, change the version.* property that sets the artifact (a BOM's property for a BOM-managed one:
+   version.org.junit is junit-bom, version.org.slf4j is slf4j-bom). A generation profile may set its own
+   (heads-of-governments-persistence's jakarta-ee-11 sets version.org.hibernate.orm).
+3. A Spring Boot module imports spring-boot-dependencies; for an artifact Boot manages at another version, import the
+   artifact's own BOM before Boot's (junit-bom, mockito-bom), or add a direct <dependencyManagement> entry
+   (logback-classic and logback-core, assertj-core). Compare with spring-boot-dependencies-<version>.pom.
+4. An artifact a module only gets transitively at another version gets a <dependencyManagement> entry and a property
+   (jinahya-object-randomizer, jts-core).
+5. Verify everything, every module under every generation and provider profile, unit and integration tests:
+   - Start the database the integration tests need: in projects/mysql-sakila-persistence, `docker compose down -v`,
+     `docker compose up -d`, then wait for `docker inspect -f '{{.State.Health.Status}}' mysql-sakila` to say healthy.
+   - Per module, `./mvnw -B -Pfailsafe,<profile> clean verify` for each generation profile (PROJECTS_BUILD names
+     them); a module without failsafe or mvnw: `../../mvnw -B clean verify` plus
+     `org.apache.maven.plugins:maven-failsafe-plugin:<version>:integration-test` and `...:verify`.
+   - Install mysql-sakila-persistence (`clean install`, its default profile) before the data modules, which depend on
+     its SNAPSHOT and test-companion jars.
+   - Take the database down (`docker compose down -v`) when done.
+6. Run `python3 _alignment.py --readme`; nothing but intended exceptions is to be left off the baseline.
+
+To add an artifact: add its row to the right section. If it should be a column of its own in the README table, add it
+to LABELS in _alignment.py; otherwise it is reported in the libraries table.
+
+A new generation: a `== Jakarta EE <N>` section with its table, its Jakarta Persistence version in
+PERSISTENCE_GENERATION in _alignment.py, and `jakarta-ee-<N>` profiles in the submodules (see PROJECTS_BUILD).
+
+Ask first: applying the versions to the submodules' poms, unless the author asked for it; moving a generation's
+activeByDefault.
+
+Common to every PROJECTS_*.asciidoc:
+- Read this file from disk right before editing it; another session may have changed it.
+- Data comes from disk and the network, never from memory: the submodules under projects/ (each its own git repo),
+  the book under src/main/asciidoc/, and Maven Central (https://repo1.maven.org/maven2/<group/as/path>/<artifact>/
+  maven-metadata.xml, <release>).
+- Generate tables with a script over the real data, then check what you wrote: counts, ids, every path resolving.
+  Replace a whole table by its `|===` ... `|===` pair; a pattern stopping at the first `|===` leaves the old rows
+  behind.
+- After editing, render it: `asciidoctor -v -o <scratch>/x.html <file>` must print nothing, and the file ends with a
+  blank line.
+- Keep the prose in English, one sentence per line, at most 120 columns; table cells may run longer.
+- Submodule changes stay uncommitted unless the author asks. Never hard-revert uncommitted work (git checkout --,
+  git restore, git reset --hard); copy it to a scratch directory, or git stash, first.
+- Report what changed and what is left under Open; ask the author before anything under "Ask first".
+////
+= Projects versions
+
+The versions every submodule under `projects/` is to be aligned on.
+`_alignment.py` reads the tables below, resolves what each submodule actually uses, once per Jakarta EE generation and
+persistence provider it builds for, and records the result in link:../README.asciidoc[].
+
+An artifact under <<every-generation>> has the same version in every generation; the test stack is not tied to one.
+An artifact under <<libraries>> has the same version in every generation and every submodule that uses it.
+An artifact under a `Jakarta EE <N>` section has that version for that generation only.
+An artifact under <<spring>> is at its latest release, and belongs to the one generation its row names.
+A new generation gets a section of its own, and a submodule builds for it with a `jakarta-ee-<N>` or
+`jakarta-ee-<N>-<provider>` profile.
+`jakarta.jakartaee-bom` is read from a submodule's pom, since it is imported and never shows up as a dependency; every
+other artifact is read from `dependency:list`.
+
+== Decisions
+
+* JUnit 6, the line Spring Boot 4 already brings, at its latest release. (2026-10-23)
+* Two providers, Hibernate ORM and EclipseLink, where they apply: a plain Jakarta Persistence mapping module runs on
+  both. `mysql-sakila-jakarta-data` stays on Hibernate ORM, since its repositories are generated by Hibernate's
+  processor, and `mysql-sakila-spring-data` does too, since Spring Boot wires Hibernate. (2026-10-23)
+* Spring Framework and Spring Boot at their latest releases, as long as they conform to the generation: a Spring Boot
+  line counts for a generation only if the Jakarta Persistence and Hibernate ORM it manages are that generation's.
+  Spring Boot 4.1.2 manages Spring Framework 7.0.10, Jakarta Persistence 3.2.0 and Hibernate ORM 7.4.13.Final, so it
+  is Jakarta EE 11's. (2026-10-23)
+* The other libraries the submodules use, from Podam to the JDBC drivers, are managed here too, at their latest
+  releases, under <<libraries>>; an implementation of a Jakarta specification (Hibernate Validator, Expressly) goes
+  with its generation instead. A milestone counts only where every submodule is already on it (AssertJ 4.0.0-M1).
+  (2026-10-23)
+
+[[every-generation]]
+== Every generation
+
+[%autowidth,cols="m,m,d",options="header"]
+|===
+| Artifact | Version | Newer versions
+
+| org.junit.jupiter:junit-jupiter-api | 6.1.3 | https://central.sonatype.com/artifact/org.junit.jupiter/junit-jupiter-api/versions[Maven Central]
+| org.mockito:mockito-core | 5.24.0 | https://central.sonatype.com/artifact/org.mockito/mockito-core/versions[Maven Central]
+| org.jboss.weld:weld-junit5 | 5.0.3.Final | https://central.sonatype.com/artifact/org.jboss.weld/weld-junit5/versions[Maven Central]
+|===
+
+[[libraries]]
+== Libraries
+
+Everything else a submodule depends on, in any generation, at its latest release.
+In `mysql-sakila-spring-data` an artifact Spring Boot manages (the logging stack, AssertJ, H2, the MySQL driver)
+follows Boot unless the pom overrides it.
+
+[%autowidth,cols="m,m,d",options="header"]
+|===
+| Artifact | Version | Newer versions
+
+| io.github.jinahya:jinahya-parent | 1.1.1 | https://central.sonatype.com/artifact/io.github.jinahya/jinahya-parent/versions[Maven Central]
+| io.github.jinahya:jinahya-persistence-utils | 0.6.7 | https://central.sonatype.com/artifact/io.github.jinahya/jinahya-persistence-utils/versions[Maven Central]
+| io.github.jinahya:jinahya-persistence-test-utils | 0.6.7 | https://central.sonatype.com/artifact/io.github.jinahya/jinahya-persistence-test-utils/versions[Maven Central]
+| io.github.jinahya:jinahya-object-randomizer | 0.0.7 | https://central.sonatype.com/artifact/io.github.jinahya/jinahya-object-randomizer/versions[Maven Central]
+| uk.co.jemos.podam:podam | 8.0.2.RELEASE | https://central.sonatype.com/artifact/uk.co.jemos.podam/podam/versions[Maven Central]
+| org.assertj:assertj-core | 4.0.0-M1 | https://central.sonatype.com/artifact/org.assertj/assertj-core/versions[Maven Central]
+| nl.jqno.equalsverifier:equalsverifier-nodep | 4.5.2 | https://central.sonatype.com/artifact/nl.jqno.equalsverifier/equalsverifier-nodep/versions[Maven Central]
+| org.projectlombok:lombok | 1.18.48 | https://central.sonatype.com/artifact/org.projectlombok/lombok/versions[Maven Central]
+| org.jspecify:jspecify | 1.0.1 | https://central.sonatype.com/artifact/org.jspecify/jspecify/versions[Maven Central]
+| org.slf4j:slf4j-api | 2.0.20 | https://central.sonatype.com/artifact/org.slf4j/slf4j-api/versions[Maven Central]
+| ch.qos.logback:logback-classic | 1.6.5 | https://central.sonatype.com/artifact/ch.qos.logback/logback-classic/versions[Maven Central]
+| com.h2database:h2 | 2.5.252 | https://central.sonatype.com/artifact/com.h2database/h2/versions[Maven Central]
+| com.mysql:mysql-connector-j | 26.10.0 | https://central.sonatype.com/artifact/com.mysql/mysql-connector-j/versions[Maven Central]
+| org.xerial:sqlite-jdbc | 3.53.4.0 | https://central.sonatype.com/artifact/org.xerial/sqlite-jdbc/versions[Maven Central]
+| org.geolatte:geolatte-geom | 1.12 | https://central.sonatype.com/artifact/org.geolatte/geolatte-geom/versions[Maven Central]
+| org.locationtech.jts:jts-core | 1.20.0 | https://central.sonatype.com/artifact/org.locationtech.jts/jts-core/versions[Maven Central]
+|===
+
+== Jakarta EE 11
+
+[%autowidth,cols="m,m,d",options="header"]
+|===
+| Artifact | Version | Newer versions
+
+| jakarta.platform:jakarta.jakartaee-bom | 11.0.0 | https://central.sonatype.com/artifact/jakarta.platform/jakarta.jakartaee-bom/versions[Maven Central]
+| jakarta.persistence:jakarta.persistence-api | 3.2.0 | https://central.sonatype.com/artifact/jakarta.persistence/jakarta.persistence-api/versions[Maven Central]
+| org.hibernate.orm:hibernate-core | 7.4.13.Final | https://central.sonatype.com/artifact/org.hibernate.orm/hibernate-core/versions[Maven Central]
+| org.eclipse.persistence:org.eclipse.persistence.jpa | 5.0.2 | https://central.sonatype.com/artifact/org.eclipse.persistence/org.eclipse.persistence.jpa/versions[Maven Central]
+| org.hibernate.validator:hibernate-validator | 9.1.5.Final | https://central.sonatype.com/artifact/org.hibernate.validator/hibernate-validator/versions[Maven Central]
+| org.glassfish.expressly:expressly | 6.0.0 | https://central.sonatype.com/artifact/org.glassfish.expressly/expressly/versions[Maven Central]
+|===
+
+[[spring]]
+== Spring
+
+Spring Framework and Spring Boot are not picked per generation: they stay at their latest releases.
+The latest Spring Boot line belongs to the one Jakarta EE generation whose Jakarta Persistence and Hibernate ORM it
+manages, and a submodule built on Spring Boot is on that generation.
+When a new Spring Boot line moves to a newer generation, its row moves with it.
+
+[%autowidth,cols="m,m,m,d",options="header"]
+|===
+| Artifact | Version | Jakarta EE | Newer versions
+
+| org.springframework:spring-core | 7.0.10 | 11 | https://central.sonatype.com/artifact/org.springframework/spring-core/versions[Maven Central]
+| org.springframework.boot:spring-boot | 4.1.2 | 11 | https://central.sonatype.com/artifact/org.springframework.boot/spring-boot/versions[Maven Central]
+| org.mybatis:mybatis-spring | 4.1.0 | 11 | https://central.sonatype.com/artifact/org.mybatis/mybatis-spring/versions[Maven Central]
+| org.mybatis.spring.boot:mybatis-spring-boot-starter | 4.1.0 | 11 | https://central.sonatype.com/artifact/org.mybatis.spring.boot/mybatis-spring-boot-starter/versions[Maven Central]
+|===
+
+Spring Boot 4.1.2 manages Spring Framework 7.0.10, Jakarta Persistence 3.2.0 and Hibernate ORM 7.4.13.Final.
+The versions the latest Spring Boot manages are listed in
+https://docs.spring.io/spring-boot/appendix/dependency-versions/coordinates.html[Managed Dependency Coordinates];
+check its Jakarta Persistence and Hibernate ORM rows there to see which generation it belongs to.
+
+== Jakarta EE 12
+
+Not released yet.
+When it is, add a table here like the one for Jakarta EE 11, and `jakarta-ee-12` profiles to the submodules.
+
+NOTE: weld-junit has a new artifact, `org.jboss.weld:weld-junit-jupiter` (from 6.0.0.Final, on Weld 7), which is not
+for Jakarta EE 11. Jakarta EE 11 stays on `org.jboss.weld:weld-junit5` under <<every-generation>>; Jakarta EE 12 takes
+`weld-junit-jupiter` in its own table, and https://central.sonatype.com/artifact/org.jboss.weld/weld-junit-jupiter/versions[Maven Central]
+lists its versions.
+
