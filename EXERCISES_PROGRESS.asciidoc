@@ -100,11 +100,11 @@ A source DDL path is relative to the project. Where the project has none, take i
 |===
 | Database | Container | Statements `NOT YET RUN` | Status
 
-| heads-of-governments (SQLite, no container) | — | 7 (HOG) | pending
-| Sakila | `mysql-sakila-persistence/compose.yaml` | 63 (SAKILA) | pending
-| demodb | `postgresql-demodb-persistence/compose.yaml` | 47 (DEMODB) | pending
-| Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | 14 (CO), 14 (HR), 7 (SH), and the JPQL marked | pending
-| SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | 22 (FUTON), 22 (AW), 24 (WWI), and the JPQL marked | pending
+| heads-of-governments (SQLite, no container) | — | 7 (HOG) | done: all ran, none failed
+| Sakila | `mysql-sakila-persistence/compose.yaml` | 63 (SAKILA) | done: all ran, none failed
+| demodb | `postgresql-demodb-persistence/compose.yaml` | 47 (DEMODB) | done: all ran, none failed; DEMODB_SCHEMA_I_10 lists 1168851 rows, a candidate for a narrower request in the next review
+| Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | 14 (CO), 14 (HR), 7 (SH), and the JPQL marked | done: all 35 ran, none failed (binds as NULL; the module shows no output); the JPQL marks stay
+| SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | 22 (FUTON), 22 (AW), 24 (WWI), and the JPQL marked | done: all 68 ran, none failed; FUTON outputs written (AW and WWI show none); the JPQL marks stay
 |===
 
 == Units
