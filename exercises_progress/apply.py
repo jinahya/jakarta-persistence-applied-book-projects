@@ -116,7 +116,10 @@ def sql_block(t, id_):
 
 def is_output(line):
     """A comment line that is output: a table, 'no rows.', '... N rows in all.', or the NOT YET RUN marker."""
-    return bool(re.match(r'-- (?:[+|]|no rows\b|\.\.\. \d+ rows?\b)', line)) or NOT_YET_RUN in line
+    return (bool(re.match(r'-- (?:[+|]|no rows\b|\.\.\. \d+ rows?\b|\(\d+ rows?\))', line))  # MySQL, and psql's count
+            or bool(re.match(r'-- -+(?:\+-+)+\s*$', line))  # psql's rule under the header
+            or ' | ' in line or line.rstrip().endswith(' |')  # a row of a table
+            or NOT_YET_RUN in line)
 
 
 def sql_parse(block):
@@ -144,17 +147,23 @@ def layout(t):
             'request': None}
 
 
-def ruler(id_, title, with_title):
+def ruler(id_, title, with_title, width=120):
     s = f' {id_} {title}' if with_title else f' {id_}'
-    return '-- ' + '-' * max(4, 120 - 3 - len(s)) + s
+    return '-- ' + '-' * max(4, width - 3 - len(s)) + s
+
+
+def ruler_width(t):
+    """The width the file draws its rulers to, the most common."""
+    widths = collections.Counter(len(l) for l in re.findall(r'(?m)^-- -+ [A-Z][A-Z0-9_]+(?: [^\n]*)?$', t))
+    return widths.most_common(1)[0][0] if widths else 120
 
 
 def wrap(text):
     return ['-- ' + l for l in textwrap.wrap(text, 117, break_long_words=False, break_on_hyphens=False)]
 
 
-def sql_render(id_, title, comment_lines, above, sql, under, with_title, gap):
-    body = [ruler(id_, title, with_title)] + comment_lines + above + [sql.strip().rstrip(';').rstrip(), ';'] + under
+def sql_render(id_, title, comment_lines, above, sql, under, with_title, gap, width=120, keep_ruler=None):
+    body = [keep_ruler or ruler(id_, title, with_title, width)] + comment_lines + above + [sql.strip().rstrip(';').rstrip(), ';'] + under
     return '\n'.join(body) + '\n' * (gap + 1)
 
 
@@ -241,7 +250,9 @@ for c in D['changes']:
             elif lay['under']:
                 under = [f'-- {NOT_YET_RUN}']
         stmt = sql if 'sql' in c else '\n'.join(s['stmt'])  # the .sql file's own statement, unless it changes
-        write(sp, st[:sb.start()] + sql_render(id_, title, comment, above, stmt, under, lay['title'], s['gap'])
+        keep = s['ruler'] if not (lay['title'] and 'title' in c) else None  # the ruler stays unless its title changes
+        write(sp, st[:sb.start()] + sql_render(id_, title, comment, above, stmt, under, lay['title'], s['gap'],
+                                               ruler_width(st), keep)
               + st[sb.end():])
         if 'title' in c:
             y = read(YAML)
@@ -306,7 +317,7 @@ for c in D['changes']:
         comment = comment_for(c, c['request'], c['title'], s['comments'], adoc_parse(adoc_block(read(ADOC), after)[0])['title'])
         above = [f'-- {NOT_YET_RUN}'] if c.get('rerun') and lay['above'] else []
         under = [f'-- {NOT_YET_RUN}'] if c.get('rerun') and lay['under'] and not lay['above'] else []
-        block = sql_render(id_, c['title'], comment, above, c['sql'], under, lay['title'], lay['gap'])
+        block = sql_render(id_, c['title'], comment, above, c['sql'], under, lay['title'], lay['gap'], ruler_width(src))
         if first:
             write(sp, st.rstrip('\n') + '\n' * 3 + block)
         else:

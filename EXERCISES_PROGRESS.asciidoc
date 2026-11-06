@@ -45,8 +45,10 @@ Steps of a unit (the status names the next step)
 4. `claude` -> discuss: read review-codex.md against review-claude.md; for each item decide agreed / rejected / merged, with a
    reason. Items the two disagree on go back to Codex once (exercises_progress/<UNIT>/review-codex-reply.md). The decisions go
    in this file, under the unit. Status `decided`.
-5. `decided` -> apply the decisions to EXERCISES.asciidoc, EXERCISES.yaml and the .sql files, and the nested classes.
-   test-compile, commit. Status `done`.
+5. `decided` -> apply the decisions (`python3 exercises_progress/apply.py <decisions.json>`, after a `--dry` run) to
+   EXERCISES.asciidoc, EXERCISES.yaml and the .sql files, then give every live exercise its nested class
+   (`python3 exercises_progress/nested.py <module>`); test-compile, check the registry against the files, commit.
+   Status `done`. `nextid.py <EXERCISES.yaml> <PREFIX_SECTION_T>` gives the next unused id.
 
 A large unit (more than about 70 exercises) splits into batches of whole sections, about 60 exercises each, in
 exercises_progress/<UNIT>/<n>/; steps 1 to 4 run per batch (gather.py takes the batch's sections, as
@@ -68,7 +70,7 @@ then `docker compose down -v` and remove what it pulled if disk is short, before
 
 | 1 | HOG | heads-of-governments-persistence | HEAD, OFFICE, SCHEMA | `db/schema.sql` | done
 | 2 | SAKILA | mysql-sakila-persistence | every table and view, SCHEMA | `docker-entrypoint-initdb.d/01-sakila-schema.sql` | done
-| 3 | DEMODB | postgresql-demodb-persistence | every table and view of `bookings`, SCHEMA | `exercises_progress/_ddl/demodb-20250901-3m-schema.sql`, the DDL of https://edu.postgrespro.ru/demo-20250901-3m.sql.gz (the edition compose.yaml runs), its data left out | pending
+| 3 | DEMODB | postgresql-demodb-persistence | every table and view of `bookings`, SCHEMA | `exercises_progress/_ddl/demodb-20250901-3m-schema.sql`, the DDL of https://edu.postgrespro.ru/demo-20250901-3m.sql.gz (the edition compose.yaml runs), its data left out | done
 | 4 | CO | oracle-sample-schemas-persistence-co | every table and view, SCHEMA | `db-sample-schemas/customer_orders/` | pending
 | 5 | HR | oracle-sample-schemas-persistence-hr | every table and view, SCHEMA | `db-sample-schemas/human_resources/` | pending
 | 6 | SH | oracle-sample-schemas-persistence-sh | every table and view, SCHEMA | `db-sample-schemas/sales_history/` | pending
@@ -97,7 +99,7 @@ A source DDL path is relative to the project. Where the project has none, take i
 
 | heads-of-governments (SQLite, no container) | — | 7 (HOG) | pending
 | Sakila | `mysql-sakila-persistence/compose.yaml` | 63 (SAKILA) | pending
-| demodb | `postgresql-demodb-persistence/compose.yaml` | | pending
+| demodb | `postgresql-demodb-persistence/compose.yaml` | 47 (DEMODB) | pending
 | Oracle (CO, HR, SH) | `oracle-sample-schemas-persistence/compose.yaml` | | pending
 | SQL Server (FUTON, AW, WWI) | `sqlserver-samples-persistence/compose.yaml` | | pending
 |===
@@ -239,3 +241,86 @@ Process notes from this unit: apply.py now keeps each .sql file's own layout (ru
 or under, title or request as the comment, blank lines), a line such as "Answered by ..." after a block, a multi-line
 @DisplayName, and makes a new level's .sql file and test class; codex.sh closes stdin (`< /dev/null`), without which a
 background `codex exec` waits for input.
+
+=== 3. DEMODB (2026-11-06)
+
+Two batches (`exercises_progress/DEMODB/1`, `2`): AIRPLANES, AIRPLANES_DATA, AIRPORTS, AIRPORTS_DATA, SEATS, ROUTES,
+TIMETABLE; BOOKINGS, TICKETS, SEGMENTS, BOARDING_PASSES, FLIGHTS, SCHEMA. The DDL is that of the demo database's dump,
+its data left out (`exercises_progress/_ddl/demodb-20250901-3m-schema.sql`). Codex reviewed each blind (28 items),
+Claude each by a subagent (30 items), and Codex answered the disagreements once
+(`exercises_progress/DEMODB/review-codex-reply.md`: 8 agree). Before: 117 live, 6 retired. After: 132 live, 9 retired.
+The decisions are `exercises_progress/DEMODB/decisions.py`.
+
+A module-wide rule came of it, which both reviews' time-zone findings asked for: a day or a month is a UTC one unless an
+exercise says it is an airport's local one; a bound on a timestamptz is written `TIMESTAMPTZ '... +00'`, and a
+`TO_CHAR` of one reads it `AT TIME ZONE 'UTC'`. EXERCISES.asciidoc says so in its preamble; the sweep changed ten
+exercises no reviewer named.
+
+The module had no exercise tests; nested.py made the 39 classes, a class per .sql file, with an empty nested class per
+exercise, and the `test:` entries of EXERCISES.yaml.
+
+[%autowidth,options="header"]
+|===
+| Id | From | Decision | Why
+
+| DEMODB_SEATS_A_01 | Claude | fixed, request and sql | the SQL wrote the airplane, '7M7', in; the flight's airplane comes from the route valid at its departure
+| DEMODB_TIMETABLE_B_02 | both | fixed, request and sql | the date bounds were read in the session's time zone; the UTC day, and the departure shown in UTC
+| DEMODB_TIMETABLE_A_02 | both | fixed, request and sql | the day was the session's; Codex's local day at Sheremetyevo, over Claude's UTC day, since the question is about connections there
+| DEMODB_TIMETABLE_I_03 | both | fixed, request and sql | the month was the session's; the late count did not ask for the status the arrived count asks for (Codex's, one definition for both)
+| DEMODB_TIMETABLE_B_01 | both | fixed, request and sql | several flights may leave SVO at the same minute; flight_id breaks the tie
+| DEMODB_AIRPLANES_DATA_A_02 | both | fixed, request and sql | the inner joins dropped an airplane with no route or no flight, though COUNT(f.flight_id) meant to show 0
+| DEMODB_AIRPORTS_DATA_A_01 | both | fixed, request and sql | the groups are by city and country, but the sort only by city, so LIMIT 10 could cut between two countries' cities
+| DEMODB_ROUTES_B_03 | Claude | fixed, request and sql | CARDINALITY = 7 counts the elements, which is all seven days only if none repeats; @> asks the question itself
+| DEMODB_ROUTES_A_02 | both | fixed, request | the request did not say what one row is; the SQL stays
+| DEMODB_TIMETABLE_B_03 | Claude | added, "how many flights of each status" | status, a CHECK-constrained enumeration, is read by no exercise
+| DEMODB_TIMETABLE_I_05 | Claude | added, "the ten airports with the longest average departure delay" | no exercise measures a delay: interval arithmetic on nullable columns, AVG over an interval, a HAVING
+| DEMODB_ROUTES_I_06 | Claude | added, "how many routes fly on each day of the week, now" | days_of_week is only tested with ANY and CARDINALITY; UNNEST turns it into rows
+| DEMODB_ROUTES_I_07 | Codex | added, "the rows whose days of the week are not a set of days" | DEMODB_ROUTES_I_06 counts each day of an array once, which holds only if no day repeats and every day is 1 to 7; nothing enforces either
+| DEMODB_ROUTES_A_04 | Claude | added, "the ten longest routes valid now, by great-circle distance" | the DDL installs earthdistance, which no exercise uses; the airports, the airplane's range and the route meet here
+| DEMODB_SEATS_I_04 | Codex | added, "the seat numbers which are not a row and a letter" | the seat exercises split seat_no into a row number and a letter, which the DDL does not promise
+| DEMODB_AIRPORTS_DATA_I_04 | Codex | added, "the airports missing an English name, city or country" | the English names are grouped and filtered everywhere, while NOT NULL applies only to the json documents
+| DEMODB_AIRPLANES_I_02 | both | retired | the view is model ->> lang() over the same table, so the comparison is empty by construction
+| DEMODB_AIRPORTS_DATA_B_03 | Claude | retired | the first letters of an IATA code mean nothing; LIKE is taught by DEMODB_AIRPLANES_B_02
+| DEMODB_FLIGHTS_A_03 | both | fixed, request and sql | it counted every boarding pass, the checked-in but not boarded too; ranked by the rounded share; a flight with no pass was dropped
+| DEMODB_SCHEMA_I_02 | both | fixed, request and sql | it counted every boarding pass, the checked-in but not boarded too
+| DEMODB_BOARDING_PASSES_I_01 | Claude | fixed, request and sql | the title says boarded, but it counted every pass, the checked-in but not boarded too
+| DEMODB_SCHEMA_B_03 | both | fixed, request and sql | a regclass sorts by its OID, not by the name it prints
+| DEMODB_SCHEMA_A_03 | both | fixed, request and sql | UNION dedups (airport, step), so step 2 also held the airports one flight away, and SVO; Claude's fewest-flights count, over Codex's request that described the old counts
+| DEMODB_SCHEMA_I_05 | both | fixed, request and sql | two flights from SVO may leave at the same minute; flight_id breaks the tie
+| DEMODB_BOOKINGS_A_01 | Codex | fixed, request and sql | the inner joins hid a booking with no ticket or no priced segment, which should fail the check
+| DEMODB_BOOKINGS_B_01 | Codex | fixed, request and sql | book_date is not unique; book_ref breaks the tie
+| DEMODB_FLIGHTS_I_04 | Claude | fixed, request and sql | ::date cast every row, in the session's zone; a half-open range on the UTC day of bookings.now()
+| DEMODB_SEGMENTS_A_01 | Claude | fixed, request and sql | the price check allows 0, and a cheapest Economy price of 0 divided by zero; Claude's condition over Codex's separate check
+| DEMODB_FLIGHTS_A_02 | Claude | fixed, request and sql | 'from 2025-10-01' had no lower bound; the days are UTC days
+| DEMODB_FLIGHTS_I_05 | Claude | added, "the flights whose status disagrees with their actual times" | several exercises rely on status agreeing with the actual times, which no constraint enforces
+| DEMODB_TICKETS_I_05 | both | added, "the passenger ids recorded under more than one name" | the passenger exercises take passenger_id as the person, which nothing ties to one name
+| DEMODB_BOOKINGS_B_04 | Claude | added, "the second page of the bookings of 2025-10-01" | no exercise reads a page past the first, the OFFSET of the module's paging rule
+| DEMODB_SCHEMA_B_06 | Codex | added, "the sold segments of the cancelled flights" | a simple join and count over the sales data, a question operations asks
+| DEMODB_SCHEMA_I_06 | Codex | added, "the flights with no route valid at their departure" | the routes do not overlap, but nothing makes a flight match one; every join on validity @> scheduled_departure assumes it
+| DEMODB_SCHEMA_I_07 | Claude | added, "how far ahead the bookings were made" | nothing relates book_date to the flights booked, the whole foreign-key chain from bookings to flights
+| DEMODB_SCHEMA_I_08 | Codex | added, "the seats of each airplane model, by fare conditions" | the seat totals are used, but never the cabin mix beside the model's range and speed
+| DEMODB_SCHEMA_I_09 | Codex | added, "today's departures, in each airport's own day" | the timetable's local times and the airports' time zones answer a departure board's question
+| DEMODB_SCHEMA_I_10 | Codex | added, "the outbound and return tickets of one passenger in one booking" | the unique key on booking, passenger and outbound pairs the two directions, which no exercise uses
+| DEMODB_SCHEMA_A_05 | both | added, "the segments which do not connect to the previous one of their ticket" | DEMODB_SCHEMA_A_04 assumes a later segment departs from where the earlier one arrived, after it arrived; nothing enforces either
+| DEMODB_SCHEMA_A_06 | Codex | added, "the passengers still to board the flights now boarding" | the composite key from boarding_passes to segments, and a missing pass told from a pass with no boarding time
+| DEMODB_SEGMENTS_I_03 | Claude | retired | DEMODB_SEGMENTS_I_04 with > 2 in place of > 1; DEMODB_SCHEMA_A_01 shows the tickets with the most segments
+| DEMODB_SCHEMA_I_01 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_BOARDING_PASSES_I_03 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_BOARDING_PASSES_A_01 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_BOOKINGS_I_01 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_BOOKINGS_I_04 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_FLIGHTS_B_01 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_FLIGHTS_I_01 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_FLIGHTS_A_04 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_SEGMENTS_A_02 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+| DEMODB_TICKETS_A_02 | both | fixed, sql | the UTC sweep: a date bound against a timestamptz, or a TO_CHAR of one, is read in the session's zone; written as TIMESTAMPTZ '... +00', and AT TIME ZONE 'UTC'
+|===
+
+Rejected: Codex's SCHEMA_I_01 (BOOKINGS_A_01 does it, with outer joins now), SCHEMA_I_09 (ROUTES_I_06 covers the
+weekdays), SEGMENTS_I_05 (the condition belongs in SEGMENTS_A_01), the integer-range part of SEATS_I_04.
+
+`NOT YET RUN`: DEMODB_SEATS_A_01, DEMODB_TIMETABLE_B_02, DEMODB_TIMETABLE_A_02, DEMODB_TIMETABLE_I_03, DEMODB_TIMETABLE_B_01, DEMODB_AIRPLANES_DATA_A_02, DEMODB_AIRPORTS_DATA_A_01, DEMODB_ROUTES_B_03, DEMODB_TIMETABLE_B_03, DEMODB_TIMETABLE_I_05, DEMODB_ROUTES_I_06, DEMODB_ROUTES_I_07, DEMODB_ROUTES_A_04, DEMODB_SEATS_I_04, DEMODB_AIRPORTS_DATA_I_04, DEMODB_FLIGHTS_A_03, DEMODB_SCHEMA_I_02, DEMODB_BOARDING_PASSES_I_01, DEMODB_SCHEMA_B_03, DEMODB_SCHEMA_A_03, DEMODB_SCHEMA_I_05, DEMODB_BOOKINGS_A_01, DEMODB_BOOKINGS_B_01, DEMODB_FLIGHTS_I_04, DEMODB_SEGMENTS_A_01, DEMODB_FLIGHTS_A_02, DEMODB_FLIGHTS_I_05, DEMODB_TICKETS_I_05, DEMODB_BOOKINGS_B_04, DEMODB_SCHEMA_B_06, DEMODB_SCHEMA_I_06, DEMODB_SCHEMA_I_07, DEMODB_SCHEMA_I_08, DEMODB_SCHEMA_I_09, DEMODB_SCHEMA_I_10, DEMODB_SCHEMA_A_05, DEMODB_SCHEMA_A_06, DEMODB_SCHEMA_I_01, DEMODB_BOARDING_PASSES_I_03, DEMODB_BOARDING_PASSES_A_01, DEMODB_BOOKINGS_I_01, DEMODB_BOOKINGS_I_04, DEMODB_FLIGHTS_B_01, DEMODB_FLIGHTS_I_01, DEMODB_FLIGHTS_A_04, DEMODB_SEGMENTS_A_02, DEMODB_TICKETS_A_02.
+
+Process notes from this unit: apply.py reads psql's output (a header, a rule of dashes and plus signs, "(N rows)") and
+keeps a file's ruler width; nested.py gives a module's live exercises their nested classes, finding a module's
+existing classes by the .sql file in their javadoc or by their name.
