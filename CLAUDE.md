@@ -109,13 +109,17 @@ src/test/sql-exercises/
 which each project's root `pom.xml` adds as a test source with `build-helper-maven-plugin` (execution
 `add-exercises-test-source`), in no profile.
 
-- A class per `.sql` file: `<Dir>_Exercises_<NN>_<Level>_Persistence{IT|Test}`, where `<Dir>` is the directory in
-  PascalCase, a leading `_` kept (`__/01_basic.sql` → `__Exercises_01_Basic_PersistenceIT`, `actor_info/` →
-  `ActorInfo_…`, `EMP_DETAILS_VIEW/` → `EmpDetailsView_…`, `_HumanResources/` → `_HumanResources_…`).
-- A nested class per exercise, `<ID>_Test`, with `@DisplayName("<ID>: <title>")`; the registry's `test:` names it as
-  `<Class>.<ID>_Test`.
-- The classes are in the module's test package, so they keep package-private access; helpers they share are in a
-  package-private `__Exercises_TestUtils` beside them.
+- A class per live exercise, `<ID>_PersistenceIT`, with `@DisplayName("<ID>: <title>")`, in a subpackage of the
+  module's test package made of the id's parts before the level, lowercased, underscores kept: `SAKILA_ADDRESS_A_02`
+  → `….persistence.sakila.address.SAKILA_ADDRESS_A_02_PersistenceIT`, `SAKILA_ACTOR_INFO_B_01` → `sakila.actor_info`,
+  `AW_HUMANRESOURCES_I_01` → `aw.humanresources`. A retired id has no class.
+- Every exercise class is an IT, run by failsafe (`-Pfailsafe`), whatever the database; the SQLite module's run on its
+  `test` unit.
+- The class of an exercise the module's `EXERCISES_PICKS.asciidoc` picks answers it, with `__QueryLanguage` and
+  `__CriteriaApi` (or `nativeQuery` where neither can); any other class is empty.
+- The registry's `test:` names the class relative to the module's test package (`sakila.address.SAKILA_ADDRESS_A_02_PersistenceIT`).
+- Helpers the classes share are in a public `__Exercises_TestUtils` in the module's test package; the classes, in
+  other packages, reach the entities through their public members only.
 - `src/test/java-exercises` may use anything in `src/test/java`; `src/test/java` never uses `src/test/java-exercises`.
 
 ## Java code
