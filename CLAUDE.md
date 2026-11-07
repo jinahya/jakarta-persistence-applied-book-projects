@@ -9,10 +9,11 @@ hold here. A project's own `CLAUDE.md` wins over this file for that project.
 
 ## Absolute rules
 
-- **`postgresql-demodb-persistence` is not Hibernate ORM only, uses no H2, and has ITs only.** The provider is the
-  `persistence-unit.provider` property; neither the module nor the book says it is Hibernate-only. A test that needs the
-  database is an `it` unit `*_PersistenceIT` and runs on PostgreSQL; there is no `test` unit and no H2. See that
-  module's `CLAUDE.md`.
+- **A project runs on both providers, or on Hibernate ORM only, by its database.** Some databases are not easy to work
+  with on EclipseLink, so their projects target Hibernate ORM only; see [Providers](#providers). Never add EclipseLink to
+  a Hibernate-ORM-only project, or drop it from a project of both, without the author.
+- **`postgresql-demodb-persistence` uses no H2 and has ITs only.** A test that needs the database is an `it` unit
+  `*_PersistenceIT` and runs on PostgreSQL; there is no `test` unit and no H2. See that module's `CLAUDE.md`.
 - **Unsure, broad, mechanical changes across several projects are asked first.** Check the change against disk and the
   conventions below, and ask the author when it is not clear.
 
@@ -44,6 +45,25 @@ Each project builds on its own, with its own wrapper, from its own directory, on
 
 Persistence units are named `test` and `it`; a module of several schemas or databases prefixes them (`hr-test`,
 `adventureworks-it`). `heads-of-governments-persistence`, on SQLite, has `test` only.
+
+## Providers
+
+The provider is the `persistence-unit.provider` property, which `persistence.xml` reads; a profile per provider sets
+it.
+
+| Project | Providers | Profiles |
+|---|---|---|
+| `heads-of-governments-persistence` | Hibernate ORM | none; `persistence.xml` names it |
+| `mysql-sakila-persistence` | Hibernate ORM and EclipseLink | `jakarta-ee-11-hibernate-orm`, `jakarta-ee-11-eclipselink` (`-weaving`) |
+| `oracle-sample-schemas-persistence` | Hibernate ORM and EclipseLink | `jakarta-ee-11-hibernate-orm`, `jakarta-ee-11-eclipselink` (`-weaving`) |
+| `postgresql-demodb-persistence` | Hibernate ORM only | none; the property's default |
+| `sqlserver-samples-persistence` | Hibernate ORM only | none; the property's default |
+
+- **Both providers:** a mapping keeps to Jakarta Persistence, and runs, with its tests, on each profile. Where the two
+  differ, the code works on both and says so in a comment or the javadoc (`insertable = true` on an `@Id` for
+  EclipseLink, `@Enumerated(STRING)` beside `@EnumeratedValue` for Hibernate ORM, say).
+- **Hibernate ORM only:** the database is not easy to work with on EclipseLink. Hibernate ORM's own features are
+  welcome where Jakarta Persistence falls short; say in the javadoc where a mapping is Hibernate ORM's.
 
 ## `src/test/sql`: profiling queries
 
