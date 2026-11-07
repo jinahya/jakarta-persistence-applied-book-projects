@@ -12,8 +12,9 @@ hold here. A project's own `CLAUDE.md` wins over this file for that project.
 - **A project runs on both providers, or on Hibernate ORM only, by its database.** Some databases are not easy to work
   with on EclipseLink, so their projects target Hibernate ORM only; see [Providers](#providers). Never add EclipseLink to
   a Hibernate-ORM-only project, or drop it from a project of both, without the author.
-- **`postgresql-demodb-persistence` uses no H2 and has ITs only.** A test that needs the database is an `it` unit
-  `*_PersistenceIT` and runs on PostgreSQL; there is no `test` unit and no H2. See that module's `CLAUDE.md`.
+- **`postgresql-demodb-persistence` keeps its entities in `src/test/java`.** `src/main/java` holds the mapped
+  superclasses (`mapped/`) only. It has the two units, `test` on H2 in PostgreSQL mode and `it` on the demo database;
+  see that module's `CLAUDE.md`.
 - **Unsure, broad, mechanical changes across several projects are asked first.** Check the change against disk and the
   conventions below, and ask the author when it is not clear.
 
