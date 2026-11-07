@@ -97,6 +97,12 @@ which each project's root `pom.xml` adds as a test source with `build-helper-mav
   package-private `__Exercises_TestUtils` beside them.
 - `src/test/java-exercises` may use anything in `src/test/java`; `src/test/java` never uses `src/test/java-exercises`.
 
+## Java code
+
+- **`Optional` over the ternary operator for a null-safe value.** Write
+  `Optional.ofNullable(category).map(Category::getCategoryId).orElse(null)`, not
+  `category == null ? null : category.getCategoryId()`.
+
 ## Shared files
 
 - **The projects share one `.gitignore` and one `.idea/codeStyles`.** Every submodule here (and under `data/`) has the
