@@ -55,8 +55,8 @@ it.
 | Project | Providers | Profiles |
 |---|---|---|
 | `heads-of-governments-persistence` | Hibernate ORM | none; `persistence.xml` names it |
-| `mysql-sakila-persistence` | Hibernate ORM and EclipseLink | `jakarta-ee-11-hibernate-orm`, `jakarta-ee-11-eclipselink` (`-weaving`) |
-| `oracle-sample-schemas-persistence` | Hibernate ORM and EclipseLink | `jakarta-ee-11-hibernate-orm`, `jakarta-ee-11-eclipselink` (`-weaving`) |
+| `mysql-sakila-persistence` | Hibernate ORM and EclipseLink | `jakartaee-11-hibernate-orm`, `jakartaee-11-eclipselink` (`-weaving`) |
+| `oracle-sample-schemas-persistence` | Hibernate ORM and EclipseLink | `jakartaee-11-hibernate-orm`, `jakartaee-11-eclipselink` (`-weaving`) |
 | `postgresql-demodb-persistence` | Hibernate ORM only | none; the property's default |
 | `sqlserver-samples-persistence` | Hibernate ORM only | none; the property's default |
 
@@ -127,6 +127,12 @@ which each project's root `pom.xml` adds as a test source with `build-helper-mav
 - **`Optional` over the ternary operator for a null-safe value.** Write
   `Optional.ofNullable(category).map(Category::getCategoryId).orElse(null)`, not
   `category == null ? null : category.getCategoryId()`.
+- **A provider's own types are written fully qualified, never imported.** In every `*-persistence` project, in
+  `src/main/java`, `src/test/java` and every `src/test/java-*`, a type of Hibernate ORM (`org.hibernate.*`), EclipseLink
+  (`org.eclipse.persistence.*`) or an extension of theirs (Hibernate Spatial, geolatte `org.geolatte.*`) is written with
+  its package at each use, `@org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.ARRAY)`, so that a
+  reader sees at once where a mapping or a test leaves Jakarta Persistence. `jakarta.*` types are imported as usual. The
+  book's `[source,java]` blocks quote these lines as they are.
 
 ## Shared files
 
