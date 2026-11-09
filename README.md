@@ -68,13 +68,17 @@ versions only.
 | `heads-of-governments-spring-data` | `heads-of-governments-persistence` | `heads-of-governments-persistence` | `compile` |
 | `mysql-sakila-persistence` | `jinahya-persistence` | `jinahya-persistence-test-utils` | `test` |
 | `oracle-sample-schemas-persistence` | `jinahya-persistence` | `jinahya-persistence-more` | `compile` |
+| | | `jinahya-persistence-utils` | `compile` |
 | | | `jinahya-persistence-test-utils` | `test` |
+| | | `jinahya-persistence-more-test` | `test` |
 | `postgresql-demodb-persistence` | `jinahya-persistence` | `jinahya-persistence-more` | `compile` |
 | | | `jinahya-persistence-utils` | `compile` |
 | | | `jinahya-persistence-test-utils` | `test` |
+| `sqlserver-samples-persistence` | `jinahya-persistence` | `jinahya-persistence-more` | `compile` |
+| | | `jinahya-persistence-test-utils` | `test` |
+| | | `jinahya-persistence-more-test` | `test` |
 
-`heads-of-governments-persistence`, `jinahya-persistence` and `sqlserver-samples-persistence` depend on no other
-project here.
+`heads-of-governments-persistence` and `jinahya-persistence` depend on no other project here.
 
 `jinahya-persistence-test-utils` depends on `jinahya-persistence-utils` at `compile` scope, so a project that
 declares the former gets the latter too: `mysql-sakila-persistence`'s tests use both, and declare only
