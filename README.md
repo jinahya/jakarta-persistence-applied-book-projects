@@ -23,6 +23,11 @@ the top.
 | [`sqlserver-samples-persistence`](https://github.com/jinahya/sqlserver-samples-persistence) | Jakarta Persistence mappings of the Microsoft SQL Server sample databases |
 | [`sqlserver-samples-spring-data`](https://github.com/jinahya/sqlserver-samples-spring-data) | Spring Data, on the SQL Server sample databases |
 
+## Companion chapters
+
+The chapters the printed book leaves out, Oracle HR and SH and SQL Server WideWorldImporters and FutonManufacturing,
+are in [`book/`](book/), one PDF each.
+
 ## Cloning
 
 ```shell
