@@ -1,4 +1,4 @@
-# book
+# companion-chapters
 
 The companion chapters of *Jakarta Persistence Applied*: the chapters the printed book leaves out, each rendered
 alone as a PDF.

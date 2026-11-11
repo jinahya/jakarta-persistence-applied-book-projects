@@ -26,7 +26,7 @@ the top.
 ## Companion chapters
 
 The chapters the printed book leaves out, Oracle HR and SH and SQL Server WideWorldImporters and FutonManufacturing,
-are in [`book/`](book/), one PDF each.
+are in [`companion-chapters/`](companion-chapters/), one PDF each.
 
 ## Cloning
 
