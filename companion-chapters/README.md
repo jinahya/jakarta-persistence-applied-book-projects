@@ -13,5 +13,5 @@ alone as a PDF.
 They are generated from the book's manuscript, in the book's repository, and are not edited here:
 
 ```shell
-$ ./build.sh companion        # or ./mvnw -Pcompanion generate-resources
+$ ./build.sh                  # the book, then these; or ./mvnw -Pcompanion generate-resources
 ```
