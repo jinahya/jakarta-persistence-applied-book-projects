@@ -233,7 +233,7 @@ ORDER BY i.YearlyIncome
 [source,jpaql]
 ----
 SELECT v.yearlyIncome, COUNT(v)
-FROM SalesPersonDemographicsView v
+FROM SalesPersonDemographics v
          JOIN PersonPerson p ON p.businessEntityId = v.businessEntityId
 WHERE p.personType = :personType
 GROUP BY v.yearlyIncome

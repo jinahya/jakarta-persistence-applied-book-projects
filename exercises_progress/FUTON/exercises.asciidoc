@@ -268,7 +268,7 @@ ORDER BY i.ItemCode, w.UsagePath
 ====
 
 SQL only: a recursive common table expression. The view `vw_WhereUsed` gives the same rows; the test reads it with the
-native query below and builds a `WhereUsedView`, a keyless class, from each row through its public constructor.
+native query below and builds a `WhereUsed`, a keyless class, from each row through its public constructor.
 
 .The native query of `FUTON_BOM_A_02_Test.nativeQuery`
 [source,sql]
