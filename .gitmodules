@@ -10,10 +10,6 @@
 	path = data/heads-of-governments-spring-data
 	url = https://github.com/jinahya/heads-of-governments-spring-data.git
 	branch = develop
-[submodule "jinahya-persistence"]
-	path = jinahya-persistence
-	url = https://github.com/jinahya/jinahya-persistence.git
-	branch = develop
 [submodule "mysql-sakila-persistence"]
 	path = mysql-sakila-persistence
 	url = https://github.com/jinahya/mysql-sakila-persistence.git
@@ -62,3 +58,7 @@
 	path = data/postgresql-demodb-spring-data
 	url = https://github.com/jinahya/postgresql-demodb-spring-data.git
 	branch = develop
+[submodule "db2-sample-database-persistence"]
+	path = db2-sample-database-persistence
+	url = https://github.com/jinahya/db2-sample-database-persistence.git
+	branch = main

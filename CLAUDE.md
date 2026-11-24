@@ -22,8 +22,8 @@ hold here. A project's own `CLAUDE.md` wins over this file for that project.
 
 ```
 projects/
+├── db2-sample-database-persistence      IBM Db2
 ├── heads-of-governments-persistence     SQLite
-├── jinahya-persistence                  the library the others use
 ├── mysql-sakila-persistence             MySQL
 ├── oracle-sample-schemas-persistence    Oracle; a module per schema: -co, -hr, -sh (and -common)
 ├── postgresql-demodb-persistence        PostgreSQL
@@ -34,13 +34,15 @@ projects/
                                          never edited here
 ```
 
-`jinahya-persistence` is the library, not a sample; most of what follows is about the `-persistence` projects of a
-sample database.
+`jinahya-persistence`, the library most of the projects use, is not here: it is managed with its sibling
+`jinahyaee-bom`, outside this repository. Most of what follows is about the `-persistence` projects of a sample
+database.
 
 ## Building
 
 Each project builds on its own, with its own wrapper, from its own directory, on Java 25. A project may depend on a
-`-SNAPSHOT` of another one here; install that first (`./mvnw install -DskipTests` in `jinahya-persistence`, say).
+`-SNAPSHOT` of another one here; install that first (`./mvnw install -DskipTests` in `heads-of-governments-persistence`,
+say).
 
 - `./mvnw test-compile` compiles every test without a database.
 - `*_PersistenceTest` runs under surefire, on the `test` unit.
@@ -140,11 +142,8 @@ which each project's root `pom.xml` adds as a test source with `build-helper-mav
 
 - **The projects share one `.gitignore` and one `.idea/codeStyles`.** Every submodule here (and under `data/`) has the
   same `.gitignore`, which ignores `.idea/*` but keeps `!.idea/codeStyles/`; what a single project needs goes at its
-  end, under "This project". Every submodule but `jinahya-persistence` tracks the same plain
-  `.idea/codeStyles/Project.xml` and `codeStyleConfig.xml`.
-- **`jinahya-persistence` is the exception, and we don't touch it:** its `.idea/codeStyles` is a git submodule
-  (`onacit/dot-idea-codestyles`), with its own content; never replace it with plain files, copy it to the others, or
-  bump it.
+  end, under "This project". Every submodule tracks the same plain `.idea/codeStyles/Project.xml` and
+  `codeStyleConfig.xml`.
 
 ## Documents
 

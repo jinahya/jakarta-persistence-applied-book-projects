@@ -6,10 +6,10 @@ the top.
 
 | Project | What |
 |---|---|
+| [`db2-sample-database-persistence`](https://github.com/jinahya/db2-sample-database-persistence) | Jakarta Persistence mappings of the IBM Db2 `SAMPLE` database |
 | [`heads-of-governments-jakarta-data`](https://github.com/jinahya/heads-of-governments-jakarta-data) | Jakarta Data, on the heads-of-governments database |
 | [`heads-of-governments-persistence`](https://github.com/jinahya/heads-of-governments-persistence) | Jakarta Persistence mappings of a small SQLite database of heads of government |
 | [`heads-of-governments-spring-data`](https://github.com/jinahya/heads-of-governments-spring-data) | Spring Data, on the heads-of-governments database |
-| [`jinahya-persistence`](https://github.com/jinahya/jinahya-persistence) | The library the other projects use |
 | [`mysql-sakila-jakarta-data`](https://github.com/jinahya/mysql-sakila-jakarta-data) | Jakarta Data, on the Sakila sample database |
 | [`mysql-sakila-persistence`](https://github.com/jinahya/mysql-sakila-persistence) | Jakarta Persistence mappings of the MySQL Sakila sample database |
 | [`mysql-sakila-spring-data`](https://github.com/jinahya/mysql-sakila-spring-data) | Spring Data, on the Sakila sample database |
@@ -54,16 +54,16 @@ The first keeps the projects as the book shows them; the second goes past it.
 Each project builds on its own, with its own wrapper, from its own directory; see its `README.md`. They need Java 25.
 
 A project may depend on a `-SNAPSHOT` of another project here (see [Inter-dependencies](#inter-dependencies)), which
-is not on Maven Central. Install that project first, `jinahya-persistence` say:
+is not on Maven Central. Install that project first, `heads-of-governments-persistence` say:
 
 ```shell
-$ cd jinahya-persistence
+$ cd heads-of-governments-persistence
 $ ./mvnw install -DskipTests
 ```
 
 ## Inter-dependencies
 
-Some projects use another one here, as an `io.github.jinahya` artifact. Between releases, a project's `develop` may
+Some projects use another one here, or `jinahya-persistence`, as an `io.github.jinahya` artifact. Between releases, a project's `develop` may
 use the other's `-SNAPSHOT`, which has to be installed first (see [Building](#building)); a release uses released
 versions only.
 
@@ -83,7 +83,10 @@ versions only.
 | | | `jinahya-persistence-test-utils` | `test` |
 | | | `jinahya-persistence-more-test` | `test` |
 
-`heads-of-governments-persistence` and `jinahya-persistence` depend on no other project here.
+`heads-of-governments-persistence` depends on no other project here.
+
+[`jinahya-persistence`](https://github.com/jinahya/jinahya-persistence), the library in the table, is not here: it is
+managed with its sibling `jinahyaee-bom`. A project on one of its `-SNAPSHOT`s needs it installed from that repository.
 
 `jinahya-persistence-test-utils` depends on `jinahya-persistence-utils` at `compile` scope, so a project that
 declares the former gets the latter too: `mysql-sakila-persistence`'s tests use both, and declare only
