@@ -1,8 +1,8 @@
 # jakarta-persistence-applied-book-projects
 
 The projects of *Jakarta Persistence Applied*, each a git submodule, at the commits the book is written against.
-The Jakarta Data and Spring Data projects, `*-jakarta-data` and `*-spring-data`, are under `data/`; the others are at
-the top.
+The Jakarta Data and Spring Data projects, `*-jakarta-data` and `*-spring-data`, are under `_data/`; the Docker images
+of the sample databases, `*-docker`, are under `_docker/`; the others are at the top.
 
 | Project | What |
 |---|---|
@@ -19,9 +19,11 @@ the top.
 | [`postgresql-demodb-jakarta-data`](https://github.com/jinahya/postgresql-demodb-jakarta-data) | Jakarta Data, on the PostgreSQL demo database |
 | [`postgresql-demodb-persistence`](https://github.com/jinahya/postgresql-demodb-persistence) | Jakarta Persistence mappings of the PostgreSQL demo database |
 | [`postgresql-demodb-spring-data`](https://github.com/jinahya/postgresql-demodb-spring-data) | Spring Data, on the PostgreSQL demo database |
+| [`postgresql-demodb-docker`](https://github.com/jinahya/postgresql-demodb-docker) | Docker images of PostgreSQL with the demo database loaded on first start |
 | [`sqlserver-samples-jakarta-data`](https://github.com/jinahya/sqlserver-samples-jakarta-data) | Jakarta Data, on the SQL Server sample databases |
 | [`sqlserver-samples-persistence`](https://github.com/jinahya/sqlserver-samples-persistence) | Jakarta Persistence mappings of the Microsoft SQL Server sample databases |
 | [`sqlserver-samples-spring-data`](https://github.com/jinahya/sqlserver-samples-spring-data) | Spring Data, on the SQL Server sample databases |
+| [`sql-server-samples-docker`](https://github.com/jinahya/sql-server-samples-docker) | Docker images of SQL Server, one per version and sample database, with the database loaded on first start |
 
 ## Companion chapters
 
