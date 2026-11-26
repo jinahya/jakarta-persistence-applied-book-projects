@@ -13,7 +13,8 @@ hold here. A project's own `CLAUDE.md` wins over this file for that project.
   with on EclipseLink, so their projects target Hibernate ORM only; see [Providers](#providers). Never add EclipseLink to
   a Hibernate-ORM-only project, or drop it from a project of both, without the author.
 - **`postgresql-demodb-persistence` keeps its entities in `src/test/java`.** `src/main/java` holds the mapped
-  superclasses (`mapped/`) only. It has the two units, `test` on H2 in PostgreSQL mode and `it` on the demo database;
+  superclasses (`Mapped*`, in `mapped/`) and, one package up, what is not a mapped superclass: the converters, the
+  utilities and the composite key classes. It has the two units, `test` on H2 in PostgreSQL mode and `it` on the demo database;
   see that module's `CLAUDE.md`.
 - **Unsure, broad, mechanical changes across several projects are asked first.** Check the change against disk and the
   conventions below, and ask the author when it is not clear.
