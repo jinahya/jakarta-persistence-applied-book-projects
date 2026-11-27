@@ -70,3 +70,7 @@
 	path = _docker/sql-server-samples-docker
 	url = https://github.com/jinahya/sql-server-samples-docker.git
 	branch = develop
+[submodule "jakarta-persistence-applied-parent"]
+	path = jakarta-persistence-applied-parent
+	url = https://github.com/jinahya/jakarta-persistence-applied-parent.git
+	branch = develop

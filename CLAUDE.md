@@ -25,6 +25,7 @@ hold here. A project's own `CLAUDE.md` wins over this file for that project.
 projects/
 ├── db2-sample-database-persistence      IBM Db2
 ├── heads-of-governments-persistence     SQLite
+├── jakarta-persistence-applied-parent   the parent POM of the -persistence projects
 ├── mysql-sakila-persistence             MySQL
 ├── oracle-sample-schemas-persistence    Oracle; a module per schema: -co, -hr, -sh (and -common)
 ├── postgresql-demodb-persistence        PostgreSQL
