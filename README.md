@@ -6,11 +6,14 @@ of the sample databases, `*-docker`, are under `_docker/`; the others are at the
 
 | Project | What |
 |---|---|
+| [`db2-sample-database-jakarta-data`](https://github.com/jinahya/db2-sample-database-jakarta-data) | Jakarta Data, on the IBM Db2 `SAMPLE` database (scaffold) |
 | [`db2-sample-database-persistence`](https://github.com/jinahya/db2-sample-database-persistence) | Jakarta Persistence mappings of the IBM Db2 `SAMPLE` database |
+| [`db2-sample-database-spring-data`](https://github.com/jinahya/db2-sample-database-spring-data) | Spring Data, on the IBM Db2 `SAMPLE` database (scaffold) |
 | [`heads-of-governments-jakarta-data`](https://github.com/jinahya/heads-of-governments-jakarta-data) | Jakarta Data, on the heads-of-governments database |
 | [`heads-of-governments-persistence`](https://github.com/jinahya/heads-of-governments-persistence) | Jakarta Persistence mappings of a small SQLite database of heads of government |
 | [`heads-of-governments-spring-data`](https://github.com/jinahya/heads-of-governments-spring-data) | Spring Data, on the heads-of-governments database |
 | [`jakarta-persistence-applied-parent`](https://github.com/jinahya/jakarta-persistence-applied-parent) | The parent POM of the `*-persistence` projects: the versions and plugins they share |
+| [`jakarta-persistence-applied-data-parent`](https://github.com/jinahya/jakarta-persistence-applied-data-parent) | The parent POM of the `*-jakarta-data` and `*-spring-data` projects: the versions and plugins they share, no platform |
 | [`mysql-sakila-jakarta-data`](https://github.com/jinahya/mysql-sakila-jakarta-data) | Jakarta Data, on the Sakila sample database |
 | [`mysql-sakila-persistence`](https://github.com/jinahya/mysql-sakila-persistence) | Jakarta Persistence mappings of the MySQL Sakila sample database |
 | [`mysql-sakila-spring-data`](https://github.com/jinahya/mysql-sakila-spring-data) | Spring Data, on the Sakila sample database |

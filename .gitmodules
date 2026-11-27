@@ -74,3 +74,15 @@
 	path = jakarta-persistence-applied-parent
 	url = https://github.com/jinahya/jakarta-persistence-applied-parent.git
 	branch = develop
+[submodule "jakarta-persistence-applied-data-parent"]
+	path = jakarta-persistence-applied-data-parent
+	url = https://github.com/jinahya/jakarta-persistence-applied-data-parent.git
+	branch = develop
+[submodule "_data/db2-sample-database-spring-data"]
+	path = _data/db2-sample-database-spring-data
+	url = https://github.com/jinahya/db2-sample-database-spring-data.git
+	branch = develop
+[submodule "_data/db2-sample-database-jakarta-data"]
+	path = _data/db2-sample-database-jakarta-data
+	url = https://github.com/jinahya/db2-sample-database-jakarta-data.git
+	branch = develop
